@@ -1550,7 +1550,9 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             matchSize: StreamMatchGameSize,
             font: StreamFont,
             textColor: matchColor ? GameTextColor.Hex(GameColors.Text) : null,
-            speakers: StreamMatchGameColor ? GameColors.SpeakerHexes() : new Dictionary<string, string>()));
+            speakers: StreamMatchGameColor ? GameColors.SpeakerHexes() : new Dictionary<string, string>())
+            // Örtü seçimi iki tarafta aynı: bulanık TV'de yumuşak kenarlı gölge olur (HDMI pikselleri bulanıklaştırılamaz).
+            with { Cover = StreamCover.ToString().ToLowerInvariant() });
     }
 
     // --- Yayın penceresi (yayın programlarının pencere yakalamayla aldığı düz zeminli altyazı) ---
@@ -1760,6 +1762,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (value == StreamCover) return;
             store.Save(StoreKeys.StreamCover, value.ToString().ToLowerInvariant());
             Changed(nameof(StreamCover));
+            SendLook();
         }
     }
 

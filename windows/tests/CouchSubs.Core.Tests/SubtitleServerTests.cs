@@ -99,6 +99,8 @@ public class SubtitleServerTests
         Assert.Contains("\"speakers\":{\"MJ\":\"#FFFFFF\",\"Spider-Man\":\"#59F9FF\"}", frame);
         Assert.Contains("\"textColor\":\"#F7F7F5\"", frame);
         Assert.Contains("\"oneLine\":true", frame);
+        Assert.DoesNotContain("\"cover\"", frame);
+        Assert.Contains("\"cover\":\"blur\"", SubtitleServer.LookFrame(look with { Cover = "blur" }));
         // Aynı renkler (farklı sırada) eşittir: yeniden gönderilmez.
         Assert.Equal(look, SubtitleLook.Create(true, true, "Segoe UI", "#F7F7F5", new Dictionary<string, string> { ["MJ"] = "#FFFFFF", ["Spider-Man"] = "#59F9FF" }));
     }

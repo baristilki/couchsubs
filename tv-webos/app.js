@@ -6,7 +6,7 @@
   'use strict';
 
   // TV uygulamasının sürümü: appinfo.json, tv-tizen/config.xml ve tv-android/app/build.gradle ile aynı tutulur.
-  var APP_VERSION = '0.9.25';
+  var APP_VERSION = '0.9.26';
   var t = window.t;
   var config = window.COUCHSUBS_CONFIG || {};
   var platform = window.COUCHSUBS_PLATFORM;
@@ -375,7 +375,7 @@
   // Bilgisayardaki yayın penceresiyle aynı: oyunun yazı rengi, konuşan adı kendi renginde ve biraz küçük, yazı boyu
   // oyunun altyazısının boyunda, satırlar alt alta bölünmez (yeni konuşanla başlayan satır hariç), yazı tipi.
   // Kurallar Windows'taki StreamSubtitleText ve GameTextSize ile aynıdır. Olayı göndermeyen bilgisayarda eski davranış.
-  var look = { oneLine: false, matchSize: false, font: null, textColor: null, speakers: {} };
+  var look = { oneLine: false, matchSize: false, font: null, textColor: null, speakers: {}, cover: null };
   var knownSpeakers = {};
   var styleTextColor = null;
 
@@ -385,7 +385,8 @@
       matchSize: data.matchSize === true,
       font: typeof data.font === 'string' && data.font ? data.font : null,
       textColor: /^#[0-9A-Fa-f]{6}$/.test(data.textColor || '') ? data.textColor : null,
-      speakers: data.speakers && typeof data.speakers === 'object' ? data.speakers : {}
+      speakers: data.speakers && typeof data.speakers === 'object' ? data.speakers : {},
+      cover: data.cover === 'dark' || data.cover === 'blur' || data.cover === 'none' ? data.cover : null
     };
     var ids = ['subtitle-text', 'subtitle-prev-text', 'subtitle-prev2-text'];
     for (var i = 0; i < ids.length; i++) {
@@ -774,22 +775,37 @@
   var SIDE_MIN = 0.05;
 
   // Altyazıyı seçilen yerleşime göre konumlar. İngilizce altyazının yeri bilinmiyorsa sabit yükseklik kullanılır.
+  // Bilgisayardaki yayın penceresinin örtü seçimi ("look" olayı) geldiyse TV de ona uyar: koyu kutu ve bulanık
+  // İngilizcenin üstüne örter, "dokunma" İngilizcenin üstüne koyar. Gelmediyse TV'nin kendi yerleşim ayarı geçerli.
+  function effectivePlacement() {
+    if (look.cover === 'none') return 'above';
+    if (look.cover === 'dark' || look.cover === 'blur') return 'cover';
+    return placement;
+  }
+
+  // Bulanık ve "dokunma" seçiminde çeviri kutusuzdur (bilgisayardaki gibi gölgeli yazı); koyu kutuda kutu örtüdür.
+  function lookTextBackground() {
+    return look.cover === 'blur' || look.cover === 'none' ? 'transparent' : textBackground;
+  }
+
   function layout() {
     var el = $('subtitle');
     var cover = $('subtitle-cover');
-    var box = placement === 'fixed' ? null : currentBox;
+    var place = effectivePlacement();
+    var box = place === 'fixed' ? null : currentBox;
     el.style.left = '8%';
     el.style.right = '8%';
     el.style.top = 'auto';
     el.style.bottom = bottomPercent + '%';
     cover.className = 'hidden';
-    $('subtitle-text').style.background = textBackground;
+    $('subtitle-text').style.background = lookTextBackground();
+    setBodyClass('game-look', look.cover === 'blur' || look.cover === 'none');
     // Altyazı yokken (ör. ayar değişince yeniden yerleşirken) örtü tek başına boş siyah kutu olarak kalmasın.
     if (!box || el.className === 'hidden') return;
 
     var height = document.documentElement.clientHeight || window.innerHeight || 1080;
     var gap = Math.round(height * 0.012);
-    var mode = placement;
+    var mode = place;
     // Ekranın kenarında yer yoksa öbür yana geçilir.
     if (mode === 'below' && box.bottom > 0.88) mode = 'above';
     if (mode === 'above' && box.top < 0.12) mode = 'below';
@@ -845,6 +861,17 @@
     // Örtü telefondaki "Arka plan koyuluğu"na uyar: eskiden hep %97'ydi, kaydırıcı %0'da da kutu opak kalıyordu.
     // %100 tamamen opaktır; koyuluğu göndermeyen eski sürümlerde style.css'teki %97 geçerlidir.
     cover.style.background = coverBackground;
+    // "Bulanık": TV'de HDMI görüntüsü uygulamanın altındaki ayrı katmanda, pikselleri bulanıklaştırılamaz. Bilgisayardaki
+    // bulanık banda en yakın görünüm: kenarları yumuşak, yarı saydam bir gölge İngilizceyi gizler, sert kutu sırıtmaz.
+    var soft = look.cover === 'blur' ? 'blur(' + Math.max(6, Math.round(height * 0.014)) + 'px)' : '';
+    cover.style.filter = soft;
+    cover.style.webkitFilter = soft;
+    if (look.cover === 'blur') {
+      cover.style.background = 'rgba(0, 0, 0, 0.66)';
+      cover.style.borderRadius = Math.round(height * 0.02) + 'px';
+    } else {
+      cover.style.borderRadius = '';
+    }
     cover.className = '';
   }
 
@@ -861,7 +888,7 @@
     el.style.top = 'auto';
     el.style.bottom = bottomPercent + '%';
     cover.className = 'hidden';
-    $('subtitle-text').style.background = textBackground;
+    $('subtitle-text').style.background = lookTextBackground();
   }
 
   // Çevirinin zemini (bilgisayardaki "Zemin koyuluğu"); boşsa style.css'teki varsayılan. Örtü varken saydam olur.

@@ -97,6 +97,10 @@ public enum SubtitleEventKind { Subtitle, Clear, Screen, ScreenClear, Region, Re
 /// </summary>
 public sealed record SubtitleLook(bool OneLine, bool MatchSize, string? Font, string? TextColor, SubtitleLook.Speakers SpeakerColors)
 {
+    /// <summary>Oyunun İngilizce altyazısının örtüsü: "dark", "blur" (TV'de yumuşak kenarlı gölge), "none"; null: TV'nin
+    /// kendi yerleşim ayarı.</summary>
+    public string? Cover { get; init; }
+
     /// <summary>Değer eşitliği olan konuşan-renk listesi (aynı renkler yeniden gönderilmesin).</summary>
     public sealed class Speakers(IEnumerable<KeyValuePair<string, string>> pairs) : IEnumerable<KeyValuePair<string, string>>
     {
@@ -382,6 +386,7 @@ public sealed class SubtitleServer(int port = 8787, TimeSpan? pingInterval = nul
         };
         if (look.TextColor is { } color) json["textColor"] = color;
         if (look.Font is { } font) json["font"] = font;
+        if (look.Cover is { } cover) json["cover"] = cover;
         return Frame("look", json);
     }
 

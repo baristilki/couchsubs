@@ -136,6 +136,13 @@ html, body {
   text-shadow: 0 0 3px #000, 0 0 3px #000, 0 2px 4px #000;
 }
 
+/* Bilgisayarın yayın penceresindeki "Bulanık" ya da "Dokunma" seçimi (app.js look.cover): çeviri kutusuz, oyun
+   altyazısı gibi yumuşak gölgeli yazı; önceki satırların kutusu da kalkar. */
+body.game-look #subtitle-text, body.game-look #subtitle-prev-text, body.game-look #subtitle-prev2-text {
+  background: transparent !important;
+  text-shadow: 0 0 2px #000, 0 1px 3px #000, 0 2px 6px rgba(0, 0, 0, 0.9);
+}
+
 /* Zemin %30'dan saydamsa (app.js applyStyle) yazının çevresine 1 px'lik sert siyah kontur eklenir. */
 body.thin-bg #subtitle-text, body.thin-bg #subtitle-prev-text, body.thin-bg #subtitle-prev2-text {
   text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 4px #000, 0 2px 4px #000;

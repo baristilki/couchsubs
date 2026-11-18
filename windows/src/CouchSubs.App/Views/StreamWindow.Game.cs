@@ -25,8 +25,9 @@ public sealed partial class StreamWindow
 {
     /// <summary>Örtünün İngilizce satır kutusundan taşma payı (kare oranı; TV'deki COVER_PAD).</summary>
     private const double CoverPad = 0.012;
-    /// <summary>Çevirinin en çok kaplayacağı genişlik (görüntüye oranla): uzun cümle tek satırda kalsın.</summary>
-    private const double MaxLineWidth = 0.92;
+    /// <summary>Çevirinin en çok kaplayacağı genişlik (görüntüye oranla): cümle yan yana uzar, ama çok uzunsa ekranı
+    /// boydan boya kaplamasın diye (oyun altyazıları gibi) alt satıra geçer.</summary>
+    private const double MaxLineWidth = 0.72;
 
     private readonly Border cover = new()
     {

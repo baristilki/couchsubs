@@ -98,6 +98,7 @@ public sealed partial class StreamWindow : Window
         root.Children.Add(linesHost);
         Content = root;
         InitGameLayout();
+        InitMenu();
         ApplyBackground();
         linesHost.SizeChanged += (_, _) =>
         {
@@ -295,7 +296,7 @@ public sealed partial class StreamWindow : Window
         if (sample?.Speaker is { } named && CurrentSpeaker() is { } name)
         {
             speaker = name;
-            if (!speakerColors.TryGetValue(name, out var tracker)) speakerColors[name] = tracker = new GameTextColor.Tracker();
+            if (!speakerColors.TryGetValue(name, out var tracker)) speakerColors[name] = tracker = new GameTextColor.Tracker(confirmations: 2);
             changed |= tracker.Offer(named);
         }
         if (!changed) return;

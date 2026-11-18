@@ -130,8 +130,13 @@ public static class GameTextColor
     public sealed class Tracker
     {
         public const int Confirmations = 3;
+        private readonly int confirmations;
         private Rgb? candidate;
         private int seen;
+
+        /// <param name="confirmations">Yeni rengin geçerli olması için art arda kaç örnekte görülmesi gerektiği.
+        /// Konuşan adlarında 2: aynı adla farklı renkte konuşanlar (iki "Spider-Man") olunca renk çabuk yetişsin.</param>
+        public Tracker(int confirmations = Confirmations) => this.confirmations = Math.Max(1, confirmations);
 
         public Rgb Current { get; private set; } = White;
 
@@ -154,7 +159,7 @@ public static class GameTextColor
                 candidate = color;
                 seen = 1;
             }
-            if (seen < Confirmations) return false;
+            if (seen < confirmations) return false;
             Current = color;
             Confirmed = true;
             candidate = null;

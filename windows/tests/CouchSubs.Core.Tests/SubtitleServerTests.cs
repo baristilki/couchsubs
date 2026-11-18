@@ -89,6 +89,20 @@ public class SubtitleServerTests
             l.Contains("{\"box\":{\"bottom\":0.84,\"left\":0.4,\"right\":0.6,\"top\":0.8},\"line\":0.04,\"text\":\"Kapıyı aç.\"}"));
     }
 
+    /// <summary>TV, bilgisayardaki yayın penceresiyle aynı görünsün: renkler, yazı tipi, boy uydurma ve tek satır.</summary>
+    [Fact]
+    public void LookCarriesGameColoursAndSpeakers()
+    {
+        var look = SubtitleLook.Create(true, true, "Segoe UI", "#F7F7F5", new Dictionary<string, string> { ["Spider-Man"] = "#59F9FF", ["MJ"] = "#FFFFFF" });
+        var frame = SubtitleServer.LookFrame(look);
+        Assert.StartsWith("event: look\n", frame);
+        Assert.Contains("\"speakers\":{\"MJ\":\"#FFFFFF\",\"Spider-Man\":\"#59F9FF\"}", frame);
+        Assert.Contains("\"textColor\":\"#F7F7F5\"", frame);
+        Assert.Contains("\"oneLine\":true", frame);
+        // Aynı renkler (farklı sırada) eşittir: yeniden gönderilmez.
+        Assert.Equal(look, SubtitleLook.Create(true, true, "Segoe UI", "#F7F7F5", new Dictionary<string, string> { ["MJ"] = "#FFFFFF", ["Spider-Man"] = "#59F9FF" }));
+    }
+
     /// <summary>Yayın penceresi çeviriyi İngilizce satırın üstüne koyabilsin diye satırın yeri olayla birlikte gelir.</summary>
     [Fact]
     public void SubtitleEventCarriesTheEnglishLineBox()

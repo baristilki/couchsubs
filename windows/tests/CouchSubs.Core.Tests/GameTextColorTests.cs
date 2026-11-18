@@ -99,6 +99,26 @@ public class GameTextColorTests
     }
 
     [Fact]
+    public void BookKeepsAColourPerSpeaker()
+    {
+        var book = new GameTextColor.Book();
+        var blue = new GameTextColor.Rgb(80, 160, 255);
+        var orange = new GameTextColor.Rgb(255, 120, 90);
+        var sample = new GameTextColor.Colors(GameTextColor.White, blue);
+        Assert.False(book.Offer(sample, "Miles"));
+        Assert.True(book.Offer(sample, "Miles")); // ad renkleri 2 örnekte
+        book.Offer(new GameTextColor.Colors(GameTextColor.White, orange), "Ganke");
+        book.Offer(new GameTextColor.Colors(GameTextColor.White, orange), "Ganke");
+        Assert.Equal(blue, book.Speaker("miles"));
+        Assert.Equal(orange, book.Speaker("Ganke"));
+        Assert.Null(book.Speaker("Peter"));
+        Assert.Equal("#50A0FF", book.SpeakerHexes()["Miles"]);
+        Assert.Equal(GameTextColor.White, book.Text);
+        book.Reset();
+        Assert.Empty(book.SpeakerHexes());
+    }
+
+    [Fact]
     public void TrackerSwitchesOnlyAfterRepeatedSamples()
     {
         var tracker = new GameTextColor.Tracker();

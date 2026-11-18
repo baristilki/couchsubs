@@ -6,7 +6,7 @@
   'use strict';
 
   // TV uygulamasının sürümü: appinfo.json, tv-tizen/config.xml ve tv-android/app/build.gradle ile aynı tutulur.
-  var APP_VERSION = '0.9.24';
+  var APP_VERSION = '0.9.25';
   var t = window.t;
   var config = window.COUCHSUBS_CONFIG || {};
   var platform = window.COUCHSUBS_PLATFORM;
@@ -371,11 +371,130 @@
     return { text: wrapBalance(words, Math.min(lines, words.length)), scale: scale };
   }
 
+  // --- Oyuna uyan görünüm ("look" olayı) ---
+  // Bilgisayardaki yayın penceresiyle aynı: oyunun yazı rengi, konuşan adı kendi renginde ve biraz küçük, yazı boyu
+  // oyunun altyazısının boyunda, satırlar alt alta bölünmez (yeni konuşanla başlayan satır hariç), yazı tipi.
+  // Kurallar Windows'taki StreamSubtitleText ve GameTextSize ile aynıdır. Olayı göndermeyen bilgisayarda eski davranış.
+  var look = { oneLine: false, matchSize: false, font: null, textColor: null, speakers: {} };
+  var knownSpeakers = {};
+  var styleTextColor = null;
+
+  function applyLook(data) {
+    look = {
+      oneLine: data.oneLine === true,
+      matchSize: data.matchSize === true,
+      font: typeof data.font === 'string' && data.font ? data.font : null,
+      textColor: /^#[0-9A-Fa-f]{6}$/.test(data.textColor || '') ? data.textColor : null,
+      speakers: data.speakers && typeof data.speakers === 'object' ? data.speakers : {}
+    };
+    var ids = ['subtitle-text', 'subtitle-prev-text', 'subtitle-prev2-text'];
+    for (var i = 0; i < ids.length; i++) {
+      // Windows yazı tipi TV'de yoksa TV'nin sade yazısı kullanılır.
+      $(ids[i]).style.fontFamily = look.font ? '"' + look.font.replace(/"/g, '') + '", sans-serif' : '';
+      var color = look.textColor || styleTextColor;
+      if (color) $(ids[i]).style.color = color;
+    }
+    var shown = rawText('subtitle-text');
+    if ($('subtitle-text').rawText !== undefined && shown && $('subtitle').className !== 'hidden') {
+      setLineText('subtitle-text', shown, !!shownParagraphs, fontBase);
+      layout();
+    }
+  }
+
+  // "Miles: ..." biçiminde baştaki konuşan adı: en çok 3 sözcük, her sözcük büyük harfle başlar; iki nokta yoksa daha
+  // önce görülmüş bir adla başlıyorsa da ad sayılır (OCR iki noktayı kaçırınca). Yoksa null.
+  function splitSpeaker(text) {
+    var colon = text.indexOf(':');
+    if (colon >= 1 && colon <= 24 && colon + 1 < text.length) {
+      var name = text.slice(0, colon).replace(/^\s+|\s+$/g, '');
+      var words = name.split(/\s+/).filter(function (w) { return w; });
+      var capital = words.length >= 1 && words.length <= 3;
+      for (var i = 0; capital && i < words.length; i++) {
+        var first = words[i].charAt(0);
+        capital = first !== first.toLowerCase() && first === first.toUpperCase();
+      }
+      if (capital && name.indexOf('\n') < 0 && /^[^0-9:!?,;"()\[\]{}<>@#$%^&*_=+|\\\/]+$/.test(name)) {
+        knownSpeakers[name.toLowerCase()] = name;
+        return { speaker: name, line: text.slice(colon + 1).replace(/^\s+/, '') };
+      }
+    }
+    var names = Object.keys(knownSpeakers).sort(function (a, b) { return b.length - a.length; });
+    for (var j = 0; j < names.length; j++) {
+      var known = knownSpeakers[names[j]];
+      if (text.length > known.length + 1 && text.slice(0, known.length + 1).toLowerCase() === names[j] + ' ') {
+        return { speaker: known, line: text.slice(known.length + 1).replace(/^\s+/, '') };
+      }
+    }
+    return null;
+  }
+
+  // Alt alta bölünmüş cümle tek satıra birleşir; yeni bir konuşanla başlayan satır kendi satırında kalır.
+  function gameLines(text) {
+    var parts = text.split('\n');
+    var lines = [];
+    for (var i = 0; i < parts.length; i++) {
+      var part = parts[i].replace(/^\s+|\s+$/g, '');
+      if (!part) continue;
+      if (lines.length > 0 && !splitSpeaker(part)) lines[lines.length - 1] += ' ' + part;
+      else lines.push(part);
+    }
+    return lines;
+  }
+
+  function speakerColor(name) {
+    var keys = Object.keys(look.speakers);
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i].toLowerCase() === name.toLowerCase() && /^#[0-9A-Fa-f]{6}$/.test(look.speakers[keys[i]])) return look.speakers[keys[i]];
+    }
+    return null;
+  }
+
+  // Yazı boyu oyunun altyazısının satır yüksekliğinden (OCR kutusu harflerin üstünden altına; boy bunun ~%92'si).
+  function gameFontSize(baseSize) {
+    if (!look.matchSize || !currentBox) return baseSize;
+    var height = currentBox.bottom - currentBox.top;
+    if (height <= 0.005 || height > 0.4) return baseSize;
+    var lines = Math.max(1, Math.min(4, Math.round(height / 0.042)));
+    var screen = document.documentElement.clientHeight || window.innerHeight || 1080;
+    // Önceki satırlar (taban boyun %80'i) oyunun boyuna göre de aynı oranda küçük kalır.
+    var size = height / lines * screen * 0.92 * (fontBase > 0 ? baseSize / fontBase : 1);
+    return Math.max(baseSize * 0.5, Math.min(baseSize * 2, size));
+  }
+
+  // Satırı oyuna uyan görünümle yazar: konuşan adı kendi renginde ve %85 boyda.
+  function setLookText(el, text, size) {
+    var lines = gameLines(text);
+    while (el.firstChild) el.removeChild(el.firstChild);
+    for (var i = 0; i < lines.length; i++) {
+      if (i > 0) el.appendChild(document.createElement('br'));
+      var split = splitSpeaker(lines[i]);
+      if (split) {
+        var name = document.createElement('span');
+        name.className = 'speaker';
+        name.textContent = split.speaker + ': ';
+        name.style.fontSize = Math.round(size * 0.85) + 'px';
+        var color = speakerColor(split.speaker);
+        if (color) name.style.color = color;
+        el.appendChild(name);
+        el.appendChild(document.createTextNode(split.line));
+      } else {
+        el.appendChild(document.createTextNode(lines[i]));
+      }
+    }
+  }
+
   // Satırı yazar. Sayfadaki metin bölünmüş hâlidir; karşılaştırmalar için özgün metin elementte kalır.
   function setLineText(textId, text, paragraphs, baseSize) {
     var el = $(textId);
-    var wrapped = paragraphs ? { text: text, scale: 1 } : wrapSubtitle(text);
     el.rawText = text;
+    if (!paragraphs && look.oneLine) {
+      var size = Math.round(gameFontSize(baseSize));
+      setLookText(el, text, size);
+      el.style.whiteSpace = 'normal';
+      el.style.fontSize = size + 'px';
+      return;
+    }
+    var wrapped = paragraphs ? { text: text, scale: 1 } : wrapSubtitle(text);
     el.textContent = wrapped.text;
     el.style.whiteSpace = 'pre-line';
     el.style.fontSize = Math.round(baseSize * wrapped.scale) + 'px';
@@ -798,9 +917,12 @@
       $('subtitle-prev2-text').style.fontWeight = style.bold ? '700' : '600';
     }
     if (TEXT_COLORS[style.textColor]) {
-      $('subtitle-text').style.color = TEXT_COLORS[style.textColor];
-      $('subtitle-prev-text').style.color = TEXT_COLORS[style.textColor];
-      $('subtitle-prev2-text').style.color = TEXT_COLORS[style.textColor];
+      styleTextColor = TEXT_COLORS[style.textColor];
+      // Oyunun rengi okunuyorsa (look) o geçerlidir; sarı seçilince bilgisayar oyun rengini göndermez.
+      var shownColor = look.textColor || styleTextColor;
+      $('subtitle-text').style.color = shownColor;
+      $('subtitle-prev-text').style.color = shownColor;
+      $('subtitle-prev2-text').style.color = shownColor;
     }
     layout();
     if (style.bottomPercent >= 0 && String(style.bottomPercent) !== load('appBottom')) {
@@ -894,6 +1016,7 @@
     onEvent('region-clear', hideRegions);
     onEvent('exit', function () { leaving = true; platform.exit(); });
     onEvent('style', applyStyle);
+    onEvent('look', applyLook);
     onEvent('speech', function (data) { if (data.url) playSpeech(server + data.url); });
     onEvent('speech-stop', stopSpeech);
   }

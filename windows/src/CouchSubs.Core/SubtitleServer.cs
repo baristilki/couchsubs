@@ -90,6 +90,27 @@ public interface ISubtitleSender
 /// </summary>
 public enum SubtitleEventKind { Subtitle, Clear, Screen, ScreenClear, Region, RegionClear }
 
+/// <summary>
+/// Çevirinin oyuna uyan görünümü (TV'ye <c>look</c> olayıyla gider): oyunun yazı rengi (#RRGGBB; null: ayardaki renk),
+/// konuşan adlarının renkleri, yazı tipi, yazı boyunun oyunun altyazısına uydurulması ve satırların tek satırda
+/// birleşmesi. Kayıt eşitliği için sözlük sıralı tutulur (<see cref="Create"/>).
+/// </summary>
+public sealed record SubtitleLook(bool OneLine, bool MatchSize, string? Font, string? TextColor, SubtitleLook.Speakers SpeakerColors)
+{
+    /// <summary>Değer eşitliği olan konuşan-renk listesi (aynı renkler yeniden gönderilmesin).</summary>
+    public sealed class Speakers(IEnumerable<KeyValuePair<string, string>> pairs) : IEnumerable<KeyValuePair<string, string>>
+    {
+        private readonly KeyValuePair<string, string>[] items = [.. pairs.OrderBy(pair => pair.Key, StringComparer.Ordinal)];
+        public IEnumerator<KeyValuePair<string, string>> GetEnumerator() => ((IEnumerable<KeyValuePair<string, string>>)items).GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => items.GetEnumerator();
+        public override bool Equals(object? obj) => obj is Speakers other && items.SequenceEqual(other.items);
+        public override int GetHashCode() => items.Length;
+    }
+
+    public static SubtitleLook Create(bool oneLine, bool matchSize, string? font, string? textColor, IReadOnlyDictionary<string, string> speakers) =>
+        new(oneLine, matchSize, font, textColor, new Speakers(speakers));
+}
+
 /// <summary>Sunucudan geçen ve bilgisayar ekranındaki altyazı penceresinin de gösterdiği olay.</summary>
 /// <param name="Replaces">Satır öncekinin uzamış ya da düzelmiş okumasıdır; öncekinin üstüne yığılmaz, yerine geçer.</param>
 /// <param name="Id">Ek alan olayında alanın kimliği (<see cref="SubtitleEventKind.Region"/>; metin boşsa kutu kalkar).</param>
@@ -335,6 +356,35 @@ public sealed class SubtitleServer(int port = 8787, TimeSpan? pingInterval = nul
         Broadcast(StyleFrame(style), subtitle: true);
     }
 
+    /// <summary>
+    /// Oyuna uyan görünüm (<c>look</c> olayı): bilgisayardaki yayın penceresiyle aynı renkler, yazı tipi, boy uydurma ve
+    /// tek satır. Yeni bağlanan TV'ye de stilden sonra gönderilir; tanımayan eski TV uygulaması olayı yok sayar.
+    /// </summary>
+    public void SendLook(SubtitleLook look)
+    {
+        lock (gate)
+        {
+            if (look == lastLook) return;
+            lastLook = look;
+        }
+        Broadcast(LookFrame(look), subtitle: true);
+    }
+
+    private SubtitleLook? lastLook;
+
+    internal static string LookFrame(SubtitleLook look)
+    {
+        var json = new SortedDictionary<string, object>
+        {
+            ["matchSize"] = look.MatchSize,
+            ["oneLine"] = look.OneLine,
+            ["speakers"] = new SortedDictionary<string, string>(look.SpeakerColors.ToDictionary(pair => pair.Key, pair => pair.Value), StringComparer.Ordinal),
+        };
+        if (look.TextColor is { } color) json["textColor"] = color;
+        if (look.Font is { } font) json["font"] = font;
+        return Frame("look", json);
+    }
+
     // --- Bağlantılar ---
 
     private async Task AcceptLoop(TcpListener listener)
@@ -429,6 +479,7 @@ public sealed class SubtitleServer(int port = 8787, TimeSpan? pingInterval = nul
         lock (gate)
         {
             if (lastStyle is { } style) head.Append(StyleFrame(style));
+            if (lastLook is { } look) head.Append(LookFrame(look));
             clients.Add(client);
             count = TvCount();
         }

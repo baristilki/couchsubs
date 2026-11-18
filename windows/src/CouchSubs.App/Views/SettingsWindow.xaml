@@ -580,6 +580,25 @@
                                        Text="{t:T 'Keep the window open and uncovered while streaming. Subtitles appear in it while the translation is running, even when they are shown only on the TV.'}" />
                         </StackPanel>
                     </c:Card>
+                    <!-- Discord "oynuyor" durumu (DiscordIpcPresence): kullanıcının Discord uygulamasının adı ve ikonu görünür. -->
+                    <c:Card Title="{t:T 'Discord status'}" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,12"
+                                       Text="{t:T 'Shows Playing in Discord while CouchSubs is open. Create an application named after the game at discord.com/developers, set the game logo as its App Icon and paste its Application ID here.'}" />
+                            <CheckBox x:Name="DiscordPresenceOn" Content="{t:T 'Show in Discord'}" Margin="0,0,0,8"
+                                      Checked="OnDiscordPresence" Unchecked="OnDiscordPresence" />
+                            <DockPanel Margin="0,0,0,8">
+                                <TextBlock Text="{t:T 'Application ID'}" Width="150" VerticalAlignment="Center" />
+                                <TextBox x:Name="DiscordAppIdBox" Width="240" HorizontalAlignment="Left" FontFamily="Consolas"
+                                         VerticalContentAlignment="Center" LostFocus="OnDiscordAppId" />
+                            </DockPanel>
+                            <DockPanel>
+                                <TextBlock Text="{t:T 'Image (optional)'}" Width="150" VerticalAlignment="Center" />
+                                <TextBox x:Name="DiscordImageBox" Width="240" HorizontalAlignment="Left"
+                                         VerticalContentAlignment="Center" LostFocus="OnDiscordImage" />
+                            </DockPanel>
+                        </StackPanel>
+                    </c:Card>
                 </StackPanel>
             </TabItem>
             <!-- Görüntünün nereden okunduğu: PS5 bağlantısı ya da bu bilgisayardaki Remote Play penceresi (PS Remote Play / chiaki-ng). -->

@@ -112,6 +112,11 @@ public sealed class LiveServices : IAppServices
 
     public IGameAudioOutput? MakeGameAudioOutput() => new WaveOutGameAudio();
 
+    private IDiscordPresence? discordPresence;
+
+    /// <summary>İlk istendiğinde açılır (Discord'a bağlanmayı kendi iş parçacığında dener).</summary>
+    public IDiscordPresence? DiscordPresence => discordPresence ??= new DiscordIpcPresence();
+
     public IStreamSession MakeWindowStream(RemotePlayApp app) => new RemotePlayWindowStream(app);
     public IStreamSession MakeCaptureWindowStream(WindowCaptureTarget target) => new RemotePlayWindowStream(target);
     public IReadOnlyList<WindowCaptureTarget> CaptureWindows() => RemotePlayWindowStream.ListCaptureWindows();

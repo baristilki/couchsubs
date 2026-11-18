@@ -74,6 +74,9 @@ public partial class SettingsWindow : Window
         StreamGameAudio.IsChecked = controller.StreamGameAudio;
         StreamMatchGameColor.IsChecked = controller.StreamMatchGameColor;
         StreamMatchGameSize.IsChecked = controller.StreamMatchGameSize;
+        DiscordPresenceOn.IsChecked = controller.DiscordPresenceEnabled;
+        DiscordAppIdBox.Text = controller.DiscordAppId;
+        DiscordImageBox.Text = controller.DiscordImage;
         var streamCover = controller.StreamCover.ToString();
         StreamCoverChoice.SelectedItem = StreamCoverChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == streamCover);
         ShowStreamPlacement();
@@ -1064,6 +1067,17 @@ public partial class SettingsWindow : Window
     private void OnStreamMatchGameColor(object sender, RoutedEventArgs e) => controller.StreamMatchGameColor = StreamMatchGameColor.IsChecked == true;
 
     private void OnStreamMatchGameSize(object sender, RoutedEventArgs e) => controller.StreamMatchGameSize = StreamMatchGameSize.IsChecked == true;
+
+    private void OnDiscordPresence(object sender, RoutedEventArgs e) => controller.DiscordPresenceEnabled = DiscordPresenceOn.IsChecked == true;
+
+    private void OnDiscordAppId(object sender, RoutedEventArgs e)
+    {
+        controller.DiscordAppId = DiscordAppIdBox.Text;
+        // Geçersiz kimlik silinir; kutu kaydedileni gösterir.
+        DiscordAppIdBox.Text = controller.DiscordAppId;
+    }
+
+    private void OnDiscordImage(object sender, RoutedEventArgs e) => controller.DiscordImage = DiscordImageBox.Text;
 
     private void OnStreamCover(object sender, SelectionChangedEventArgs e)
     {

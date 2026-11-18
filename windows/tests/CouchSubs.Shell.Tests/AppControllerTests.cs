@@ -132,6 +132,8 @@ internal sealed class FakeServices : IAppServices
     /// <summary>PS Remote Play / chiaki-ng bu bilgisayarda kurulu mu (Ayarlar'daki indirme satırları, ana ekran uyarısı).</summary>
     public bool RemotePlayIsInstalled { get; set; } = true;
     public bool RemotePlayInstalled(RemotePlayApp app) => RemotePlayIsInstalled;
+    public FakeDiscord? Discord { get; set; }
+    public IDiscordPresence? DiscordPresence => Discord;
     /// <summary>Oyun sesi çıkışı (yayın penceresi); her istekte aynısı verilir, kaç kez istendiği sayılır.</summary>
     public FakeGameAudio GameAudio { get; } = new();
     public int GameAudioRequests { get; private set; }

@@ -58,6 +58,12 @@ public static class StoreKeys
     public const string StreamGameVolume = "streamGameVolume";
     /// <summary>Oyun sesi kısık mı (düzey korunur, açınca geri gelir).</summary>
     public const string StreamGameMuted = "streamGameMuted";
+    /// <summary>Discord'da "oynuyor" durumu gösterilsin mi.</summary>
+    public const string DiscordPresence = "discordPresence";
+    /// <summary>Kullanıcının Discord Developer Portal'da açtığı uygulamanın kimliği (adı Discord'da "oynuyor" diye görünür).</summary>
+    public const string DiscordAppId = "discordAppId";
+    /// <summary>O uygulamanın Rich Presence görsellerinden büyük görselin anahtarı (ör. "gta6") ya da https adresi.</summary>
+    public const string DiscordImage = "discordImage";
 }
 
 /// <summary>
@@ -67,6 +73,23 @@ public static class StoreKeys
 /// Discord ya da OBS'te olduğu gibi yayınlanır, TV'deki oyun etkilenmez. Görüntü gelene kadar zemin siyahtır.
 /// </summary>
 public enum StreamBackground { Green, Black, Magenta, Game }
+
+/// <summary>
+/// Discord'da gösterilecek "oynuyor" durumu. Başlık (ör. "Grand Theft Auto VI") Discord uygulamasının adıdır; satırlar
+/// ve görsel buradan gelir.
+/// </summary>
+/// <param name="LargeImage">Uygulamanın Rich Presence görsel anahtarı ya da https adresi.</param>
+public sealed record DiscordActivity(string AppId, string? Details, string? State, string? LargeImage, string? LargeText, DateTimeOffset Started);
+
+/// <summary>Discord masaüstü uygulamasının yerel bağlantısı (IPC). Discord kapalıysa açılınca kendiliğinden bağlanır.</summary>
+public interface IDiscordPresence : IDisposable
+{
+    /// <summary>Gösterilecek durum; null ise durum kaldırılır. Bloklamaz.</summary>
+    void Update(DiscordActivity? activity);
+
+    /// <summary>Discord uygulamasının adı (Developer Portal'daki; herkese açık bilgi); alınamazsa null.</summary>
+    Task<string?> AppNameAsync(string appId) => Task.FromResult<string?>(null);
+}
 
 /// <summary>Oyun görüntüsü zemininde, çeviri görünürken oyunun İngilizce altyazısı nasıl örtülür.</summary>
 public enum StreamCover
@@ -640,6 +663,8 @@ public interface IAppServices
     IStreamSession MakeStream(RegisteredConsole console, byte[] accountId, string? loginPasscode);
     /// <summary>Yayın penceresi oyun görüntüsü gösterirken oyun sesini bu bilgisayarda çalan çıkış; yoksa null.</summary>
     IGameAudioOutput? MakeGameAudioOutput() => null;
+    /// <summary>Discord'daki "oynuyor" durumu (Rich Presence); yoksa null.</summary>
+    IDiscordPresence? DiscordPresence => null;
     /// <summary>Görüntüyü bu bilgisayardaki Remote Play penceresinden (PS Remote Play ya da chiaki-ng) alan kaynak.</summary>
     IStreamSession MakeWindowStream(RemotePlayApp app) => throw new NotSupportedException();
     /// <summary>Açıkça seçilen pencereyi okumak için aynı Windows Graphics Capture hattını kullanır.</summary>

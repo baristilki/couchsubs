@@ -153,6 +153,12 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         services.Translation.EngineFailure += OnEngineFailure;
         services.Translation.GpuFallback += OnGpuFallback;
         history = services.HistoryFile is { } file ? SubtitleHistory.Load(file) : new SubtitleHistory();
+        // Discord durumu: uygulama açılınca gösterilir; oyun, çeviri ya da yayın değişince güncellenir.
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(PlayedGame) or nameof(IsRunning)) ApplyDiscord();
+        };
+        ApplyDiscord();
     }
 
     /// <summary>
@@ -387,6 +393,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (!Set(ref settings, value, [nameof(UsesFreeGemini)])) return;
             settingsStore.Save(value);
             server.SendStyle(value.Style);
+            SendLook();
             if (old.Output != value.Output) OutputChanged();
             if (old.Dubbing != value.Dubbing) DubbingSettingsChanged(old.Dubbing);
             if (old.GamePacks != value.GamePacks && pipeline is not null) ConnectPacks(pipeline);
@@ -1323,6 +1330,9 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             RefreshTranslatorStatus();
             try { await StartServerAsync(); } catch { /* port açılamadıysa TV durumu "bekleniyor" kalır */ }
             server.SendStyle(settings.Style);
+            // Yeni oturum başka oyun olabilir: renkler yeniden okunur; TV oyuna uyan görünümü baştan alır.
+            GameColors.Reset();
+            SendLook();
             SubtitlesPaused = false;
             MetricsText = "";
             MakePipeline();
@@ -1461,9 +1471,86 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
 
     private void OnSubtitleEvent(SubtitleEvent e)
     {
+        NoteShownForColors(e);
         post(() => StreamEvent?.Invoke(e));
         if (!ShowsOnComputer) return;
         post(() => OverlayEvent?.Invoke(e));
+    }
+
+    // --- Oyuna uyan görünüm: oyunun altyazı renkleri (bilgisayar ve TV ortak) ---
+    // Renk her karede değil, yarım saniyede bir ve yalnız ekranda çeviri varken (oyunun altyazısı da görünürken)
+    // İngilizce satırın yerinden okunur. Yayın penceresi ve TV aynı defteri kullanır, ikisi hep aynı renktedir.
+
+    /// <summary>Oyunun cümle ve konuşan adı renkleri.</summary>
+    public GameTextColor.Book GameColors { get; } = new();
+
+    private readonly Lock colorGate = new();
+    private string? shownText;
+    private TextBox? shownBox;
+    private long nextColorSample;
+    private readonly HashSet<string> knownSpeakers = new(StringComparer.OrdinalIgnoreCase);
+
+    private void NoteShownForColors(SubtitleEvent e)
+    {
+        lock (colorGate)
+        {
+            if (e.Kind == SubtitleEventKind.Subtitle)
+            {
+                shownText = e.Text;
+                if (e.Box is { } box) shownBox = box;
+            }
+            else if (e.Kind == SubtitleEventKind.Clear) shownText = null;
+        }
+    }
+
+    /// <summary>Kare iş parçacığında: zamanı geldiyse oyunun yazı renklerini okur, değiştiyse yayın penceresine ve TV'ye bildirir.</summary>
+    private void SampleGameColors(Frame frame)
+    {
+        if (!StreamMatchGameColor) return;
+        string? text;
+        TextBox? box;
+        var now = Environment.TickCount64;
+        lock (colorGate)
+        {
+            if (now < nextColorSample || shownText is null) return;
+            nextColorSample = now + 500;
+            text = shownText;
+            box = shownBox;
+        }
+        // İngilizce satırın yeri biliniyorsa yalnız orası (biraz paylı) okunur; bilinmiyorsa altyazı bölgesinin tamamı.
+        var region = box is { } b
+            ? new CropRegion(Math.Max(0, b.Top - 0.01), Math.Min(1, b.Bottom + 0.01), Math.Max(0, b.Left - 0.01), Math.Min(1, b.Right + 0.01))
+            : settings.Region;
+        var sample = GameTextColor.SampleColors(frame.Pixels, frame.Width, frame.Height, region);
+        // Okunan ad rengi soldaki (ilk satırdaki) konuşanındır; iki konuşanlı satırda kime ait olduğu belli değil.
+        string? speaker = null;
+        lock (colorGate)
+        {
+            var parts = StreamSubtitleText.Lines(text);
+            var named = parts.Select(part => StreamSubtitleText.SplitSpeaker(part, knownSpeakers)).ToList();
+            foreach (var split in named) if (split is { } s) knownSpeakers.Add(s.Speaker);
+            if (named.Count(split => split is not null) == 1 && named[0] is { } first) speaker = first.Speaker;
+        }
+        if (!GameColors.Offer(sample, speaker)) return;
+        SubtitleLog.Write($"oyunun yazı rengi {GameTextColor.Hex(GameColors.Text)}"
+            + (speaker is not null && GameColors.Speaker(speaker) is { } c ? $", {speaker} {GameTextColor.Hex(c)}" : ""));
+        post(() =>
+        {
+            Changed(nameof(GameColors));
+            SendLook();
+        });
+    }
+
+    /// <summary>TV'ye oyuna uyan görünümü gönderir (yayın penceresi aynı ayarları ve renkleri kendisi okur).</summary>
+    private void SendLook()
+    {
+        var matchColor = StreamMatchGameColor && settings.Style.TextColor == SubtitleTextColor.White;
+        server.SendLook(SubtitleLook.Create(
+            oneLine: StreamMatchGameSize,
+            matchSize: StreamMatchGameSize,
+            font: StreamFont,
+            textColor: matchColor ? GameTextColor.Hex(GameColors.Text) : null,
+            speakers: StreamMatchGameColor ? GameColors.SpeakerHexes() : new Dictionary<string, string>()));
     }
 
     // --- Yayın penceresi (yayın programlarının pencere yakalamayla aldığı düz zeminli altyazı) ---
@@ -1506,6 +1593,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (gameVideoWanted == value) return;
             gameVideoWanted = value;
             ApplyGameVideo();
+            ApplyDiscord();
         }
     }
 
@@ -1538,7 +1626,97 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (value == StreamMatchGameColor) return;
             store.Save(StoreKeys.StreamMatchGameColor, value);
             Changed(nameof(StreamMatchGameColor));
+            SendLook();
         }
+    }
+
+    // --- Discord "oynuyor" durumu (Rich Presence) ---
+    // Kullanıcı Discord Developer Portal'da oyun adıyla bir uygulama açar (ör. "Grand Theft Auto VI"), görselini
+    // yükler, kimliğini Ayarlar'a yazar. CouchSubs açıkken Discord'da o ad, görsel ve "Türkçe altyazıyla" görünür;
+    // yayın penceresi açıksa "Yayında" da yazar.
+
+    private readonly DateTimeOffset discordSince = DateTimeOffset.UtcNow;
+
+    public bool DiscordPresenceEnabled
+    {
+        get => store.Load<bool?>(StoreKeys.DiscordPresence) ?? false;
+        set
+        {
+            if (value == DiscordPresenceEnabled) return;
+            store.Save(StoreKeys.DiscordPresence, value);
+            Changed(nameof(DiscordPresenceEnabled));
+            ApplyDiscord();
+        }
+    }
+
+    /// <summary>Discord uygulama kimliği (yalnız rakam); geçersizse boş.</summary>
+    public string DiscordAppId
+    {
+        get => store.Load<string>(StoreKeys.DiscordAppId) ?? "";
+        set
+        {
+            value = DiscordPresence.CleanAppId(value);
+            if (value == DiscordAppId) return;
+            store.Save(StoreKeys.DiscordAppId, value);
+            Changed(nameof(DiscordAppId));
+            ApplyDiscord();
+        }
+    }
+
+    /// <summary>Büyük görselin anahtarı (Developer Portal › Rich Presence › Art Assets) ya da https adresi.</summary>
+    public string DiscordImage
+    {
+        get => store.Load<string>(StoreKeys.DiscordImage) ?? DiscordPresence.DefaultImage;
+        set
+        {
+            value = value?.Trim() ?? "";
+            if (value == DiscordImage) return;
+            store.Save(StoreKeys.DiscordImage, value);
+            Changed(nameof(DiscordImage));
+            ApplyDiscord();
+        }
+    }
+
+    private DiscordActivity? lastDiscord;
+
+    private void ApplyDiscord()
+    {
+        if (services.DiscordPresence is not { } discord) return;
+        var activity = DiscordPresenceEnabled
+            ? DiscordPresence.For(DiscordAppId, DiscordImage, PlayedGame, IsRunning, gameVideoWanted, discordSince, text)
+            : null;
+        _ = RefreshDiscordAppNameAsync(activity?.AppId);
+        if (activity == lastDiscord) return;
+        lastDiscord = activity;
+        discord.Update(activity);
+    }
+
+    private string? discordAppName;
+    private string? discordAppNameFor;
+
+    /// <summary>
+    /// Discord uygulamasının adı (ör. "Grand Theft Auto VI"); durum açık değilse null. Discord, oyuna bağlayamadığı
+    /// pencere yayınını pencere başlığıyla gösterir ("Yayında: CouchSubs Yayın"); yayın penceresi başlığını bundan alır,
+    /// Discord'da "Yayında: Grand Theft Auto VI" görünür.
+    /// </summary>
+    public string? DiscordAppName { get => discordAppName; private set => Set(ref discordAppName, value); }
+
+    private async Task RefreshDiscordAppNameAsync(string? appId)
+    {
+        if (appId == discordAppNameFor) return;
+        discordAppNameFor = appId;
+        if (appId is null || services.DiscordPresence is not { } discord)
+        {
+            DiscordAppName = null;
+            return;
+        }
+        string? name;
+        try { name = await discord.AppNameAsync(appId); }
+        catch { name = null; }
+        post(() =>
+        {
+            if (discordAppNameFor == appId) DiscordAppName = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+        });
     }
 
     /// <summary>Bilgisayarda çalan, Discord/OBS'e giden oyun sesinin düzeyi (0-100). Varsayılan 100.</summary>
@@ -1617,6 +1795,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (value == StreamMatchGameSize) return;
             store.Save(StoreKeys.StreamMatchGameSize, value);
             Changed(nameof(StreamMatchGameSize));
+            SendLook();
         }
     }
 
@@ -1630,6 +1809,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (value == StreamFont) return;
             store.Save(StoreKeys.StreamFont, value);
             Changed(nameof(StreamFont));
+            SendLook();
         }
     }
 
@@ -1803,6 +1983,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         var exiting = StopSession(closeTvApp: true);
         gameAudio?.Dispose();
         gameAudio = null;
+        services.DiscordPresence?.Update(null);
         if (services.Xbox is IDisposable disposableXbox) disposableXbox.Dispose();
         // Sunucu kapanmadan TV'ye çıkış mesajı yazılsın; TV yanıt vermiyorsa kapanış en çok bir saniye bekler.
         try { exiting.Wait(TimeSpan.FromSeconds(1)); }
@@ -2454,6 +2635,8 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         try
         {
             post(() => LastFrame = frame);
+            // Oyunun altyazı renkleri (yarım saniyede bir; yayın penceresi ve TV ortak).
+            SampleGameColors(frame);
             // Duraklatıldıysa kare yalnız ek bölgeler ve serbest alan için saklanır; altyazı okunmaz.
             if (subtitlesPaused) return;
             // Önceki kare hâlâ işleniyorsa bu kare atlanır; okuma kareleri biriktirmez.

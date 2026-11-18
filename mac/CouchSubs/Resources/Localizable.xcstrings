@@ -12081,6 +12081,134 @@
         }
       }
     },
+    "Discord status": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discord status"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discord durumu"
+          }
+        }
+      }
+    },
+    "Shows Playing in Discord while CouchSubs is open. Create an application named after the game at discord.com/developers, set the game logo as its App Icon and paste its Application ID here.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows Playing in Discord while CouchSubs is open. Create an application named after the game at discord.com/developers, set the game logo as its App Icon and paste its Application ID here."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CouchSubs açıkken Discord'da \"Oynuyor\" olarak görünür. discord.com/developers adresinde oyunun adıyla bir uygulama açın, oyunun logosunu App Icon yapın ve Application ID'sini buraya yapıştırın."
+          }
+        }
+      }
+    },
+    "Show in Discord": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show in Discord"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discord'da göster"
+          }
+        }
+      }
+    },
+    "Application ID": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Application ID"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Application ID"
+          }
+        }
+      }
+    },
+    "Image (optional)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image (optional)"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Görsel (isteğe bağlı)"
+          }
+        }
+      }
+    },
+    "With Turkish subtitles": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With Turkish subtitles"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Türkçe altyazıyla"
+          }
+        }
+      }
+    },
+    "With CouchSubs": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With CouchSubs"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CouchSubs ile"
+          }
+        }
+      }
+    },
+    "Streaming": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Streaming"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yayında"
+          }
+        }
+      }
+    },
     "Open the stream window": {
       "localizations": {
         "en": {

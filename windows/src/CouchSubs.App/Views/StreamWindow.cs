@@ -71,7 +71,9 @@ public sealed partial class StreamWindow : Window
     private StreamWindow(AppController controller)
     {
         this.controller = controller;
-        Title = WindowTitle;
+        // Discord durumu açıkken başlık Discord uygulamasının adıdır: Discord pencere yayınını başlıkla gösterir
+        // ("Yayında: Grand Theft Auto VI"). Kapalıysa sabit ad; yayın programı pencereyi bu adla bulur.
+        Title = controller.DiscordAppName ?? WindowTitle;
         // 1280x720 içerik: 16:9, yayın programında kaynak oranı bozulmaz.
         SizeToContent = SizeToContent.Manual;
         Width = 1296;
@@ -116,7 +118,6 @@ public sealed partial class StreamWindow : Window
         staleCheck.Tick += (_, _) =>
         {
             DrawLatestFrame();
-            SampleGameTextColor();
         };
         KeyDown += OnKey;
         MouseDoubleClick += (_, e) =>
@@ -240,8 +241,6 @@ public sealed partial class StreamWindow : Window
         if (rendering) controller.GameVideo.FrameWritten -= OnFrameWritten;
         staleCheck.Stop();
         // Başka oyuna geçilmiş olabilir: renk yeniden okunur.
-        gameColor.Reset();
-        speakerColors.Clear();
         rendering = false;
         game.Visibility = Visibility.Collapsed;
         game.Source = null;
@@ -262,58 +261,12 @@ public sealed partial class StreamWindow : Window
 
     private readonly DispatcherTimer staleCheck = new() { Interval = TimeSpan.FromMilliseconds(500) };
 
-    /// <summary>Oyunun altyazı rengi; yarım saniyede bir, yalnız ekranda çeviri varken (oyunun altyazısı da görünürken)
-    /// altyazı bölgesinden okunur.</summary>
-    private readonly GameTextColor.Tracker gameColor = new();
-
-    /// <summary>
-    /// Konuşan adlarının renkleri, ada göre: oyunlar her karakterin adını kendi renginde yazar (Miles mavi, Ganke
-    /// turuncu…); tek bir "ad rengi" tutulunca renk karakterden karaktere zıplıyordu.
-    /// </summary>
-    private readonly Dictionary<string, GameTextColor.Tracker> speakerColors = new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>Ekrandaki son çevirinin konuşan adı (okunan ad rengi bu ada yazılır).</summary>
-    private string? CurrentSpeaker()
-    {
-        var current = stack.Lines(Now).LastOrDefault();
-        // Okunan ad rengi soldaki (ilk satırdaki) konuşanındır; iki konuşanlı satırda ikinciye yazılmaz.
-        if (current is null || Lines(current.Text) is not [var firstLine, ..]) return null;
-        // İki konuşanlı satırda hangi rengin kime ait olduğu belli değil: renk yazılmaz.
-        if (Lines(current.Text).Count(part => SplitSpeaker(part, seenSpeakers) is not null) > 1) return null;
-        return SpeakerOf(firstLine)?.Speaker;
-    }
-
-    private void SampleGameTextColor()
-    {
-        if (!rendering || !controller.StreamMatchGameColor || stack.Lines(Now).Count() == 0) return;
-        // İngilizce satırın yeri biliniyorsa yalnız orası (biraz paylı) okunur; bilinmiyorsa altyazı bölgesinin tamamı.
-        var region = englishBox is { } box
-            ? new CropRegion(Math.Max(0, box.Top - 0.01), Math.Min(1, box.Bottom + 0.01), Math.Max(0, box.Left - 0.01), Math.Min(1, box.Right + 0.01))
-            : controller.Settings.Region;
-        var sample = controller.GameVideo.Read((pixels, width, height) => GameTextColor.SampleColors(pixels, width, height, region));
-        var changed = gameColor.Offer(sample?.Text);
-        string? speaker = null;
-        if (sample?.Speaker is { } named && CurrentSpeaker() is { } name)
-        {
-            speaker = name;
-            if (!speakerColors.TryGetValue(name, out var tracker)) speakerColors[name] = tracker = new GameTextColor.Tracker(confirmations: 2);
-            changed |= tracker.Offer(named);
-        }
-        if (!changed) return;
-        static string Hex(GameTextColor.Rgb c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
-        var speakerNote = speaker is not null && speakerColors[speaker].Confirmed ? $", {speaker} {Hex(speakerColors[speaker].Current)}" : "";
-        CouchSubs.RemotePlay.RemotePlayLog.Note($"yayın penceresi: oyunun yazı rengi {Hex(gameColor.Current)}{speakerNote}");
-        boxes.Clear();
-        Refresh();
-    }
-
     /// <summary>Konuşan adının yazı rengi: oyunda o karakterin adı ayrı renkteyse o renk, değilse cümlenin rengi;
-    /// renk uyumu kapalıysa sönük gri.</summary>
+    /// renk uyumu kapalıysa sönük gri. Renkler çeviri hattında okunur (AppController.GameColors); TV de aynısını kullanır.</summary>
     private Color SpeakerBrushColor(SubtitleStyle style, string speaker)
     {
         if (!controller.StreamMatchGameColor) return SpeakerColor;
-        if (speakerColors.TryGetValue(speaker, out var tracker) && tracker.Confirmed)
-            return Color.FromRgb(tracker.Current.R, tracker.Current.G, tracker.Current.B);
+        if (controller.GameColors.Speaker(speaker) is { } c) return Color.FromRgb(c.R, c.G, c.B);
         return GameTextBrushColor(style);
     }
 
@@ -321,7 +274,7 @@ public sealed partial class StreamWindow : Window
     private Color GameTextBrushColor(SubtitleStyle style)
     {
         if (style.TextColor == SubtitleTextColor.Yellow) return Color.FromRgb(0xFF, 0xE1, 0x35);
-        var c = controller.StreamMatchGameColor ? gameColor.Current : GameTextColor.White;
+        var c = controller.StreamMatchGameColor ? controller.GameColors.Text : GameTextColor.White;
         return Color.FromRgb(c.R, c.G, c.B);
     }
 
@@ -374,6 +327,12 @@ public sealed partial class StreamWindow : Window
     private void OnChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(AppController.GameVideoActive)) UpdateGameRendering();
+        if (e.PropertyName == nameof(AppController.GameColors))
+        {
+            boxes.Clear();
+            Refresh();
+        }
+        if (e.PropertyName == nameof(AppController.DiscordAppName)) Title = controller.DiscordAppName ?? WindowTitle;
         if (e.PropertyName is nameof(AppController.StreamCover) or nameof(AppController.StreamMatchGameColor)
             or nameof(AppController.StreamPlacement) or nameof(AppController.StreamMatchGameSize) or nameof(AppController.StreamFont)
             or nameof(AppController.StreamFreePosition))

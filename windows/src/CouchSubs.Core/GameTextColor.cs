@@ -123,6 +123,62 @@ public static class GameTextColor
         return false;
     }
 
+    public static string Hex(Rgb color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+
+    /// <summary>
+    /// Oyunun altyazı renkleri: cümlenin rengi ve konuşan adlarının renkleri (ada göre; oyunlar her karakterin adını
+    /// kendi renginde yazar). Bilgisayardaki yayın penceresi ve TV aynı defteri kullanır, ikisi hep aynı renktedir.
+    /// </summary>
+    public sealed class Book
+    {
+        private readonly Tracker text = new();
+        private readonly Dictionary<string, Tracker> speakers = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Lock gate = new();
+
+        /// <summary>Okunan örnek; <paramref name="speaker"/> ekrandaki çevirinin (tek) konuşan adı. Renk değiştiyse true.</summary>
+        public bool Offer(Colors? sample, string? speaker)
+        {
+            lock (gate)
+            {
+                var changed = text.Offer(sample?.Text);
+                if (sample?.Speaker is { } named && speaker is not null)
+                {
+                    if (!speakers.TryGetValue(speaker, out var tracker)) speakers[speaker] = tracker = new Tracker(confirmations: 2);
+                    changed |= tracker.Offer(named);
+                }
+                return changed;
+            }
+        }
+
+        public Rgb Text
+        {
+            get { lock (gate) return text.Current; }
+        }
+
+        /// <summary>Konuşanın doğrulanmış rengi; yoksa null (ad cümlenin renginde yazılır).</summary>
+        public Rgb? Speaker(string name)
+        {
+            lock (gate) return speakers.TryGetValue(name, out var tracker) && tracker.Confirmed ? tracker.Current : null;
+        }
+
+        /// <summary>Doğrulanmış konuşan renkleri (TV'ye gönderilir).</summary>
+        public IReadOnlyDictionary<string, string> SpeakerHexes()
+        {
+            lock (gate)
+                return speakers.Where(pair => pair.Value.Confirmed).ToDictionary(pair => pair.Key, pair => Hex(pair.Value.Current), StringComparer.Ordinal);
+        }
+
+        /// <summary>Başka oyuna geçilmiş olabilir: renkler yeniden okunur.</summary>
+        public void Reset()
+        {
+            lock (gate)
+            {
+                text.Reset();
+                speakers.Clear();
+            }
+        }
+    }
+
     /// <summary>
     /// Örneklerden kararlı renk: tek bir karedeki sapma (patlama, parlak efekt) rengi değiştirmesin diye yeni renk
     /// art arda <see cref="Confirmations"/> örnekte görülünce geçilir.

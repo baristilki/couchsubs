@@ -26,13 +26,17 @@ public static class DiscordPresence
 
     /// <summary>Gösterilecek durum; kimlik geçersizse null (durum gösterilmez).</summary>
     public static DiscordActivity? For(string appId, string image, string? playedGame, bool translating, bool streaming,
-                                       DateTimeOffset since, Localizer text)
+                                       DateTimeOffset since, Localizer text, bool xbox = false)
     {
         if (CleanAppId(appId) is not { Length: > 0 } id) return null;
         var details = translating ? text["With Turkish subtitles"] : text["With CouchSubs"];
         var state = streaming ? text["Streaming"] : null;
-        return new DiscordActivity(id, details, state, string.IsNullOrWhiteSpace(image) ? null : image.Trim(),
-                                   playedGame, since);
+        // Köşede konsolun ikonu: Developer Portal › Rich Presence › Art Assets'e "ps5" (ya da "xbox") adıyla yüklenir.
+        return new DiscordActivity(id, details, state, string.IsNullOrWhiteSpace(image) ? null : image.Trim(), playedGame, since)
+        {
+            SmallImage = xbox ? "xbox" : "ps5",
+            SmallText = xbox ? "Xbox" : "PlayStation 5",
+        };
     }
 
     /// <summary>İlk ileti (handshake, işlem kodu 0).</summary>
@@ -48,6 +52,8 @@ public static class DiscordPresence
             var assets = new JsonObject();
             if (activity.LargeImage is { Length: > 0 } image) assets["large_image"] = Limit(image, 300);
             if (activity.LargeText is { Length: > 0 } large) assets["large_text"] = Limit(large, 128);
+            if (activity.SmallImage is { Length: > 0 } small) assets["small_image"] = Limit(small, 300);
+            if (activity.SmallText is { Length: > 0 } smallText) assets["small_text"] = Limit(smallText, 128);
             var node = new JsonObject
             {
                 ["type"] = 0, // "Oynuyor"

@@ -1685,7 +1685,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     {
         if (services.DiscordPresence is not { } discord) return;
         var activity = DiscordPresenceEnabled
-            ? DiscordPresence.For(DiscordAppId, DiscordImage, PlayedGame, IsRunning, gameVideoWanted, discordSince, text)
+            ? DiscordPresence.For(DiscordAppId, DiscordImage, PlayedGame, IsRunning, gameVideoWanted, discordSince, text, IsXbox)
             : null;
         _ = RefreshDiscordAppNameAsync(activity?.AppId);
         if (activity == lastDiscord) return;

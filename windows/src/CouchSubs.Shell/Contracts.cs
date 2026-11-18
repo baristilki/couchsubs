@@ -79,7 +79,13 @@ public enum StreamBackground { Green, Black, Magenta, Game }
 /// ve görsel buradan gelir.
 /// </summary>
 /// <param name="LargeImage">Uygulamanın Rich Presence görsel anahtarı ya da https adresi.</param>
-public sealed record DiscordActivity(string AppId, string? Details, string? State, string? LargeImage, string? LargeText, DateTimeOffset Started);
+public sealed record DiscordActivity(string AppId, string? Details, string? State, string? LargeImage, string? LargeText, DateTimeOffset Started)
+{
+    /// <summary>Köşedeki küçük görselin anahtarı (Art Assets'e bu adla yüklenir, ör. "ps5"); yüklü değilse Discord göstermez.</summary>
+    public string? SmallImage { get; init; }
+    /// <summary>Küçük görselin üstüne gelince yazan (ör. "PlayStation 5").</summary>
+    public string? SmallText { get; init; }
+}
 
 /// <summary>Discord masaüstü uygulamasının yerel bağlantısı (IPC). Discord kapalıysa açılınca kendiliğinden bağlanır.</summary>
 public interface IDiscordPresence : IDisposable

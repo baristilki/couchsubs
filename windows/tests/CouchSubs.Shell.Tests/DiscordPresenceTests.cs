@@ -46,6 +46,9 @@ public class DiscordPresenceTests
         Assert.Equal("Türkçe altyazıyla", sent.GetProperty("details").GetString());
         Assert.Equal(1_800_000_000, sent.GetProperty("timestamps").GetProperty("start").GetInt64());
         Assert.False(sent.GetProperty("assets").TryGetProperty("large_image", out _));
+        // Köşede konsolun ikonu ("ps5" görsel anahtarı) ve adı.
+        Assert.Equal("ps5", sent.GetProperty("assets").GetProperty("small_image").GetString());
+        Assert.Equal("PlayStation 5", sent.GetProperty("assets").GetProperty("small_text").GetString());
 
         using var cleared = JsonDocument.Parse(DiscordPresence.SetActivity(null, 42, "n2"));
         Assert.Equal(JsonValueKind.Null, cleared.RootElement.GetProperty("args").GetProperty("activity").ValueKind);

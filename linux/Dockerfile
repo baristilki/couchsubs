@@ -17,7 +17,7 @@ RUN apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq 
       build-essential cmake ninja-build pkg-config nasm git \
       python3 python3-protobuf protobuf-compiler \
       libssl-dev libjson-c-dev libevent-dev libminiupnpc-dev zlib1g-dev \
-      libavcodec-dev libswscale-dev libavutil-dev >/dev/null
+      libavcodec-dev libswscale-dev libavutil-dev libopus-dev >/dev/null
 WORKDIR /src
 COPY third-party third-party
 COPY windows/native windows/native
@@ -46,7 +46,7 @@ RUN dotnet publish linux/CouchSubs.Linux -c Release -o /app --nologo -v q \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble
 # FFmpeg ve libchiaki'nin çalışma zamanı kütüphaneleri, Tesseract (yazı tanıma) ve ssh-keygen (LG geliştirici anahtarı).
 RUN apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-      libavcodec60 libswscale7 libavutil58 libjson-c5 libminiupnpc17 libevent-2.1-7t64 libevent-pthreads-2.1-7t64 libssl3t64 zlib1g \
+      libavcodec60 libswscale7 libavutil58 libopus0 libjson-c5 libminiupnpc17 libevent-2.1-7t64 libevent-pthreads-2.1-7t64 libssl3t64 zlib1g \
       libtesseract5 tesseract-ocr-eng openssh-client ca-certificates >/dev/null \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=app /app /app

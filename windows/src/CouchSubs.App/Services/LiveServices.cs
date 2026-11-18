@@ -110,6 +110,8 @@ public sealed class LiveServices : IAppServices
     public IStreamSession MakeStream(RegisteredConsole console, byte[] accountId, string? loginPasscode) =>
         new StreamSession(console, accountId, loginPasscode);
 
+    public IGameAudioOutput? MakeGameAudioOutput() => new WaveOutGameAudio();
+
     public IStreamSession MakeWindowStream(RemotePlayApp app) => new RemotePlayWindowStream(app);
     public IStreamSession MakeCaptureWindowStream(WindowCaptureTarget target) => new RemotePlayWindowStream(target);
     public IReadOnlyList<WindowCaptureTarget> CaptureWindows() => RemotePlayWindowStream.ListCaptureWindows();

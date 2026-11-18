@@ -133,3 +133,26 @@ public interface IStreamSession : IDisposable
     /// <summary>Bilgisayar uykudan uyandığında ya da ağ değiştiğinde çağrılır.</summary>
     void ReconnectNow();
 }
+
+/// <summary>
+/// Oyun görüntüsünü akıcı (saniyede 30 kare) verebilen oturum: "Yayın penceresi" oyunu altyazıyla birlikte gösterir,
+/// yayın programı (Discord, OBS) o pencereyi yakalar. Yalnız PS5 bağlantısı (ikinci hesap) bunu yapar; Remote Play
+/// penceresi ve seçili pencere zaten bilgisayarda görünür.
+/// </summary>
+public interface IGameVideoSource
+{
+    /// <summary>
+    /// null değilse her çözülen kare buraya da yazılır ve PS5'ten saniyede 30 kare istenir (yazı okuma yine en çok
+    /// saniyede 20 kare görür). Oturum çalışırken değişirse kare hızı için bağlantı yeniden kurulur.
+    /// </summary>
+    VideoFrameBuffer? GameVideo { get; set; }
+
+    /// <summary>Oyun görüntüsü açıkken PS5'ten istenen kare hızı (30 ya da 60). Değişirse bağlantı yeniden kurulur.</summary>
+    int GameVideoFps { get; set; }
+
+    /// <summary>
+    /// null değilse ve oyun görüntüsü açıksa oyun sesi de istenir ve buraya yazılır. Ses yalnız bağlantı açılırken
+    /// istenebildiğinden değişirse bağlantı yeniden kurulur.
+    /// </summary>
+    IGameAudioOutput? GameAudio { get; set; }
+}

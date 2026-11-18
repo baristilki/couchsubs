@@ -1358,8 +1358,10 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             stream.StateChanged += state => post(() => SessionStateChanged(state));
             stream.ConsoleMoved += moved => post(() => ConsoleMoved(moved));
             stream.FrameReceived += HandleFrame;
-            stream.Start();
             session = stream;
+            // Oyun görüntüsü baştan isteniyorsa ilk bağlantı 30 kare/sn açılır (sonradan açmak yeniden bağlanmayı gerektirir).
+            ApplyGameVideo();
+            stream.Start();
 
             StartKeeper();
             StartGameSense();
@@ -1483,7 +1485,83 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (value == StreamBackground) return;
             store.Save(StoreKeys.StreamBackground, value.StoredName());
             Changed(nameof(StreamBackground));
+            ApplyGameVideo();
         }
+    }
+
+    // --- Yayın penceresinde oyun görüntüsü ---
+
+    /// <summary>PS5'ten gelen son oyun karesi; yayın penceresi zemin olarak çizer (<see cref="StreamBackground.Game"/>).</summary>
+    public VideoFrameBuffer GameVideo { get; } = new();
+
+    private bool gameVideoWanted;
+
+    /// <summary>Yayın penceresi açık mı (pencere açılınca ve kapanınca söyler). Kapalıyken kareler kopyalanmaz ve
+    /// PS5'ten yine saniyede 20 kare istenir.</summary>
+    public bool GameVideoWanted
+    {
+        get => gameVideoWanted;
+        set
+        {
+            if (gameVideoWanted == value) return;
+            gameVideoWanted = value;
+            ApplyGameVideo();
+        }
+    }
+
+    /// <summary>Oyun görüntüsü yalnız PS5 bağlantısında (ikinci hesap) vardır: Remote Play penceresi ve seçilen pencere
+    /// zaten bu ekranda görünür, Xbox akışı ayrıdır.</summary>
+    public bool GameVideoAvailable => !IsXbox && settings.FrameSource == FrameSource.Ps5;
+
+    /// <summary>Oyun görüntüsü şu an oturumdan alınıyor mu.</summary>
+    public bool GameVideoActive { get; private set; }
+
+    /// <summary>Oyun sesi bu bilgisayarda çalınsın mı (yayın programı sesi bu uygulamadan alır). Varsayılan açık.</summary>
+    public bool StreamGameAudio
+    {
+        get => store.Load<bool?>(StoreKeys.StreamGameAudio) ?? true;
+        set
+        {
+            if (value == StreamGameAudio) return;
+            store.Save(StoreKeys.StreamGameAudio, value);
+            Changed(nameof(StreamGameAudio));
+            ApplyGameVideo();
+        }
+    }
+
+    /// <summary>Oyun görüntüsünün kare hızı: 30 (Discord'un ücretsiz yayını) ya da 60.</summary>
+    public int StreamVideoFps
+    {
+        get => GameVideoRate.FromStored(store.Load<int?>(StoreKeys.StreamVideoFps));
+        set
+        {
+            value = GameVideoRate.FromStored(value);
+            if (value == StreamVideoFps) return;
+            store.Save(StoreKeys.StreamVideoFps, value);
+            Changed(nameof(StreamVideoFps));
+            ApplyGameVideo();
+        }
+    }
+
+    /// <summary>Oyun sesi çıkışı; ilk gerektiğinde açılır, uygulama kapanırken bırakılır.</summary>
+    private IGameAudioOutput? gameAudio;
+
+    private void ApplyGameVideo()
+    {
+        var on = gameVideoWanted && StreamBackground == StreamBackground.Game && GameVideoAvailable && session is IGameVideoSource;
+        if (session is IGameVideoSource source)
+        {
+            // Açılırken kare hızı ve ses görüntüden önce, kapanırken görüntü önce verilir: oturum her değişiklikte
+            // değil, yalnız bir kez yeniden bağlanır.
+            if (!on) source.GameVideo = null;
+            source.GameVideoFps = StreamVideoFps;
+            source.GameAudio = on && StreamGameAudio ? gameAudio ??= services.MakeGameAudioOutput() : null;
+            if (on) source.GameVideo = GameVideo;
+        }
+        if (!on) GameVideo.Clear();
+        if (GameVideoActive == on) return;
+        GameVideoActive = on;
+        Changed(nameof(GameVideoActive));
     }
 
     /// <summary>Bilgisayarın ağ adresiyle OBS sayfası; localhost'u kabul etmeyen yayın programları (TikTok LIVE Studio) için.</summary>
@@ -1508,6 +1586,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         session?.Stop();
         session?.Dispose();
         session = null;
+        ApplyGameVideo();
         UpdateGameProbe(connected: false);
         StopGameSense();
         EndGameAreas();
@@ -1617,6 +1696,8 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         services.Translation.GpuFallback -= OnGpuFallback;
         if (services.Xbox is { } xbox) xbox.TokenUpdated -= OnXboxTokenUpdated;
         var exiting = StopSession(closeTvApp: true);
+        gameAudio?.Dispose();
+        gameAudio = null;
         if (services.Xbox is IDisposable disposableXbox) disposableXbox.Dispose();
         // Sunucu kapanmadan TV'ye çıkış mesajı yazılsın; TV yanıt vermiyorsa kapanış en çok bir saniye bekler.
         try { exiting.Wait(TimeSpan.FromSeconds(1)); }

@@ -162,10 +162,74 @@ internal sealed class SerialQueue : IDisposable
 
 /// <summary>PS5'e (ikinci hesapla) Remote Play bağlantısı kurar ve görüntüyü kare kare verir.
 /// Ses kapalıdır, kol girdisi gönderilmez. Bağlantı koparsa kendiliğinden yeniden bağlanır.</summary>
-public sealed class StreamSession : IStreamSession
+public sealed class StreamSession : IStreamSession, IGameVideoSource
 {
-    /// <summary>Saniyede en çok bu kadar kare BGRA'ya çevrilir (Mac'teki gibi).</summary>
+    /// <summary>Saniyede en çok bu kadar kare BGRA'ya çevrilir ve okunur (Mac'teki gibi).</summary>
     internal const int MaxFps = 20;
+    /// <summary>Oyun yayın penceresinde gösterilirken PS5'ten istenen kare hızı (bağlantının profili de 30).</summary>
+    internal const int VideoFps = 30;
+
+    /// <summary>
+    /// Yerel koda verilecek kare sınırı. Oyun görüntüsünde sınır yoktur (0): yerel sınırlayıcı iki kare arasında tam
+    /// 1/fps süre ister ve ağdan titreşimli gelen 30/sn akışta (30 ms, 36 ms…) kareleri düzensiz atardı; görüntü
+    /// takılırdı. Akışın kendisi zaten en çok <see cref="VideoFps"/> karedir; okuma için seyreltme
+    /// <see cref="FrameDelivery"/>'de yapılır.
+    /// </summary>
+    internal static int NativeFps(bool gameVideo) => gameVideo ? 0 : MaxFps;
+
+    private VideoFrameBuffer? gameVideo;
+
+    /// <inheritdoc />
+    public VideoFrameBuffer? GameVideo
+    {
+        get => Volatile.Read(ref gameVideo);
+        set
+        {
+            var old = Interlocked.Exchange(ref gameVideo, value);
+            if ((old is null) == (value is null)) return;
+            // Kare hızı yalnız oturum açılırken verilebilir; çalışan bağlantı yeni hızla yeniden kurulur.
+            RemotePlayLog.Note(value is null ? "oyun görüntüsü kapandı" : $"oyun görüntüsü açıldı ({GameVideoFps} kare/sn, ses {(GameAudio is null ? "kapalı" : "açık")})");
+            if (value is null) GameAudio?.Reset();
+            ReconnectNow();
+        }
+    }
+
+    private int gameVideoFps = GameVideoRate.Standard;
+
+    /// <inheritdoc />
+    public int GameVideoFps
+    {
+        get => Volatile.Read(ref gameVideoFps);
+        set
+        {
+            value = GameVideoRate.FromStored(value);
+            if (Interlocked.Exchange(ref gameVideoFps, value) == value) return;
+            RemotePlayLog.Note($"oyun görüntüsü kare hızı: {value}");
+            if (GameVideo is not null) ReconnectNow();
+        }
+    }
+
+    private IGameAudioOutput? gameAudio;
+
+    /// <inheritdoc />
+    public IGameAudioOutput? GameAudio
+    {
+        get => Volatile.Read(ref gameAudio);
+        set
+        {
+            var old = Interlocked.Exchange(ref gameAudio, value);
+            if (ReferenceEquals(old, value)) return;
+            old?.Reset();
+            RemotePlayLog.Note(value is null ? "oyun sesi kapandı" : "oyun sesi açıldı");
+            if (GameVideo is not null) ReconnectNow();
+        }
+    }
+
+    /// <summary>Bu bağlantıda ses istenecek mi: yalnız oyun görüntüsü açıkken.</summary>
+    private bool WantsAudio => GameVideo is not null && GameAudio is not null;
+
+    /// <summary>PS5'ten istenecek kare hızı.</summary>
+    private int RequestedFps => GameVideo is not null ? GameVideoFps : GameVideoRate.Standard;
 
     /// <summary>Çözülmüş kare. Oturumun kare iş parçacığında çağrılır; işleyici meşgulken gelen kareler atlanır.</summary>
     public event Action<Frame>? FrameReceived;
@@ -204,7 +268,8 @@ public sealed class StreamSession : IStreamSession
         this.console = console;
         this.accountId = (byte[])accountId.Clone();
         this.loginPasscode = LoginPasscode.Normalized(loginPasscode);
-        delivery = new FrameDelivery(frame => FrameReceived?.Invoke(frame));
+        // Oyun görüntüsü için kareler 30/sn gelse de yazı okuma eskisi gibi en çok 20/sn kare görür.
+        delivery = new FrameDelivery(frame => FrameReceived?.Invoke(frame), maxPerSecond: MaxFps);
     }
 
     public void Start()
@@ -476,14 +541,15 @@ public sealed class StreamSession : IStreamSession
                 var registKey = NativeMethods.Padded(console.RegistKey, 0x10);
                 var morning = NativeMethods.Padded(console.Morning, 0x10);
                 delegate* unmanaged[Cdecl]<byte*, int, int, int, nint, void> frame = &OnFrame;
+                delegate* unmanaged[Cdecl]<short*, int, int, int, nint, void> audio = &OnAudio;
                 delegate* unmanaged[Cdecl]<int, int, byte*, nint, void> eventCallback = &OnEvent;
                 delegate* unmanaged[Cdecl]<int, byte*, nint, void> log = &OnLog;
                 fixed (byte* key = registKey)
                 fixed (byte* morningPointer = morning)
                 fixed (byte* account = accountId)
-                    box.native = NativeMethods.cs_session_start(console.Host, key, morningPointer, account, MaxFps,
-                                                                (nint)frame, (nint)eventCallback, (nint)log,
-                                                                GCHandle.ToIntPtr(box.handle));
+                    box.native = NativeMethods.SessionStart(console.Host, key, morningPointer, account, NativeFps(owner.GameVideo is not null),
+                                                            owner.RequestedFps, (nint)frame, owner.WantsAudio ? (nint)audio : 0,
+                                                            (nint)eventCallback, (nint)log, GCHandle.ToIntPtr(box.handle));
             }
             catch (Exception error)
             {
@@ -528,10 +594,22 @@ public sealed class StreamSession : IStreamSession
                 if (From(user) is { } box && bgra != null && width > 0 && height > 0)
                 {
                     box.owner.watchdog.Picture(Environment.TickCount64);
+                    box.owner.GameVideo?.Write((nint)bgra, width, height, stride);
                     box.owner.delivery.Offer((nint)bgra, width, height, stride);
                 }
             }
             catch (Exception error) { RemotePlayLog.Write(0, $"frame: {error.Message}"); }
+        }
+
+        [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+        private static unsafe void OnAudio(short* pcm, int frames, int channels, int rate, nint user)
+        {
+            try
+            {
+                if (From(user) is { } box && pcm != null && frames > 0 && channels is 1 or 2 && rate > 0)
+                    box.owner.GameAudio?.Write(new ReadOnlySpan<short>(pcm, frames * channels), channels, rate);
+            }
+            catch (Exception error) { RemotePlayLog.Write(0, $"audio: {error.Message}"); }
         }
 
         [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -576,13 +654,25 @@ internal sealed class FrameDelivery : IDisposable
     // Monitor.Wait/Pulse gerektiği için Lock değil düz nesne.
     private readonly object gate = new();
     private readonly Thread thread;
+    private readonly double perSecond;
+    private readonly Func<long> now;
+    /// <summary>Kova: her ms'de <see cref="perSecond"/>/1000 hak dolar, her kabul edilen kare bir hak harcar. Böylece
+    /// 30/sn akıştan ortalama 20/sn kare geçer (her üç kareden ikisi); en kısa aralık kuralı yalnız her iki kareden birini,
+    /// yani 15/sn'yi geçirirdi.</summary>
+    private double tokens = BucketSize;
+    private long lastRefill = long.MinValue;
+    private const double BucketSize = 2;
     private Frame? pending;
     private bool busy;
     private bool closed;
 
-    public FrameDelivery(Action<Frame> deliver)
+    /// <param name="maxPerSecond">Saniyede ortalama en çok bu kadar kare dağıtılır (0: sınır yok). Kova iki karelik
+    /// olduğundan ağdan titreşimli gelen 20/sn akışta kare atlanmaz.</param>
+    public FrameDelivery(Action<Frame> deliver, int maxPerSecond = 0, Func<long>? now = null)
     {
         this.deliver = deliver;
+        perSecond = maxPerSecond;
+        this.now = now ?? (() => Environment.TickCount64);
         thread = new Thread(Run) { IsBackground = true, Name = "CouchSubs frames" };
         thread.Start();
     }
@@ -590,9 +680,17 @@ internal sealed class FrameDelivery : IDisposable
     /// <summary>Tampon yalnız bu çağrı süresince geçerlidir.</summary>
     public void Offer(nint bgra, int width, int height, int stride)
     {
+        var at = now();
         lock (gate)
         {
             if (closed || busy || pending is not null) return;
+            if (perSecond > 0)
+            {
+                if (lastRefill != long.MinValue) tokens = Math.Min(BucketSize, tokens + ((at - lastRefill) * perSecond / 1000));
+                lastRefill = at;
+                if (tokens < 1) return;
+                tokens -= 1;
+            }
         }
         var frame = Frame.Copy(bgra, width, height, stride);
         lock (gate)

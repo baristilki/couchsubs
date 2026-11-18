@@ -69,6 +69,9 @@ public partial class SettingsWindow : Window
         else NetworkObsPanel.Visibility = Visibility.Collapsed;
         var streamBackground = controller.StreamBackground.ToString();
         StreamBackgroundChoice.SelectedItem = StreamBackgroundChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == streamBackground);
+        var streamFps = controller.StreamVideoFps.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        StreamFpsChoice.SelectedItem = StreamFpsChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == streamFps);
+        StreamGameAudio.IsChecked = controller.StreamGameAudio;
         ShowArea(0);
         ShowAreaProfile();
         // Num 8: oyunun o anki görüntüsü önizlemeye alınır.
@@ -1038,6 +1041,14 @@ public partial class SettingsWindow : Window
     }
 
     private void OnOpenStreamWindow(object sender, RoutedEventArgs e) => StreamWindow.Open(controller);
+
+    private void OnStreamFps(object sender, SelectionChangedEventArgs e)
+    {
+        if (StreamFpsChoice.SelectedItem is ComboBoxItem { Tag: string tag } && int.TryParse(tag, out var fps))
+            controller.StreamVideoFps = fps;
+    }
+
+    private void OnStreamGameAudio(object sender, RoutedEventArgs e) => controller.StreamGameAudio = StreamGameAudio.IsChecked == true;
 
     /// <summary>Ek bölgenin ipucu, o bölgenin kısayoluyla.</summary>
     private void ShowAreaHint()

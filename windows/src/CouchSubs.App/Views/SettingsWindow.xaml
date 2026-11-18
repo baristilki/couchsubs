@@ -530,8 +530,24 @@
                                     <ComboBoxItem Content="{t:T 'Green'}" Tag="Green" />
                                     <ComboBoxItem Content="{t:T 'Black'}" Tag="Black" />
                                     <ComboBoxItem Content="{t:T 'Magenta'}" Tag="Magenta" />
+                                    <ComboBoxItem Content="{t:T 'Game picture (PS5)'}" Tag="Game" />
                                 </ComboBox>
                             </DockPanel>
+                            <!-- Oyun görüntüsü: PS5 bağlantısından (ikinci hesap) gelen görüntü altyazının arkasına çizilir (StreamWindow.cs). -->
+                            <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,12"
+                                       Text="{t:T 'Game picture: the window shows the PS5 game with the subtitles on top, so you can share it in Discord or OBS while you keep playing on the TV. Only with the PS5 connection (second account).'}" />
+                            <!-- Oyun görüntüsü seçenekleri: kare hızı (30/60) ve oyun sesinin bu bilgisayarda çalınması. -->
+                            <DockPanel Margin="0,0,0,12">
+                                <TextBlock Text="{t:T 'Game picture frame rate'}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                <ComboBox x:Name="StreamFpsChoice" Width="180" HorizontalAlignment="Left" SelectionChanged="OnStreamFps">
+                                    <ComboBoxItem Content="{t:T '30 fps'}" Tag="30" />
+                                    <ComboBoxItem Content="{t:T '60 fps'}" Tag="60" />
+                                </ComboBox>
+                            </DockPanel>
+                            <CheckBox x:Name="StreamGameAudio" Content="{t:T 'Play the game sound on this computer'}" Margin="0,0,0,4"
+                                      Checked="OnStreamGameAudio" Unchecked="OnStreamGameAudio" />
+                            <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,12"
+                                       Text="{t:T 'Discord and OBS take the sound from CouchSubs. Discord streams at most 30 fps without Nitro.'}" />
                             <Button Content="{t:T 'Open the stream window'}" HorizontalAlignment="Left" Click="OnOpenStreamWindow" />
                             <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,12,0,0"
                                        Text="{t:T 'Keep the window open and uncovered while streaming. Subtitles appear in it while the translation is running, even when they are shown only on the TV.'}" />

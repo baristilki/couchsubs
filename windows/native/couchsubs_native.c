@@ -18,6 +18,8 @@
 #include <libavutil/mem.h>
 #include <libswscale/swscale.h>
 
+#include <opus.h>
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -554,7 +556,17 @@ struct cs_session {
 	cs_decoder decoder;
 	cs_throttle throttle;
 	bool decoder_ready;
+	/* Oyun sesi (cs_session_start_ex, audio != NULL): libchiaki Opus verir, burada PCM'e çözülür. Başlık ve kareler
+	 * aynı ses iş parçacığında gelir; çözücü yalnız orada ve durdurma sonrasında (join'den sonra) kullanılır. */
+	cs_audio_cb audio;
+	OpusDecoder *opus;
+	int audio_channels;
+	int audio_rate;
+	int16_t *pcm;
 };
+
+/* Opus'un tek pakette verebileceği en uzun ses: 120 ms (48 kHz'de 5760 örnek). */
+#define CS_OPUS_MAX_FRAMES 5760
 
 static int cs_quit_reason(ChiakiQuitReason reason)
 {
@@ -636,9 +648,62 @@ static void cs_session_cant_display(void *user, bool cant_display)
 	CHIAKI_LOGI(&session->log, "PS5 stream %s", cant_display ? "can't display (protected content)" : "can display again");
 }
 
+static void cs_audio_close(cs_session *session)
+{
+	if(session->opus)
+		opus_decoder_destroy(session->opus);
+	session->opus = NULL;
+	free(session->pcm);
+	session->pcm = NULL;
+}
+
+/* Ses iş parçacığında: PS5 ses biçimini bildirdi (PS5'te 2 kanal, 48 kHz). Yeniden bağlanmada tekrar gelebilir. */
+static void cs_audio_header(ChiakiAudioHeader *header, void *user)
+{
+	cs_session *session = user;
+	cs_audio_close(session);
+	if(!header || header->channels < 1 || header->channels > 2 || !header->rate)
+		return;
+	int err = OPUS_OK;
+	session->opus = opus_decoder_create((opus_int32)header->rate, header->channels, &err);
+	if(err != OPUS_OK || !session->opus)
+	{
+		CHIAKI_LOGE(&session->log, "Opus decoder could not be created: %d", err);
+		session->opus = NULL;
+		return;
+	}
+	session->pcm = malloc(sizeof(int16_t) * CS_OPUS_MAX_FRAMES * header->channels);
+	if(!session->pcm)
+	{
+		cs_audio_close(session);
+		return;
+	}
+	session->audio_channels = header->channels;
+	session->audio_rate = (int)header->rate;
+	CHIAKI_LOGI(&session->log, "Game audio on: %d ch, %d Hz", session->audio_channels, session->audio_rate);
+}
+
+/* Ses iş parçacığında: bir Opus paketi. Bozuk paket atlanır, akış sürer. */
+static void cs_audio_frame(uint8_t *buf, size_t buf_size, void *user)
+{
+	cs_session *session = user;
+	if(!session->opus || !session->audio || !buf || !buf_size)
+		return;
+	int frames = opus_decode(session->opus, buf, (opus_int32)buf_size, session->pcm, CS_OPUS_MAX_FRAMES, 0);
+	if(frames > 0)
+		session->audio(session->pcm, frames, session->audio_channels, session->audio_rate, session->user);
+}
+
 CS_API cs_session *cs_session_start(const char *host, const uint8_t regist_key[0x10], const uint8_t morning[0x10],
 		const uint8_t account_id[8], int max_fps,
 		cs_frame_cb frame, cs_event_cb event, cs_log_cb log, void *user)
+{
+	return cs_session_start_ex(host, regist_key, morning, account_id, max_fps, 30, frame, NULL, event, log, user);
+}
+
+CS_API cs_session *cs_session_start_ex(const char *host, const uint8_t regist_key[0x10], const uint8_t morning[0x10],
+		const uint8_t account_id[8], int max_fps, int video_fps,
+		cs_frame_cb frame, cs_audio_cb audio, cs_event_cb event, cs_log_cb log, void *user)
 {
 	if(!host || !regist_key || !morning || !account_id)
 		return NULL;
@@ -646,6 +711,7 @@ CS_API cs_session *cs_session_start(const char *host, const uint8_t regist_key[0
 	cs_session *session = calloc(1, sizeof(cs_session));
 	if(!session)
 		return NULL;
+	session->audio = audio;
 	session->frame = frame;
 	session->event = event;
 	session->user = user;
@@ -668,12 +734,13 @@ CS_API cs_session *cs_session_start(const char *host, const uint8_t regist_key[0
 	info.host = host; /* libchiaki adresi oturum açılırken kopyalar */
 	memcpy(info.regist_key, regist_key, sizeof(info.regist_key));
 	memcpy(info.morning, morning, sizeof(info.morning));
-	chiaki_connect_video_profile_preset(&info.video_profile, CHIAKI_VIDEO_RESOLUTION_PRESET_1080p, CHIAKI_VIDEO_FPS_PRESET_30);
+	chiaki_connect_video_profile_preset(&info.video_profile, CHIAKI_VIDEO_RESOLUTION_PRESET_1080p,
+			video_fps == 60 ? CHIAKI_VIDEO_FPS_PRESET_60 : CHIAKI_VIDEO_FPS_PRESET_30);
 	info.video_profile.codec = CHIAKI_CODEC_H264;
 	info.video_profile_auto_downgrade = true;
 	info.enable_keyboard = false;
 	info.enable_dualsense = false;
-	info.audio_video_disabled = CHIAKI_AUDIO_DISABLED;
+	info.audio_video_disabled = audio ? CHIAKI_NONE_DISABLED : CHIAKI_AUDIO_DISABLED;
 	info.auto_regist = false;
 	info.holepunch_session = NULL;
 	info.rudp_sock = NULL;
@@ -691,6 +758,11 @@ CS_API cs_session *cs_session_start(const char *host, const uint8_t regist_key[0
 	}
 	chiaki_session_set_event_cb(&session->session, cs_session_event, session);
 	chiaki_session_set_video_sample_cb(&session->session, cs_session_video_sample, session);
+	if(audio)
+	{
+		ChiakiAudioSink audio_sink = { .user = session, .header_cb = cs_audio_header, .frame_cb = cs_audio_frame };
+		chiaki_session_set_audio_sink(&session->session, &audio_sink);
+	}
 	ChiakiCtrlDisplaySink display_sink = { .user = session, .cantdisplay_cb = cs_session_cant_display };
 	chiaki_session_ctrl_set_display_sink(&session->session, &display_sink);
 
@@ -724,5 +796,6 @@ CS_API void cs_session_stop(cs_session *session)
 	chiaki_session_join(&session->session);
 	chiaki_session_fini(&session->session);
 	cs_decoder_fini(&session->decoder);
+	cs_audio_close(session);
 	free(session);
 }

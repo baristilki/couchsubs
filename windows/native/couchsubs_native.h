@@ -85,6 +85,19 @@ CS_API cs_session *cs_session_start(const char *host, const uint8_t regist_key[0
                                     const uint8_t account_id[8], int max_fps,
                                     cs_frame_cb frame, cs_event_cb event, cs_log_cb log, void *user);
 
+/* Çözülmüş oyun sesi: 16 bit işaretli PCM, kanallar iç içe (frames x channels örnek). Bellek yalnız geri çağrı
+ * süresince geçerlidir; oturumun ses iş parçacığında gelir. */
+typedef void (*cs_audio_cb)(const int16_t *pcm, int frames, int channels, int rate, void *user);
+
+/* cs_session_start gibi; ek olarak:
+ *   video_fps: PS5'ten istenen kare hızı, 30 ya da 60 (başka değer 30 sayılır).
+ *   audio:     NULL değilse oyun sesi açılır, Opus çözülüp PCM olarak verilir ("Yayın penceresi" için). NULL ise ses
+ *              eskisi gibi kapalıdır. */
+CS_API cs_session *cs_session_start_ex(const char *host, const uint8_t regist_key[0x10], const uint8_t morning[0x10],
+                                       const uint8_t account_id[8], int max_fps, int video_fps,
+                                       cs_frame_cb frame, cs_audio_cb audio, cs_event_cb event, cs_log_cb log,
+                                       void *user);
+
 /* PS5'in istediği giriş şifresini (ASCII rakamlar) gönderir. Olay geri çağrısı içinden çağrılmamalı (libchiaki olayı
  * kilit tutarken verir). Dönüş: 0 başarı. */
 CS_API int cs_session_set_login_pin(cs_session *session, const uint8_t *pin, size_t pin_size);

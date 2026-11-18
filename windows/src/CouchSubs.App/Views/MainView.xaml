@@ -75,6 +75,10 @@
                         </Button.Style>
                     </Button>
 
+                    <!-- Yayın penceresi (Discord/OBS için oyun + altyazı); ayarları Ayarlar › OBS katmanı'nda. -->
+                    <Button Content="{t:T 'Open the stream window'}" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Stretch"
+                            Margin="0,8,0,0" Click="OnStreamWindow" />
+
                     <!-- Durum karoları -->
                     <Grid Margin="0,12,0,0">
                         <Grid.ColumnDefinitions>

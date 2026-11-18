@@ -208,6 +208,8 @@ public partial class MainView : UserControl
 
     private void OnHistory(object sender, RoutedEventArgs e) => HistoryWindow.Open(Window.GetWindow(this), controller);
 
+    private void OnStreamWindow(object sender, RoutedEventArgs e) => StreamWindow.Open(controller);
+
     /// <summary>Deneme altyazısı (çeviri başlamadıysa altyazı sunucusu da açılır).</summary>
     private async void OnTest(object sender, RoutedEventArgs e)
     {

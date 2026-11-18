@@ -11633,6 +11633,118 @@
         }
       }
     },
+    "Game picture (PS5)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Game picture (PS5)"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oyun görüntüsü (PS5)"
+          }
+        }
+      }
+    },
+    "Game picture: the window shows the PS5 game with the subtitles on top, so you can share it in Discord or OBS while you keep playing on the TV. Only with the PS5 connection (second account).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Game picture: the window shows the PS5 game with the subtitles on top, so you can share it in Discord or OBS while you keep playing on the TV. Only with the PS5 connection (second account)."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oyun görüntüsü: pencere PS5'teki oyunu altyazıyla birlikte gösterir; siz TV'de oynamaya devam ederken onu Discord'da ya da OBS'te paylaşabilirsiniz. Yalnız PS5 bağlantısıyla (ikinci hesap)."
+          }
+        }
+      }
+    },
+    "Game picture frame rate": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Game picture frame rate"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oyun görüntüsü kare hızı"
+          }
+        }
+      }
+    },
+    "30 fps": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "30 fps"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "30 kare/sn"
+          }
+        }
+      }
+    },
+    "60 fps": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "60 fps"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "60 kare/sn"
+          }
+        }
+      }
+    },
+    "Play the game sound on this computer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Play the game sound on this computer"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oyun sesini bu bilgisayarda çal"
+          }
+        }
+      }
+    },
+    "Discord and OBS take the sound from CouchSubs. Discord streams at most 30 fps without Nitro.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discord and OBS take the sound from CouchSubs. Discord streams at most 30 fps without Nitro."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discord ve OBS sesi CouchSubs'tan alır. Discord, Nitro olmadan en çok 30 kare/sn yayınlar."
+          }
+        }
+      }
+    },
     "Open the stream window": {
       "localizations": {
         "en": {

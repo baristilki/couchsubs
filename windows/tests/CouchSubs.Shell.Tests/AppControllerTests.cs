@@ -31,8 +31,23 @@ internal sealed class FakeSleep : ISleepGuard
     public void End() => (Active, DisplayOn) = (false, false);
 }
 
-internal sealed class FakeStream : IStreamSession
+internal sealed class FakeStream : IStreamSession, IGameVideoSource
 {
+    /// <summary>Oturuma verilen oyun görüntüsü tamponu (null: kapalı); her değişiklik sırayla.</summary>
+    public List<VideoFrameBuffer?> GameVideoChanges { get; } = [];
+    private VideoFrameBuffer? gameVideo;
+    public VideoFrameBuffer? GameVideo
+    {
+        get => gameVideo;
+        set
+        {
+            if (ReferenceEquals(gameVideo, value)) return;
+            gameVideo = value;
+            GameVideoChanges.Add(value);
+        }
+    }
+    public int GameVideoFps { get; set; } = GameVideoRate.Standard;
+    public IGameAudioOutput? GameAudio { get; set; }
     public event Action<Frame>? FrameReceived;
     public event Action<SessionState>? StateChanged;
     public event Action<RegisteredConsole>? ConsoleMoved;
@@ -45,6 +60,15 @@ internal sealed class FakeStream : IStreamSession
     public void Dispose() { }
     public void Emit(SessionState state) => StateChanged?.Invoke(state);
     public void Emit(Frame frame) => FrameReceived?.Invoke(frame);
+}
+
+internal sealed class FakeGameAudio : IGameAudioOutput
+{
+    public int Resets { get; private set; }
+    public bool Disposed { get; private set; }
+    public void Write(ReadOnlySpan<short> pcm, int channels, int rate) { }
+    public void Reset() => Resets++;
+    public void Dispose() => Disposed = true;
 }
 
 internal sealed class FakeKeeper : IKeeper
@@ -107,6 +131,14 @@ internal sealed class FakeServices : IAppServices
     /// <summary>PS Remote Play / chiaki-ng bu bilgisayarda kurulu mu (Ayarlar'daki indirme satırları, ana ekran uyarısı).</summary>
     public bool RemotePlayIsInstalled { get; set; } = true;
     public bool RemotePlayInstalled(RemotePlayApp app) => RemotePlayIsInstalled;
+    /// <summary>Oyun sesi çıkışı (yayın penceresi); her istekte aynısı verilir, kaç kez istendiği sayılır.</summary>
+    public FakeGameAudio GameAudio { get; } = new();
+    public int GameAudioRequests { get; private set; }
+    public IGameAudioOutput? MakeGameAudioOutput()
+    {
+        GameAudioRequests++;
+        return GameAudio;
+    }
     public List<ConsoleInfo> Consoles { get; } = [new("192.168.1.253", "PS5-789", true)];
     public List<LgTv> Tvs { get; } = [new("LG TV", "192.168.1.153")];
     public RegisteredConsole? Registered { get; private set; }
@@ -944,6 +976,88 @@ public class AppControllerTests
 
 public class AppControllerRunTests
 {
+    [Fact]
+    public async Task GameVideoIsSentToThePs5SessionOnlyWhileTheStreamWindowWantsIt()
+    {
+        var (controller, services, _) = Ready();
+        controller.StreamBackground = StreamBackground.Game;
+        Assert.True(controller.GameVideoAvailable);
+
+        // Pencere çeviriden önce açıldı: ilk bağlantı baştan oyun görüntüsüyle (30 kare/sn) kurulur.
+        controller.GameVideoWanted = true;
+        Assert.False(controller.GameVideoActive);
+        await controller.StartAsync();
+        var stream = Assert.Single(services.Streams);
+        Assert.Same(controller.GameVideo, stream.GameVideo);
+        Assert.True(controller.GameVideoActive);
+
+        // Pencere kapandı: kare kopyalanmaz, oturum yine 20 kare/sn'ye döner.
+        controller.GameVideoWanted = false;
+        Assert.Null(stream.GameVideo);
+        Assert.False(controller.GameVideoActive);
+
+        // Düz renk zeminde oyun görüntüsü istenmez.
+        controller.GameVideoWanted = true;
+        Assert.Same(controller.GameVideo, stream.GameVideo);
+        controller.StreamBackground = StreamBackground.Green;
+        Assert.Null(stream.GameVideo);
+        controller.Stop();
+        Assert.False(controller.GameVideoActive);
+        controller.Dispose();
+    }
+
+    [Fact]
+    public async Task GameAudioAndFrameRateFollowTheStreamWindowSettings()
+    {
+        var (controller, services, _) = Ready();
+        Assert.True(controller.StreamGameAudio);
+        Assert.Equal(30, controller.StreamVideoFps);
+        controller.StreamBackground = StreamBackground.Game;
+        controller.StreamVideoFps = 60;
+        controller.GameVideoWanted = true;
+        await controller.StartAsync();
+        var stream = Assert.Single(services.Streams);
+        Assert.Equal(60, stream.GameVideoFps);
+        Assert.Same(services.GameAudio, stream.GameAudio);
+
+        // Ses kapatılınca oturuma ses verilmez; çıkış bir kez açılır, yeniden kullanılır.
+        controller.StreamGameAudio = false;
+        Assert.Null(stream.GameAudio);
+        controller.StreamGameAudio = true;
+        Assert.Same(services.GameAudio, stream.GameAudio);
+        Assert.Equal(1, services.GameAudioRequests);
+
+        // Pencere kapanınca ses de kapanır; geçersiz kare hızı 30 sayılır.
+        controller.GameVideoWanted = false;
+        Assert.Null(stream.GameAudio);
+        controller.StreamVideoFps = 45;
+        Assert.Equal(30, controller.StreamVideoFps);
+        controller.Dispose();
+        Assert.True(services.GameAudio.Disposed);
+    }
+
+    [Fact]
+    public async Task GameVideoIsNotUsedWhenReadingTheRemotePlayWindow()
+    {
+        var (controller, services, _) = Ready();
+        controller.Settings = controller.Settings with { FrameSource = FrameSource.RemotePlayWindow };
+        controller.StreamBackground = StreamBackground.Game;
+        controller.GameVideoWanted = true;
+        Assert.False(controller.GameVideoAvailable);
+        await controller.StartAsync();
+        Assert.All(services.Streams, stream => Assert.Null(stream.GameVideo));
+        Assert.False(controller.GameVideoActive);
+        controller.Dispose();
+    }
+
+    [Fact]
+    public void GameBackgroundIsStoredAndIsBlackUntilThePictureArrives()
+    {
+        Assert.Equal(StreamBackground.Game, StreamBackgrounds.FromStored("game"));
+        Assert.Equal("game", StreamBackground.Game.StoredName());
+        Assert.Equal(((byte)0, (byte)0, (byte)0), StreamBackground.Game.Rgb());
+    }
+
     private static (AppController Controller, FakeServices Services, FakeSleep Sleep) Ready(FakeServices? services = null)
     {
         services ??= new FakeServices();

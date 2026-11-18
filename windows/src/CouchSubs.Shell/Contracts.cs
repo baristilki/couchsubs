@@ -38,20 +38,27 @@ public static class StoreKeys
     public const string LoginPasscode = "loginPasscode";
     /// <summary>"Yayın penceresi"nin zemin rengi (<see cref="StreamBackground"/>).</summary>
     public const string StreamBackground = "streamBackground";
+    /// <summary>Yayın penceresi oyun görüntüsü gösterirken oyun sesi bu bilgisayarda çalınsın mı (vars. açık).</summary>
+    public const string StreamGameAudio = "streamGameAudio";
+    /// <summary>Yayın penceresinde oyun görüntüsünün kare hızı: 30 ya da 60.</summary>
+    public const string StreamVideoFps = "streamVideoFps";
 }
 
 /// <summary>
 /// "Yayın penceresi"nin ve OBS sayfasının (<c>/obs?bg=green</c>) düz zemin rengi (Mac: StreamBackground.swift). Şeffaflık
 /// tanımayan yayın programları (TikTok LIVE Studio, pencere yakalama) pencereyi yakalar, zemini chroma key ile siler.
+/// <see cref="StreamBackground.Game"/>: zemin PS5'in oyun görüntüsüdür (yalnız Windows'ta, PS5 bağlantısıyla); pencere
+/// Discord ya da OBS'te olduğu gibi yayınlanır, TV'deki oyun etkilenmez. Görüntü gelene kadar zemin siyahtır.
 /// </summary>
-public enum StreamBackground { Green, Black, Magenta }
+public enum StreamBackground { Green, Black, Magenta, Game }
 
 public static class StreamBackgrounds
 {
-    /// <summary>0-255 RGB; chroma key'in varsayılanlarıyla (yeşil #00FF00, mor #FF00FF) aynı.</summary>
+    /// <summary>0-255 RGB; chroma key'in varsayılanlarıyla (yeşil #00FF00, mor #FF00FF) aynı. Oyun görüntüsü
+    /// gelmeden önce siyah.</summary>
     public static (byte Red, byte Green, byte Blue) Rgb(this StreamBackground background) => background switch
     {
-        StreamBackground.Black => (0x00, 0x00, 0x00),
+        StreamBackground.Black or StreamBackground.Game => (0x00, 0x00, 0x00),
         StreamBackground.Magenta => (0xFF, 0x00, 0xFF),
         _ => (0x00, 0xFF, 0x00),
     };
@@ -563,6 +570,8 @@ public interface IAppServices
     Task<TvPairing> PairTvAsync(LgTv tv, string? key, string server);
     /// <param name="loginPasscode">PS5 bu hesap için giriş şifresi isterse gönderilecek 4 hane (Ayarlar'da kayıtlıysa).</param>
     IStreamSession MakeStream(RegisteredConsole console, byte[] accountId, string? loginPasscode);
+    /// <summary>Yayın penceresi oyun görüntüsü gösterirken oyun sesini bu bilgisayarda çalan çıkış; yoksa null.</summary>
+    IGameAudioOutput? MakeGameAudioOutput() => null;
     /// <summary>Görüntüyü bu bilgisayardaki Remote Play penceresinden (PS Remote Play ya da chiaki-ng) alan kaynak.</summary>
     IStreamSession MakeWindowStream(RemotePlayApp app) => throw new NotSupportedException();
     /// <summary>Açıkça seçilen pencereyi okumak için aynı Windows Graphics Capture hattını kullanır.</summary>

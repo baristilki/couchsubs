@@ -46,9 +46,13 @@ foreach(lib avcodec swscale avutil)
 endforeach()
 find_path(FFMPEG_INCLUDE_DIR libavcodec/avcodec.h HINTS "${FFMPEG_PREFIX}/include")
 
+# libopus: "Yayın penceresi"nde oyun sesini çözmek için (BSD). Windows'ta MSYS2'nin statik libopus.a'sı.
+find_library(OPUS_LIBRARY NAMES opus REQUIRED)
+find_path(OPUS_INCLUDE_DIR opus.h PATH_SUFFIXES opus REQUIRED)
+
 add_library(couchsubs_deps INTERFACE)
-target_link_libraries(couchsubs_deps INTERFACE chiaki-lib ${FFMPEG_avcodec} ${FFMPEG_swscale} ${FFMPEG_avutil})
-target_include_directories(couchsubs_deps INTERFACE "${FFMPEG_INCLUDE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(couchsubs_deps INTERFACE chiaki-lib ${FFMPEG_avcodec} ${FFMPEG_swscale} ${FFMPEG_avutil} ${OPUS_LIBRARY})
+target_include_directories(couchsubs_deps INTERFACE "${FFMPEG_INCLUDE_DIR}" "${OPUS_INCLUDE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}")
 if(WIN32)
 	# Statik OpenSSL, libevent, curl (Schannel) ve FFmpeg'in Windows bağımlılıkları; hepsi sistem DLL'i.
 	target_link_libraries(couchsubs_deps INTERFACE

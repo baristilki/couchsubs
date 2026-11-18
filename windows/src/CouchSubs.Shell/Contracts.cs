@@ -42,6 +42,22 @@ public static class StoreKeys
     public const string StreamGameAudio = "streamGameAudio";
     /// <summary>Yayın penceresinde oyun görüntüsünün kare hızı: 30 ya da 60.</summary>
     public const string StreamVideoFps = "streamVideoFps";
+    /// <summary>Oyun görüntüsü zemininde çeviri, oyunun kendi altyazısının renginde gösterilsin mi (vars. açık).</summary>
+    public const string StreamMatchGameColor = "streamMatchGameColor";
+    /// <summary>Oyun görüntüsü zemininde oyunun İngilizce altyazısının nasıl örtüleceği (<see cref="StreamCover"/>).</summary>
+    public const string StreamCover = "streamCover";
+    /// <summary>Oyun görüntüsü zemininde çevirinin yeri (<see cref="StreamPlacement"/>).</summary>
+    public const string StreamPlacement = "streamPlacement";
+    /// <summary>Serbest yerdeki çevirinin ortası, görüntüye oranla ("x;y").</summary>
+    public const string StreamFreePosition = "streamFreePosition";
+    /// <summary>Çevirinin yazı boyu oyunun altyazısınınkine uydurulsun mu (vars. açık).</summary>
+    public const string StreamMatchGameSize = "streamMatchGameSize";
+    /// <summary>Oyun görüntüsü zemininde çevirinin yazı tipi.</summary>
+    public const string StreamFont = "streamFont";
+    /// <summary>Bilgisayarda çalan (yayına giden) oyun sesinin düzeyi, 0-100.</summary>
+    public const string StreamGameVolume = "streamGameVolume";
+    /// <summary>Oyun sesi kısık mı (düzey korunur, açınca geri gelir).</summary>
+    public const string StreamGameMuted = "streamGameMuted";
 }
 
 /// <summary>
@@ -51,6 +67,58 @@ public static class StoreKeys
 /// Discord ya da OBS'te olduğu gibi yayınlanır, TV'deki oyun etkilenmez. Görüntü gelene kadar zemin siyahtır.
 /// </summary>
 public enum StreamBackground { Green, Black, Magenta, Game }
+
+/// <summary>Oyun görüntüsü zemininde, çeviri görünürken oyunun İngilizce altyazısı nasıl örtülür.</summary>
+public enum StreamCover
+{
+    /// <summary>Koyu kutu (TV'deki "Üstünü örtsün" gibi); Türkçe uzunsa kutu büyür.</summary>
+    Dark,
+    /// <summary>İngilizce yazının olduğu yer bulanıklaştırılır; çeviri kutusuz, yalnız gölgeli yazı (oyuna en yakın görünüm).</summary>
+    Blur,
+    /// <summary>Örtü yok; çeviri İngilizcenin hemen üstünde, kutusuz.</summary>
+    None,
+}
+
+/// <summary>Oyun görüntüsü zemininde çevirinin yeri.</summary>
+public enum StreamPlacement
+{
+    /// <summary>Oyunun kendi altyazısının yerinde (örtüyle).</summary>
+    OnGameSubtitle,
+    /// <summary>Kullanıcının yayın penceresinde sürükleyip bıraktığı yer; oyunun altyazısı da görünür kalır.</summary>
+    Free,
+}
+
+public static class StreamLayout
+{
+    /// <summary>Yayın penceresinde seçilebilen yazı tipleri (Windows'ta kurulu gelenler; oyun altyazılarına yakın sade
+    /// yazılar). İlki varsayılan.</summary>
+    public static readonly IReadOnlyList<string> Fonts =
+        ["Segoe UI Variable Text", "Segoe UI", "Arial", "Bahnschrift", "Calibri", "Trebuchet MS", "Verdana", "Tahoma"];
+
+    public static StreamCover CoverFromStored(string? stored) =>
+        Enum.TryParse<StreamCover>(stored, ignoreCase: true, out var value) && Enum.IsDefined(value) ? value : StreamCover.Blur;
+
+    public static StreamPlacement PlacementFromStored(string? stored) =>
+        Enum.TryParse<StreamPlacement>(stored, ignoreCase: true, out var value) && Enum.IsDefined(value) ? value : StreamPlacement.OnGameSubtitle;
+
+    /// <summary>Serbest yerin varsayılanı: altta, ortada.</summary>
+    public static readonly (double X, double Y) DefaultFreePosition = (0.5, 0.86);
+
+    public static (double X, double Y) FreePositionFromStored(string? stored)
+    {
+        var parts = stored?.Split(';');
+        if (parts is not [var x, var y]
+            || !double.TryParse(x, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var fx)
+            || !double.TryParse(y, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var fy))
+            return DefaultFreePosition;
+        return (Math.Clamp(fx, 0, 1), Math.Clamp(fy, 0, 1));
+    }
+
+    public static string FreePositionToStored((double X, double Y) position) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{Math.Clamp(position.X, 0, 1):0.####};{Math.Clamp(position.Y, 0, 1):0.####}");
+
+    public static string FontFromStored(string? stored) => stored is not null && Fonts.Contains(stored) ? stored : Fonts[0];
+}
 
 public static class StreamBackgrounds
 {

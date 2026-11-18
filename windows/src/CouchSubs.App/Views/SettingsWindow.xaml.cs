@@ -72,6 +72,17 @@ public partial class SettingsWindow : Window
         var streamFps = controller.StreamVideoFps.ToString(System.Globalization.CultureInfo.InvariantCulture);
         StreamFpsChoice.SelectedItem = StreamFpsChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == streamFps);
         StreamGameAudio.IsChecked = controller.StreamGameAudio;
+        StreamMatchGameColor.IsChecked = controller.StreamMatchGameColor;
+        StreamMatchGameSize.IsChecked = controller.StreamMatchGameSize;
+        var streamCover = controller.StreamCover.ToString();
+        StreamCoverChoice.SelectedItem = StreamCoverChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == streamCover);
+        ShowStreamPlacement();
+        // Yazı tipleri kendi yazılarıyla gösterilir.
+        foreach (var font in StreamLayout.Fonts)
+            StreamFontChoice.Items.Add(new ComboBoxItem { Content = font, Tag = font, FontFamily = new System.Windows.Media.FontFamily(font) });
+        StreamFontChoice.SelectedItem = StreamFontChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == controller.StreamFont);
+        controller.PropertyChanged += OnStreamPlacementChanged;
+        Closed += (_, _) => controller.PropertyChanged -= OnStreamPlacementChanged;
         ShowArea(0);
         ShowAreaProfile();
         // Num 8: oyunun o anki görüntüsü önizlemeye alınır.
@@ -1049,6 +1060,45 @@ public partial class SettingsWindow : Window
     }
 
     private void OnStreamGameAudio(object sender, RoutedEventArgs e) => controller.StreamGameAudio = StreamGameAudio.IsChecked == true;
+
+    private void OnStreamMatchGameColor(object sender, RoutedEventArgs e) => controller.StreamMatchGameColor = StreamMatchGameColor.IsChecked == true;
+
+    private void OnStreamMatchGameSize(object sender, RoutedEventArgs e) => controller.StreamMatchGameSize = StreamMatchGameSize.IsChecked == true;
+
+    private void OnStreamCover(object sender, SelectionChangedEventArgs e)
+    {
+        if (StreamCoverChoice.SelectedItem is ComboBoxItem { Tag: string tag } && Enum.TryParse<StreamCover>(tag, out var value))
+            controller.StreamCover = value;
+    }
+
+    private void OnStreamPlacement(object sender, SelectionChangedEventArgs e)
+    {
+        if (StreamPlacementChoice.SelectedItem is ComboBoxItem { Tag: string tag } && Enum.TryParse<StreamPlacement>(tag, out var value))
+            controller.StreamPlacement = value;
+    }
+
+    /// <summary>Yayın penceresinde sürüklenince yer "serbest"e geçer; seçim burada da görünsün.</summary>
+    private void OnStreamPlacementChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(AppController.StreamPlacement)) Dispatcher.BeginInvoke(ShowStreamPlacement);
+    }
+
+    private void ShowStreamPlacement()
+    {
+        var placement = controller.StreamPlacement.ToString();
+        StreamPlacementChoice.SelectedItem = StreamPlacementChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == placement);
+    }
+
+    private void OnStreamResetPosition(object sender, RoutedEventArgs e)
+    {
+        controller.StreamFreePosition = StreamLayout.DefaultFreePosition;
+        controller.StreamPlacement = StreamPlacement.OnGameSubtitle;
+    }
+
+    private void OnStreamFont(object sender, SelectionChangedEventArgs e)
+    {
+        if (StreamFontChoice.SelectedItem is ComboBoxItem { Tag: string font }) controller.StreamFont = font;
+    }
 
     /// <summary>Ek bölgenin ipucu, o bölgenin kısayoluyla.</summary>
     private void ShowAreaHint()

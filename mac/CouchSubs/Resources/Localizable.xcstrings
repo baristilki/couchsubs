@@ -11745,6 +11745,230 @@
         }
       }
     },
+    "Use the game's subtitle colour": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use the game's subtitle colour"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oyunun altyazı rengini kullan"
+          }
+        }
+      }
+    },
+    "Match the game's subtitle size": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Match the game's subtitle size"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yazı boyunu oyunun altyazısına uydur"
+          }
+        }
+      }
+    },
+    "Game subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Game subtitle"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oyunun altyazısı"
+          }
+        }
+      }
+    },
+    "Cover with a dark box": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover with a dark box"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koyu kutuyla ört"
+          }
+        }
+      }
+    },
+    "Blur it (no background)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blur it (no background)"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bulanıklaştır (arka plansız)"
+          }
+        }
+      }
+    },
+    "Leave it (translation above)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave it (translation above)"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dokunma (çeviri üstünde)"
+          }
+        }
+      }
+    },
+    "Translation position": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Translation position"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Çevirinin yeri"
+          }
+        }
+      }
+    },
+    "On the game subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On the game subtitle"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oyunun altyazısının yerinde"
+          }
+        }
+      }
+    },
+    "Where I drag it": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Where I drag it"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sürüklediğim yerde"
+          }
+        }
+      }
+    },
+    "Reset position": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset position"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konumu sıfırla"
+          }
+        }
+      }
+    },
+    "Font": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Font"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yazı tipi"
+          }
+        }
+      }
+    },
+    "Drag the translation with the mouse in the stream window to move it; the game subtitle then stays visible too. F11 or double-click: full screen. In the stream window M mutes the game sound, + and - change it.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag the translation with the mouse in the stream window to move it; the game subtitle then stays visible too. F11 or double-click: full screen. In the stream window M mutes the game sound, + and - change it."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Çeviriyi taşımak için yayın penceresinde fareyle sürükleyin; o zaman oyunun altyazısı da görünür kalır. F11 ya da çift tık: tam ekran. Yayın penceresinde M oyun sesini kısar, + ve - düzeyi değiştirir."
+          }
+        }
+      }
+    },
+    "Stream sound": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stream sound"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yayın sesi"
+          }
+        }
+      }
+    },
+    "Mute": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mute"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessiz"
+          }
+        }
+      }
+    },
     "Open the stream window": {
       "localizations": {
         "en": {

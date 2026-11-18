@@ -77,8 +77,28 @@ internal sealed unsafe partial class WaveOutGameAudio : IGameAudioOutput
     private bool disposed;
     private long dropped;
 
+    private double volume = 1;
+
+    public double Volume
+    {
+        get => Volatile.Read(ref volume);
+        set => Volatile.Write(ref volume, Math.Clamp(value, 0, 1));
+    }
+
+    /// <summary>Kısılmış ses için ara tampon (her parçada yeni dizi ayrılmasın).</summary>
+    private short[] scaled = [];
+
     public void Write(ReadOnlySpan<short> pcm, int channels, int rate)
     {
+        var level = Volume;
+        if (level < 0.999)
+        {
+            if (scaled.Length < pcm.Length) scaled = new short[pcm.Length];
+            var copy = scaled.AsSpan(0, pcm.Length);
+            pcm.CopyTo(copy);
+            GameVolume.Apply(copy, level);
+            pcm = copy;
+        }
         lock (gate)
         {
             if (disposed) return;

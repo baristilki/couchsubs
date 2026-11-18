@@ -19,6 +19,13 @@ public sealed class VideoFrameBuffer
     /// karesi) biri atlanır.</summary>
     private int writing;
 
+    /// <summary>
+    /// Yeni kare yazılınca, yazanın iş parçacığında çağrılır (kısa tutulmalı; arayüz kendi iş parçacığına aktarır).
+    /// Ekran yenilemesini beklemek yerine kare gelince çizmek, 60 kare/sn akışta yakın gelen iki kareden birinin
+    /// atlanmasını önler.
+    /// </summary>
+    public event Action? FrameWritten;
+
     /// <summary>Her yeni karede artar; okuyan değişmemiş kareyi yeniden kopyalamaz.</summary>
     public long Version
     {
@@ -55,6 +62,7 @@ public sealed class VideoFrameBuffer
         {
             Volatile.Write(ref writing, 0);
         }
+        FrameWritten?.Invoke();
     }
 
     /// <summary>
@@ -70,6 +78,12 @@ public sealed class VideoFrameBuffer
             use(front, frontWidth, frontHeight);
             return version;
         }
+    }
+
+    /// <summary>Son kare üzerinde kilit altında hesap yapar (ör. yazı rengi); kare yoksa varsayılan döner. Kısa tutulmalı.</summary>
+    public T? Read<T>(Func<byte[], int, int, T> use)
+    {
+        lock (gate) return front.Length == 0 ? default : use(front, frontWidth, frontHeight);
     }
 
     /// <summary>Son kareyi bırakır (akış durunca pencere eski kareyi göstermesin).</summary>

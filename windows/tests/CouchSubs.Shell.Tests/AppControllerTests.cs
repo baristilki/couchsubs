@@ -69,6 +69,7 @@ internal sealed class FakeGameAudio : IGameAudioOutput
     public void Write(ReadOnlySpan<short> pcm, int channels, int rate) { }
     public void Reset() => Resets++;
     public void Dispose() => Disposed = true;
+    public double Volume { get; set; } = 1;
 }
 
 internal sealed class FakeKeeper : IKeeper
@@ -1011,6 +1012,9 @@ public class AppControllerRunTests
     {
         var (controller, services, _) = Ready();
         Assert.True(controller.StreamGameAudio);
+        Assert.True(controller.StreamMatchGameColor);
+        controller.StreamMatchGameColor = false;
+        Assert.False(controller.StreamMatchGameColor);
         Assert.Equal(30, controller.StreamVideoFps);
         controller.StreamBackground = StreamBackground.Game;
         controller.StreamVideoFps = 60;
@@ -1026,6 +1030,17 @@ public class AppControllerRunTests
         controller.StreamGameAudio = true;
         Assert.Same(services.GameAudio, stream.GameAudio);
         Assert.Equal(1, services.GameAudioRequests);
+
+        // Ses düzeyi ve sessiz: düzey korunur, sessizden çıkınca geri gelir.
+        Assert.Equal(1, services.GameAudio.Volume);
+        controller.StreamGameVolume = 40;
+        Assert.Equal(0.4, services.GameAudio.Volume, 3);
+        controller.StreamGameMuted = true;
+        Assert.Equal(0, services.GameAudio.Volume);
+        controller.StreamGameMuted = false;
+        Assert.Equal(0.4, services.GameAudio.Volume, 3);
+        controller.StreamGameVolume = 150;
+        Assert.Equal(100, controller.StreamGameVolume);
 
         // Pencere kapanınca ses de kapanır; geçersiz kare hızı 30 sayılır.
         controller.GameVideoWanted = false;
@@ -1048,6 +1063,33 @@ public class AppControllerRunTests
         Assert.All(services.Streams, stream => Assert.Null(stream.GameVideo));
         Assert.False(controller.GameVideoActive);
         controller.Dispose();
+    }
+
+    [Fact]
+    public void StreamLayoutSettingsHaveSafeDefaultsAndAreSaved()
+    {
+        var store = new MemoryStore();
+        var controller = AppControllerTests.Make(store: store);
+        Assert.Equal(StreamCover.Blur, controller.StreamCover);
+        Assert.Equal(StreamPlacement.OnGameSubtitle, controller.StreamPlacement);
+        Assert.Equal(StreamLayout.DefaultFreePosition, controller.StreamFreePosition);
+        Assert.True(controller.StreamMatchGameSize);
+        Assert.Equal(StreamLayout.Fonts[0], controller.StreamFont);
+
+        controller.StreamCover = StreamCover.Dark;
+        controller.StreamPlacement = StreamPlacement.Free;
+        controller.StreamFreePosition = (0.25, 0.4);
+        controller.StreamFont = "Bahnschrift";
+        controller.StreamFont = "Kurulu olmayan yazı"; // listede yoksa varsayılan
+        var reopened = AppControllerTests.Make(store: store);
+        Assert.Equal(StreamCover.Dark, reopened.StreamCover);
+        Assert.Equal(StreamPlacement.Free, reopened.StreamPlacement);
+        Assert.Equal((0.25, 0.4), reopened.StreamFreePosition);
+        Assert.Equal(StreamLayout.Fonts[0], reopened.StreamFont);
+
+        Assert.Equal(StreamLayout.DefaultFreePosition, StreamLayout.FreePositionFromStored("bozuk"));
+        Assert.Equal((1.0, 0.0), StreamLayout.FreePositionFromStored("3;-1"));
+        Assert.Equal(StreamCover.Blur, StreamLayout.CoverFromStored("yok-boyle"));
     }
 
     [Fact]

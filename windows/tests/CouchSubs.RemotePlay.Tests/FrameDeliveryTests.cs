@@ -55,19 +55,17 @@ public class FrameDeliveryTests
     {
         var clock = 0L;
         var received = 0;
-        using var arrived = new SemaphoreSlim(0);
-        using var delivery = new FrameDelivery(_ =>
-        {
-            Interlocked.Increment(ref received);
-            arrived.Release();
-        }, maxPerSecond: StreamSession.MaxFps, now: () => Volatile.Read(ref clock));
+        using var delivery = new FrameDelivery(_ => Interlocked.Increment(ref received),
+            maxPerSecond: StreamSession.MaxFps, now: () => Volatile.Read(ref clock));
         byte[] pixels = [1, 2, 3, 4];
         foreach (var time in times)
         {
             Volatile.Write(ref clock, time);
             Offer(delivery, pixels, 1, 1, 4);
-            // Kabul edildiyse dağıtılmasını bekle (sonraki kare "meşgul" diye atlanmasın); edilmediyse kısa bekleme yeter.
-            await arrived.WaitAsync(TimeSpan.FromMilliseconds(30));
+            // Kare dağıtılıp dağıtıcı boşalana kadar bekle: sonraki kare yalnız kova kuralıyla atlanabilsin,
+            // "meşgul" diye değil (yavaş CI makinesinde işleyici bitince bayrak hemen inmiyordu).
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (delivery.IsBusy && DateTime.UtcNow < deadline) await Task.Delay(1);
         }
         return Volatile.Read(ref received);
     }

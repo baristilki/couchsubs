@@ -13,6 +13,26 @@ public interface IGameAudioOutput : IDisposable
 
     /// <summary>Bekleyen sesi atar (bağlantı koptu ya da ses kapandı).</summary>
     void Reset();
+
+    /// <summary>Ses düzeyi, 0 (sessiz) – 1 (olduğu gibi). Yayına giden ses de buna göredir (örnekler çalmadan önce kısılır).</summary>
+    double Volume { get; set; }
+}
+
+public static class GameVolume
+{
+    /// <summary>16 bit örnekleri <paramref name="volume"/> oranında kısar (yerinde); 1'de dokunmaz.</summary>
+    public static void Apply(Span<short> pcm, double volume)
+    {
+        if (volume >= 0.999) return;
+        if (volume <= 0.001)
+        {
+            pcm.Clear();
+            return;
+        }
+        // Algılanan ses düzeyi doğrusal değil: kaydırıcının ortası (%50) duyulan yarı düzeye yakın olsun diye kare.
+        var gain = volume * volume;
+        for (var i = 0; i < pcm.Length; i++) pcm[i] = (short)Math.Round(pcm[i] * gain);
+    }
 }
 
 /// <summary>Yayın penceresinde oyun görüntüsünün kare hızı.</summary>

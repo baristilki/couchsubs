@@ -89,6 +89,20 @@ public class SubtitleServerTests
             l.Contains("{\"box\":{\"bottom\":0.84,\"left\":0.4,\"right\":0.6,\"top\":0.8},\"line\":0.04,\"text\":\"Kapıyı aç.\"}"));
     }
 
+    /// <summary>Yayın penceresi çeviriyi İngilizce satırın üstüne koyabilsin diye satırın yeri olayla birlikte gelir.</summary>
+    [Fact]
+    public void SubtitleEventCarriesTheEnglishLineBox()
+    {
+        using var server = new SubtitleServer(0);
+        var received = new List<SubtitleEvent>();
+        server.EventSent += received.Add;
+        var box = new TextBox(0.2, 0.84, 0.8, 0.92);
+        server.SendSubtitle("Merhaba", 2000, box);
+        server.SendSubtitle("Kutusuz", 2000);
+        Assert.Equal(box, received[0].Box);
+        Assert.Null(received[1].Box);
+    }
+
     /// <summary>Ek alanın çevirisi kendi olayıyla gider (eski TV uygulamaları tanımadığı olayı yok sayar; Mac ile aynı).</summary>
     [Fact]
     public async Task StreamsRegionTranslationsAndTheirClear()

@@ -22,7 +22,7 @@ namespace CouchSubs.App.Views;
 /// Zemin "Oyun görüntüsü" seçiliyse PS5'ten gelen görüntü altyazının arkasına çizilir: pencere Discord ya da OBS'te
 /// olduğu gibi yayınlanır, oyun TV'de oynanmaya devam eder.
 /// </summary>
-public sealed class StreamWindow : Window
+public sealed partial class StreamWindow : Window
 {
     private static StreamWindow? open;
 
@@ -40,6 +40,8 @@ public sealed class StreamWindow : Window
     /// <summary>Oyun görüntüsü (zemin "Oyun görüntüsü"yken); altyazı katmanlarının arkasında, oranı korunarak.</summary>
     private readonly Image game = new() { Stretch = Stretch.Uniform, Visibility = Visibility.Collapsed };
     private WriteableBitmap? gameBitmap;
+    private readonly Grid root;
+
     private long gameVersion = -1;
     private bool rendering;
 
@@ -88,15 +90,18 @@ public sealed class StreamWindow : Window
         layers.Children.Add(regionsPanel);
         layers.Children.Add(linesPanel);
         linesHost = new Border { Child = layers };
-        // Görüntü kenar boşluğu (altyazı payı) olmadan tüm pencereyi kaplar; altyazı katmanı üstündedir.
-        var root = new Grid();
+        // Görüntü kenar boşluğu (altyazı payı) olmadan tüm pencereyi kaplar; altyazı katmanı üstündedir. Örtü
+        // (oyunun İngilizce altyazısını kapatan kutu) ikisinin arasındadır.
+        root = new Grid();
         root.Children.Add(game);
+        root.Children.Add(cover);
         root.Children.Add(linesHost);
         Content = root;
+        InitGameLayout();
         ApplyBackground();
         linesHost.SizeChanged += (_, _) =>
         {
-            linesHost.Padding = new Thickness(24 * Scale, 0, 24 * Scale, linesHost.ActualHeight * 0.07);
+            linesHost.Padding = new Thickness(24 * Scale, 0, 24 * Scale, positioned ? 0 : linesHost.ActualHeight * 0.07);
             regionsPanel.Margin = new Thickness(0, 16 * Scale, 0, 0);
             boxes.Clear();
             Refresh();
@@ -106,6 +111,16 @@ public sealed class StreamWindow : Window
         {
             timer.Stop();
             Refresh();
+        };
+        staleCheck.Tick += (_, _) =>
+        {
+            DrawLatestFrame();
+            SampleGameTextColor();
+        };
+        KeyDown += OnKey;
+        MouseDoubleClick += (_, e) =>
+        {
+            if (e.ChangedButton == System.Windows.Input.MouseButton.Left) ToggleFullScreen();
         };
         controller.StreamEvent += OnEvent;
         controller.StreamHidden += OnHidden;
@@ -124,6 +139,71 @@ public sealed class StreamWindow : Window
         };
     }
 
+    // --- Tam ekran: F11 ya da çift tık açar/kapatır, Esc kapatır. Kenarlıksız pencere bulunduğu ekranı kaplar;
+    // başlığı değişmediği için yayın programındaki pencere yakalama sürer. ---
+
+    private bool fullScreen;
+    private WindowState savedState;
+    private Rect savedBounds;
+
+    private void OnKey(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.F11 || (e.Key == System.Windows.Input.Key.Enter && System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Alt))
+        {
+            ToggleFullScreen();
+            e.Handled = true;
+        }
+        else if (e.Key == System.Windows.Input.Key.Escape && fullScreen)
+        {
+            ToggleFullScreen();
+            e.Handled = true;
+        }
+        // Ses: pencerede düğme olmaz (yayında görünürdü); M sessiz, + / - düzey.
+        else if (e.Key == System.Windows.Input.Key.M)
+        {
+            controller.StreamGameMuted = !controller.StreamGameMuted;
+            e.Handled = true;
+        }
+        else if (e.Key is System.Windows.Input.Key.OemPlus or System.Windows.Input.Key.Add)
+        {
+            controller.StreamGameMuted = false;
+            controller.StreamGameVolume += 10;
+            e.Handled = true;
+        }
+        else if (e.Key is System.Windows.Input.Key.OemMinus or System.Windows.Input.Key.Subtract)
+        {
+            controller.StreamGameVolume -= 10;
+            e.Handled = true;
+        }
+    }
+
+    private void ToggleFullScreen()
+    {
+        if (!fullScreen)
+        {
+            savedState = WindowState;
+            savedBounds = new Rect(Left, Top, Width, Height);
+            // Önce normal durum: büyütülmüş pencere kenarlık kalkınca görev çubuğunun altında kalırdı.
+            WindowState = WindowState.Normal;
+            WindowStyle = WindowStyle.None;
+            ResizeMode = ResizeMode.NoResize;
+            WindowState = WindowState.Maximized;
+            fullScreen = true;
+        }
+        else
+        {
+            WindowState = WindowState.Normal;
+            WindowStyle = WindowStyle.SingleBorderWindow;
+            ResizeMode = ResizeMode.CanResize;
+            Left = savedBounds.Left;
+            Top = savedBounds.Top;
+            Width = savedBounds.Width;
+            Height = savedBounds.Height;
+            WindowState = savedState == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal;
+            fullScreen = false;
+        }
+    }
+
     private void ApplyBackground()
     {
         var (red, green, blue) = controller.StreamBackground.Rgb();
@@ -132,23 +212,35 @@ public sealed class StreamWindow : Window
         linesHost.Background = Brushes.Transparent;
     }
 
-    /// <summary>Oyun görüntüsü açıkken her ekran yenilemesinde yeni kare var mı bakılır; yoksa kopyalanmaz.</summary>
+    /// <summary>
+    /// Oyun görüntüsü açıkken her yeni kare gelince çizilir (ekran yenilemesine bağlanınca 60 kare/sn akışın ancak
+    /// ~45'i gösteriliyordu: yakın gelen iki kare aynı yenilemeye düşüp biri atlanıyordu). Arayüz geride kalırsa
+    /// bekleyen tek bir çizim isteği tutulur, en yeni kare çizilir.
+    /// </summary>
     private void UpdateGameRendering()
     {
         if (controller.GameVideoActive) StartGameRendering();
         else StopGameRendering();
     }
 
+    private int drawQueued;
+
     private void StartGameRendering()
     {
         if (rendering) return;
         rendering = true;
-        CompositionTarget.Rendering += OnRendering;
+        controller.GameVideo.FrameWritten += OnFrameWritten;
+        // Akış durunca (FrameWritten gelmez) eski kare donup kalmasın: seyrek bir yoklama bunu fark eder.
+        staleCheck.Start();
     }
 
     private void StopGameRendering()
     {
-        if (rendering) CompositionTarget.Rendering -= OnRendering;
+        if (rendering) controller.GameVideo.FrameWritten -= OnFrameWritten;
+        staleCheck.Stop();
+        // Başka oyuna geçilmiş olabilir: renk yeniden okunur.
+        gameColor.Reset();
+        speakerColors.Clear();
         rendering = false;
         game.Visibility = Visibility.Collapsed;
         game.Source = null;
@@ -156,7 +248,83 @@ public sealed class StreamWindow : Window
         gameVersion = -1;
     }
 
-    private void OnRendering(object? sender, EventArgs e)
+    /// <summary>Kare iş parçacığında: arayüze tek bir çizim isteği bırakır.</summary>
+    private void OnFrameWritten()
+    {
+        if (Interlocked.Exchange(ref drawQueued, 1) == 1) return;
+        Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
+        {
+            Volatile.Write(ref drawQueued, 0);
+            if (rendering) DrawLatestFrame();
+        });
+    }
+
+    private readonly DispatcherTimer staleCheck = new() { Interval = TimeSpan.FromMilliseconds(500) };
+
+    /// <summary>Oyunun altyazı rengi; yarım saniyede bir, yalnız ekranda çeviri varken (oyunun altyazısı da görünürken)
+    /// altyazı bölgesinden okunur.</summary>
+    private readonly GameTextColor.Tracker gameColor = new();
+
+    /// <summary>
+    /// Konuşan adlarının renkleri, ada göre: oyunlar her karakterin adını kendi renginde yazar (Miles mavi, Ganke
+    /// turuncu…); tek bir "ad rengi" tutulunca renk karakterden karaktere zıplıyordu.
+    /// </summary>
+    private readonly Dictionary<string, GameTextColor.Tracker> speakerColors = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Ekrandaki son çevirinin konuşan adı (okunan ad rengi bu ada yazılır).</summary>
+    private string? CurrentSpeaker()
+    {
+        var current = stack.Lines(Now).LastOrDefault();
+        // Okunan ad rengi soldaki (ilk satırdaki) konuşanındır; iki konuşanlı satırda ikinciye yazılmaz.
+        if (current is null || Lines(current.Text) is not [var firstLine, ..]) return null;
+        // İki konuşanlı satırda hangi rengin kime ait olduğu belli değil: renk yazılmaz.
+        if (Lines(current.Text).Count(part => SplitSpeaker(part, seenSpeakers) is not null) > 1) return null;
+        return SpeakerOf(firstLine)?.Speaker;
+    }
+
+    private void SampleGameTextColor()
+    {
+        if (!rendering || !controller.StreamMatchGameColor || stack.Lines(Now).Count() == 0) return;
+        // İngilizce satırın yeri biliniyorsa yalnız orası (biraz paylı) okunur; bilinmiyorsa altyazı bölgesinin tamamı.
+        var region = englishBox is { } box
+            ? new CropRegion(Math.Max(0, box.Top - 0.01), Math.Min(1, box.Bottom + 0.01), Math.Max(0, box.Left - 0.01), Math.Min(1, box.Right + 0.01))
+            : controller.Settings.Region;
+        var sample = controller.GameVideo.Read((pixels, width, height) => GameTextColor.SampleColors(pixels, width, height, region));
+        var changed = gameColor.Offer(sample?.Text);
+        string? speaker = null;
+        if (sample?.Speaker is { } named && CurrentSpeaker() is { } name)
+        {
+            speaker = name;
+            if (!speakerColors.TryGetValue(name, out var tracker)) speakerColors[name] = tracker = new GameTextColor.Tracker();
+            changed |= tracker.Offer(named);
+        }
+        if (!changed) return;
+        static string Hex(GameTextColor.Rgb c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+        var speakerNote = speaker is not null && speakerColors[speaker].Confirmed ? $", {speaker} {Hex(speakerColors[speaker].Current)}" : "";
+        CouchSubs.RemotePlay.RemotePlayLog.Note($"yayın penceresi: oyunun yazı rengi {Hex(gameColor.Current)}{speakerNote}");
+        boxes.Clear();
+        Refresh();
+    }
+
+    /// <summary>Konuşan adının yazı rengi: oyunda o karakterin adı ayrı renkteyse o renk, değilse cümlenin rengi;
+    /// renk uyumu kapalıysa sönük gri.</summary>
+    private Color SpeakerBrushColor(SubtitleStyle style, string speaker)
+    {
+        if (!controller.StreamMatchGameColor) return SpeakerColor;
+        if (speakerColors.TryGetValue(speaker, out var tracker) && tracker.Confirmed)
+            return Color.FromRgb(tracker.Current.R, tracker.Current.G, tracker.Current.B);
+        return GameTextBrushColor(style);
+    }
+
+    /// <summary>Çevirinin yazı rengi: kullanıcı sarı seçtiyse sarı, değilse (açıksa) oyunun rengi, yoksa kırık beyaz.</summary>
+    private Color GameTextBrushColor(SubtitleStyle style)
+    {
+        if (style.TextColor == SubtitleTextColor.Yellow) return Color.FromRgb(0xFF, 0xE1, 0x35);
+        var c = controller.StreamMatchGameColor ? gameColor.Current : GameTextColor.White;
+        return Color.FromRgb(c.R, c.G, c.B);
+    }
+
+    private void DrawLatestFrame()
     {
         if (!controller.GameVideo.HasFrame)
         {
@@ -171,6 +339,7 @@ public sealed class StreamWindow : Window
             {
                 gameBitmap = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgr32, null);
                 game.Source = gameBitmap;
+                if (blurred.Visibility == Visibility.Visible) blurred.Source = gameBitmap;
             }
             gameBitmap.WritePixels(new Int32Rect(0, 0, width, height), pixels, width * 4, 0);
         });
@@ -182,21 +351,35 @@ public sealed class StreamWindow : Window
 
     private int shownFrames;
     private long shownSince = Environment.TickCount64;
+    private long versionSince = -1;
 
-    /// <summary>Takılma şikâyetinde bakılabilsin: gösterilen kare hızı 10 sn'de bir günlüğe yazılır.</summary>
+    /// <summary>
+    /// Takılma şikâyetinde bakılabilsin: 10 sn'de bir PS5'ten gelen ve pencerede gösterilen kare hızı günlüğe yazılır
+    /// (ikisi farklıysa kareler pencerede, aynıysa akışın kendisinde azdır).
+    /// </summary>
     private void CountShownFrame()
     {
         shownFrames++;
+        if (versionSince < 0) versionSince = gameVersion;
         var elapsed = Environment.TickCount64 - shownSince;
         if (elapsed < 10_000) return;
-        CouchSubs.RemotePlay.RemotePlayLog.Note($"yayın penceresi: {shownFrames * 1000.0 / elapsed:0.0} kare/sn gösterildi");
+        var received = (gameVersion - versionSince) * 1000.0 / elapsed;
+        CouchSubs.RemotePlay.RemotePlayLog.Note($"yayın penceresi: {received:0.0} kare/sn geldi, {shownFrames * 1000.0 / elapsed:0.0} gösterildi");
         shownFrames = 0;
         shownSince = Environment.TickCount64;
+        versionSince = gameVersion;
     }
 
     private void OnChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(AppController.GameVideoActive)) UpdateGameRendering();
+        if (e.PropertyName is nameof(AppController.StreamCover) or nameof(AppController.StreamMatchGameColor)
+            or nameof(AppController.StreamPlacement) or nameof(AppController.StreamMatchGameSize) or nameof(AppController.StreamFont)
+            or nameof(AppController.StreamFreePosition))
+        {
+            boxes.Clear();
+            Refresh();
+        }
         if (e.PropertyName == nameof(AppController.StreamBackground))
         {
             ApplyBackground();
@@ -218,6 +401,12 @@ public sealed class StreamWindow : Window
         {
             case SubtitleEventKind.Subtitle:
                 screenUntil = 0;
+                if (e.Box is { } english)
+                {
+                    englishBox = english;
+                    gameSize.Offer(english);
+                    UpdateAnchor(english);
+                }
                 stack.Show(e.Text, e.DurationMs, e.Paragraphs, Now, e.Replaces);
                 break;
             case SubtitleEventKind.Screen:
@@ -256,6 +445,8 @@ public sealed class StreamWindow : Window
     {
         var now = Now;
         var lines = stack.Lines(now).ToList();
+        // Oyun görüntüsü zemininde çeviri oyunun altyazısının yerine ya da serbest yere konur (StreamWindow.Game.cs).
+        UpdateGameLayoutMode(lines.Count);
         regionsPanel.Children.Clear();
         foreach (var (text, area) in regions.Values.OrderBy(region => region.Box?.Top ?? 0)) regionsPanel.Children.Add(MakeRegionBox(text, area));
         linesPanel.Children.Clear();
@@ -274,6 +465,9 @@ public sealed class StreamWindow : Window
             }
             linesPanel.Children.Add(box);
         }
+        // Yerleştirme kutuların ölçüsünü bilmeli: yerleşimden sonra yapılır.
+        if (positioned) Dispatcher.BeginInvoke(DispatcherPriority.Loaded, PositionGameSubtitle);
+        else HideCover();
         timer.Stop();
         if (stack.NextChange(now) is { } next)
         {
@@ -317,109 +511,6 @@ public sealed class StreamWindow : Window
             Margin = new Thickness(0, 14 * scale, 0, 0),
             HorizontalAlignment = HorizontalAlignment.Center,
             Child = text,
-        };
-    }
-
-    // --- Oyun görüntüsü zemini: oyun altyazısına benzeyen görünüm ---
-    // Zemin görüntünün kendisi olduğundan chroma key kuralı (tam opak kutu) gerekmez: kutu Ayarlar'daki koyulukla yarı
-    // saydam, yazı oyun altyazıları gibi yumuşak gölgeli beyaz. Önceki satırlar soluklaştırılır, konuşan adı vurgulanır.
-
-    /// <summary>Konuşan adı sönük ve küçük: oyunlar (ör. Spider-Man) hemen her satırı adla başlatır; parlak renk göze batıyordu.</summary>
-    private static readonly Color SpeakerColor = Color.FromRgb(0xB9, 0xBC, 0xC4);
-    private static readonly FontFamily GameFont = new("Segoe UI Variable Text, Segoe UI");
-
-    /// <summary>"Miles: ..." biçiminde baştaki konuşan adı (en çok 3 sözcük); yoksa null.</summary>
-    internal static (string Speaker, string Line)? SplitSpeaker(string text)
-    {
-        var colon = text.IndexOf(':');
-        if (colon < 1 || colon > 24 || colon + 1 >= text.Length) return null;
-        var name = text[..colon];
-        if (name.Contains('\n') || name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length > 3) return null;
-        if (!name.All(c => char.IsLetter(c) || c is ' ' or '.' or '\'' or '-')) return null;
-        return (name.Trim(), text[(colon + 1)..].TrimStart());
-    }
-
-    private Border MakeGameBox(SubtitleStack.Line line)
-    {
-        var style = controller.Settings.Style;
-        var scale = Scale;
-        var current = line.Role == SubtitleStack.Role.Current;
-        var wrapped = line.Wrapped;
-        var size = Math.Max(1, OverlayPlacement.FontSize(style.FontSize) * scale * (current ? 1 : 0.82) * wrapped.Scale);
-        // Ayarlardaki koyuluk (vars. %72) TV'deki kutuya göredir; oyunun üstünde biraz daha hafif durur.
-        var boxOpacity = Math.Clamp(style.Background / 100.0, 0, 1) * 0.8;
-        var boxed = boxOpacity > 0.02;
-        var color = style.TextColor == SubtitleTextColor.Yellow ? Color.FromRgb(0xFF, 0xE1, 0x35) : Color.FromRgb(0xF7, 0xF7, 0xF5);
-        var text = new TextBlock
-        {
-            FontFamily = GameFont,
-            FontSize = size,
-            FontWeight = style.Bold ? FontWeights.Bold : FontWeights.Medium,
-            Foreground = new SolidColorBrush(color),
-            TextWrapping = TextWrapping.Wrap,
-            TextAlignment = line.Paragraphs ? TextAlignment.Left : TextAlignment.Center,
-            LineHeight = size * 1.28,
-            // Açık sahnede de okunsun: kutusuzken belirgin, kutuluyken hafif gölge (tek efekt, akışı yormaz).
-            Effect = new DropShadowEffect
-            {
-                Color = Colors.Black,
-                Direction = 270,
-                ShadowDepth = (boxed ? 1 : 1.6) * scale,
-                BlurRadius = (boxed ? 4 : 7) * scale,
-                Opacity = boxed ? 0.55 : 0.95,
-            },
-        };
-        if (SplitSpeaker(wrapped.Text) is { } split)
-        {
-            text.Inlines.Add(new System.Windows.Documents.Run(split.Speaker + ": ")
-            {
-                Foreground = new SolidColorBrush(SpeakerColor),
-                FontWeight = FontWeights.Normal,
-                FontSize = size * 0.82,
-            });
-            text.Inlines.Add(new System.Windows.Documents.Run(split.Line));
-        }
-        else
-        {
-            text.Text = wrapped.Text;
-        }
-        return new Border
-        {
-            Background = boxed ? new SolidColorBrush(Color.FromArgb((byte)Math.Round(boxOpacity * 255), 0x0B, 0x0B, 0x0D)) : Brushes.Transparent,
-            CornerRadius = new CornerRadius(6 * scale),
-            Padding = current ? new Thickness(18 * scale, 7 * scale, 18 * scale, 8 * scale) : new Thickness(14 * scale, 4 * scale, 14 * scale, 5 * scale),
-            Margin = new Thickness(0, 8 * scale, 0, 0),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            MaxWidth = Math.Max(200, linesHost.ActualWidth * 0.8),
-            Opacity = line.Role switch { SubtitleStack.Role.Current => 1.0, SubtitleStack.Role.Previous => 0.7, _ => 0.5 },
-            Child = text,
-        };
-    }
-
-    /// <summary>Oyun görüntüsü zemininde ek alan kutusu: altyazıyla aynı dilde, daha küçük ve yarı saydam.</summary>
-    private Border MakeGameRegionBox(string text, CouchSubs.Core.TextBox? area)
-    {
-        var style = controller.Settings.Style;
-        var scale = Scale;
-        var size = Math.Max(12, OverlayPlacement.FontSize(style.FontSize) * scale * 0.52);
-        var middle = area is { } box ? (box.Left + box.Right) / 2 : 0.5;
-        return new Border
-        {
-            Background = new SolidColorBrush(Color.FromArgb(0xA6, 0x0B, 0x0B, 0x0D)),
-            CornerRadius = new CornerRadius(6 * scale),
-            Padding = new Thickness(12 * scale, 5 * scale, 12 * scale, 6 * scale),
-            Margin = new Thickness(0, 0, 0, 8 * scale),
-            HorizontalAlignment = middle < 0.4 ? HorizontalAlignment.Left : middle > 0.6 ? HorizontalAlignment.Right : HorizontalAlignment.Center,
-            Child = new TextBlock
-            {
-                Text = text,
-                FontFamily = GameFont,
-                FontSize = size,
-                FontWeight = FontWeights.Medium,
-                Foreground = style.TextColor == SubtitleTextColor.Yellow ? new SolidColorBrush(Color.FromRgb(0xFF, 0xE1, 0x35)) : new SolidColorBrush(Color.FromRgb(0xF7, 0xF7, 0xF5)),
-                TextWrapping = TextWrapping.Wrap,
-                LineHeight = size * 1.25,
-            },
         };
     }
 

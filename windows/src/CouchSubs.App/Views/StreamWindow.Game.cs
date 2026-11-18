@@ -1,0 +1,370 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Effects;
+using CouchSubs.Core;
+using CouchSubs.Shell;
+
+namespace CouchSubs.App.Views;
+
+/// <summary>
+/// Yayın penceresinin "Oyun görüntüsü" zemini: çeviri oyunun kendi altyazısına uysun, sırıtmasın.
+/// <list type="bullet">
+/// <item>Yer: oyunun İngilizce altyazısının yerinde (örtüyle) ya da kullanıcının pencerede sürükleyip bıraktığı serbest
+/// yerde (iki altyazı birden görünür).</item>
+/// <item>Örtü: koyu kutu (TV'deki "Üstünü örtsün"; Türkçe uzunsa kutu büyür), bulanık (İngilizce yazı bulanıklaşır,
+/// çeviri kutusuz gölgeli yazı; oyuna en yakın görünüm) ya da yok (çeviri İngilizcenin hemen üstünde).</item>
+/// <item>Görünüm: yazı oyunun altyazısının renginde ve boyunda; satırlar alt alta bölünmez, görüntü genişliğince yan
+/// yana uzar; yazı tipi seçilebilir.</item>
+/// </list>
+/// </summary>
+public sealed partial class StreamWindow
+{
+    /// <summary>Örtünün İngilizce satır kutusundan taşma payı (kare oranı; TV'deki COVER_PAD).</summary>
+    private const double CoverPad = 0.012;
+    /// <summary>Çevirinin en çok kaplayacağı genişlik (görüntüye oranla): uzun cümle tek satırda kalsın.</summary>
+    private const double MaxLineWidth = 0.92;
+
+    private readonly Border cover = new()
+    {
+        HorizontalAlignment = HorizontalAlignment.Left,
+        VerticalAlignment = VerticalAlignment.Top,
+        Visibility = Visibility.Collapsed,
+        IsHitTestVisible = false,
+    };
+
+    /// <summary>Son okunan İngilizce altyazının karedeki yeri (oranlar).</summary>
+    private CouchSubs.Core.TextBox? englishBox;
+    private readonly GameTextSize gameSize = new();
+    /// <summary>Çeviri oyun görüntüsü üstünde bir yere konuyor mu (değilse eski alt-orta düzen).</summary>
+    private bool positioned;
+    /// <summary>İngilizce altyazı örtülüyor mu (koyu ya da bulanık).</summary>
+    private bool covering;
+    /// <summary>
+    /// Çevirinin dayandığı alt kenar ve yatay orta (kareye oranla). İngilizce altyazı bir satırdan ikiye çıkınca ya da
+    /// OCR kutusu birkaç piksel oynayınca çeviri inip çıkıyordu; yalnız belirgin değişimde (altyazı başka yere
+    /// taşınınca) güncellenir. Çeviri alttan dayanır: önceki satırlar yukarı yığılır, son satır yerinde kalır.
+    /// </summary>
+    private double? anchorBottom, anchorCenterX;
+    private const double AnchorMoveY = 0.03, AnchorMoveX = 0.08;
+
+    private void UpdateAnchor(CouchSubs.Core.TextBox box)
+    {
+        if (anchorBottom is not { } bottom || Math.Abs(box.Bottom - bottom) > AnchorMoveY) anchorBottom = box.Bottom;
+        var center = (box.Left + box.Right) / 2;
+        if (anchorCenterX is not { } x || Math.Abs(center - x) > AnchorMoveX) anchorCenterX = center;
+    }
+
+    /// <summary>Sürüklenirken çevirinin ortası (görüntüye oranla); bırakılınca kaydedilir.</summary>
+    private (double X, double Y)? dragPosition;
+    private Point dragGrab;
+
+    private bool GameMode => controller.StreamBackground == StreamBackground.Game && game.Visibility == Visibility.Visible;
+
+    /// <summary>
+    /// Bulanık örtü: oyun görüntüsünün aynı yerleşimli ikinci bir kopyası, yalnız örtü alanında (kırpılıp) bulanık
+    /// çizilir. Aynı yerleşim olduğundan bulanık parça hep tam altındaki sahnenin parçasıdır (VisualBrush ile parça
+    /// kayıyor, yazının üstünde ayrı bir bulanık kutu görünüyordu).
+    /// </summary>
+    private readonly Image blurred = new() { Stretch = Stretch.Uniform, Visibility = Visibility.Collapsed, IsHitTestVisible = false };
+
+    private void InitGameLayout()
+    {
+        RenderOptions.SetBitmapScalingMode(blurred, BitmapScalingMode.Linear);
+        root.Children.Insert(root.Children.IndexOf(game) + 1, blurred);
+        linesPanel.MouseLeftButtonDown += OnDragStart;
+        linesPanel.MouseMove += OnDragMove;
+        linesPanel.MouseLeftButtonUp += OnDragEnd;
+        linesPanel.LostMouseCapture += (_, _) => FinishDrag();
+    }
+
+    /// <summary>Oyun görüntüsü zemininde düzen kipini seçer; kip değişince kutular yeniden kurulur.</summary>
+    private void UpdateGameLayoutMode(int lineCount)
+    {
+        var free = GameMode && controller.StreamPlacement == StreamPlacement.Free;
+        var onGame = GameMode && !free && englishBox is not null;
+        var place = lineCount > 0 && (free || onGame);
+        var cov = place && onGame && controller.StreamCover != StreamCover.None;
+        linesPanel.Cursor = GameMode ? Cursors.SizeAll : null;
+        if (place == positioned && cov == covering) return;
+        positioned = place;
+        covering = cov;
+        boxes.Clear();
+        linesPanel.HorizontalAlignment = place ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
+        linesPanel.VerticalAlignment = place ? VerticalAlignment.Top : VerticalAlignment.Bottom;
+        linesPanel.Margin = new Thickness(0);
+        linesHost.Padding = place ? new Thickness(0) : new Thickness(24 * Scale, 0, 24 * Scale, linesHost.ActualHeight * 0.07);
+    }
+
+    /// <summary>Oyun görüntüsünün penceredeki dikdörtgeni (Uniform ölçekte kenarlarda siyah pay kalabilir).</summary>
+    private Rect PictureRect()
+    {
+        double frameWidth = gameBitmap?.PixelWidth ?? 1920, frameHeight = gameBitmap?.PixelHeight ?? 1080;
+        double width = root.ActualWidth, height = root.ActualHeight;
+        if (width <= 0 || height <= 0) return new Rect(0, 0, 1280, 720);
+        var scale = Math.Min(width / frameWidth, height / frameHeight);
+        double w = frameWidth * scale, h = frameHeight * scale;
+        return new Rect((width - w) / 2, (height - h) / 2, w, h);
+    }
+
+    private static Rect ToPicture(CouchSubs.Core.TextBox box, Rect picture, double pad) => new(
+        new Point(picture.X + ((box.Left - pad) * picture.Width), picture.Y + ((box.Top - pad) * picture.Height)),
+        new Point(picture.X + ((box.Right + pad) * picture.Width), picture.Y + ((box.Bottom + pad) * picture.Height)));
+
+    /// <summary>Çeviriyi yerine koyar ve gerekiyorsa örtüyü yerleştirir (kutuların ölçüsü bilindikten sonra).</summary>
+    private void PositionGameSubtitle()
+    {
+        if (!positioned || linesPanel.Children.Count == 0)
+        {
+            HideCover();
+            return;
+        }
+        var picture = PictureRect();
+        // Ölçü kenar boşluğu olmadan alınır: DesiredSize Margin'i de içerir; önceki yerleştirmenin boşluğu ölçüye
+        // girince her yenilemede yer değişiyor, çeviri bir yukarı bir aşağı gidiyordu.
+        linesPanel.Margin = new Thickness(0);
+        linesPanel.Measure(new Size(picture.Width, double.PositiveInfinity));
+        var size = linesPanel.DesiredSize;
+        Rect? english = null;
+        double centerX, top;
+        if (controller.StreamPlacement == StreamPlacement.Free || englishBox is not { } box)
+        {
+            var (fx, fy) = dragPosition ?? controller.StreamFreePosition;
+            centerX = picture.X + (fx * picture.Width);
+            top = picture.Y + (fy * picture.Height) - (size.Height / 2);
+        }
+        else
+        {
+            var rect = ToPicture(box, picture, CoverPad);
+            english = rect;
+            centerX = picture.X + ((anchorCenterX ?? ((box.Left + box.Right) / 2)) * picture.Width);
+            // Örtü yoksa çeviri İngilizcenin hemen üstünde; varsa alt kenarı İngilizce altyazının (kararlı) alt kenarında.
+            top = controller.StreamCover == StreamCover.None
+                ? rect.Top - size.Height - (6 * Scale)
+                : picture.Y + (((anchorBottom ?? box.Bottom) + (CoverPad / 2)) * picture.Height) - size.Height;
+        }
+        var left = Math.Clamp(centerX - (size.Width / 2), picture.Left, Math.Max(picture.Left, picture.Right - size.Width));
+        top = Math.Clamp(top, picture.Top, Math.Max(picture.Top, picture.Bottom - size.Height));
+        linesPanel.Margin = new Thickness(left, top, 0, 0);
+
+        if (!covering || english is not { } covered)
+        {
+            HideCover();
+            return;
+        }
+        // Örtü İngilizce satırı ve çeviriyi birlikte kapsar (tek kutu).
+        var area = Rect.Union(covered, new Rect(left, top, size.Width, size.Height));
+        if (controller.Settings.Style.BackgroundShape == SubtitleBackgroundShape.Band)
+            area = new Rect(picture.Left, area.Top, picture.Width, area.Height);
+        area.Intersect(picture);
+        if (area.IsEmpty)
+        {
+            HideCover();
+            return;
+        }
+        if (controller.StreamCover == StreamCover.Blur) ApplyBlurCover(area);
+        else ApplyDarkCover();
+        cover.Margin = new Thickness(area.Left, area.Top, 0, 0);
+        cover.Width = area.Width;
+        cover.Height = area.Height;
+        cover.Visibility = Visibility.Visible;
+    }
+
+    private void ApplyDarkCover()
+    {
+        var style = controller.Settings.Style;
+        // Örtü İngilizceyi gizlemeli: koyuluk ayarı düşük olsa da en az %90.
+        var opacity = Math.Max(0.9, Math.Clamp(style.Background / 100.0, 0, 1));
+        cover.Background = new SolidColorBrush(Color.FromArgb((byte)Math.Round(opacity * 255), 0x0B, 0x0B, 0x0D));
+        cover.CornerRadius = new CornerRadius(style.BackgroundShape == SubtitleBackgroundShape.Band ? 0 : 6 * Scale);
+        blurred.Visibility = Visibility.Collapsed;
+    }
+
+    private void HideCover()
+    {
+        cover.Visibility = Visibility.Collapsed;
+        blurred.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Bulanık örtü: alttaki sahnenin aynı parçası güçlü bulanıklıkla çizilir (yazı okunmaz, sahne sürer), üstüne çok
+    /// hafif bir gölge konur ki çeviri açık sahnede de okunsun; kutu sırıtmaz.
+    /// </summary>
+    private void ApplyBlurCover(Rect area)
+    {
+        var radius = 8 * Scale;
+        blurred.Source = gameBitmap;
+        blurred.Clip = new RectangleGeometry(area, radius, radius);
+        blurred.Effect = new BlurEffect { Radius = Math.Max(12, area.Height * 0.45), KernelType = KernelType.Gaussian };
+        blurred.Visibility = Visibility.Visible;
+        cover.Background = new SolidColorBrush(Color.FromArgb(0x30, 0, 0, 0));
+        cover.CornerRadius = new CornerRadius(radius);
+    }
+
+    // --- Görünüm ---
+
+    /// <summary>Konuşan adı sönük ve küçük: oyunlar (ör. Spider-Man) hemen her satırı adla başlatır; parlak renk göze batıyordu.</summary>
+    private static readonly Color SpeakerColor = Color.FromRgb(0xB9, 0xBC, 0xC4);
+
+    /// <summary>Bu oturumda iki noktayla görülmüş konuşan adları: OCR iki noktayı kaçırınca ("Peter İki kelime…") ad
+    /// yine tanınsın.</summary>
+    private readonly HashSet<string> seenSpeakers = new(StringComparer.OrdinalIgnoreCase);
+
+    private static (string Speaker, string Line)? SplitSpeaker(string text, IEnumerable<string>? known = null) =>
+        StreamSubtitleText.SplitSpeaker(text, known);
+
+    private (string Speaker, string Line)? SpeakerOf(string text)
+    {
+        var split = SplitSpeaker(text, seenSpeakers);
+        if (split is { } found) seenSpeakers.Add(found.Speaker);
+        return split;
+    }
+
+    private static List<string> Lines(string text) => StreamSubtitleText.Lines(text);
+
+    /// <summary>Çevirinin yazı boyu: oyunun altyazısınınkine uydurulduysa onun satır yüksekliğinden, yoksa ayardan.</summary>
+    private double GameFontSize(SubtitleStyle style)
+    {
+        var fallback = OverlayPlacement.FontSize(style.FontSize) * Scale;
+        if (!controller.StreamMatchGameSize || gameSize.Current is not { } line) return fallback;
+        // OCR kutusu harflerin üstünden altına kadardır; yazı boyu bunun ~%92'si. Uç değerler ayarın yarısı ile iki katı.
+        var size = line * PictureRect().Height * 0.92;
+        return Math.Clamp(size, fallback * 0.5, fallback * 2);
+    }
+
+    private Border MakeGameBox(SubtitleStack.Line line)
+    {
+        var style = controller.Settings.Style;
+        var scale = Scale;
+        var current = line.Role == SubtitleStack.Role.Current;
+        var size = Math.Max(1, GameFontSize(style) * (current ? 1 : 0.82));
+        // Zemin yalnız koyu örtü seçiliyken ve örtülmüyorken (serbest yer) olur; bulanık ve "yok"ta kutusuz yazı.
+        var boxOpacity = Math.Clamp(style.Background / 100.0, 0, 1) * 0.8;
+        var boxed = controller.StreamCover == StreamCover.Dark && !covering && boxOpacity > 0.02;
+        var text = new TextBlock
+        {
+            FontFamily = new FontFamily(controller.StreamFont),
+            FontSize = size,
+            FontWeight = style.Bold ? FontWeights.Bold : FontWeights.Medium,
+            Foreground = new SolidColorBrush(GameTextBrushColor(style)),
+            TextWrapping = TextWrapping.Wrap,
+            TextAlignment = line.Paragraphs ? TextAlignment.Left : TextAlignment.Center,
+            LineHeight = size * 1.22,
+            // Kutusuzken oyun altyazıları gibi belirgin gölge (açık sahnede de okunsun); kutuluyken hafif.
+            Effect = new DropShadowEffect
+            {
+                Color = Colors.Black,
+                Direction = 270,
+                ShadowDepth = (boxed ? 1 : 1.4) * scale,
+                BlurRadius = (boxed ? 4 : 6) * scale,
+                Opacity = boxed ? 0.55 : 1,
+            },
+        };
+        if (line.Paragraphs)
+        {
+            text.Text = line.Text;
+        }
+        else
+        {
+            // Her konuşan kendi satırında; ad kendi renginde (oyundaki gibi), cümleden biraz küçük ki ayırt edilsin.
+            var first = true;
+            foreach (var part in Lines(line.Text))
+            {
+                if (!first) text.Inlines.Add(new System.Windows.Documents.LineBreak());
+                first = false;
+                if (SpeakerOf(part) is { } split)
+                {
+                    text.Inlines.Add(new System.Windows.Documents.Run(split.Speaker + ": ")
+                    {
+                        Foreground = new SolidColorBrush(SpeakerBrushColor(style, split.Speaker)),
+                        FontWeight = controller.StreamMatchGameColor ? text.FontWeight : FontWeights.Normal,
+                        FontSize = size * 0.85,
+                    });
+                    text.Inlines.Add(new System.Windows.Documents.Run(split.Line));
+                }
+                else
+                {
+                    text.Inlines.Add(new System.Windows.Documents.Run(part));
+                }
+            }
+        }
+        return new Border
+        {
+            Background = boxed ? new SolidColorBrush(Color.FromArgb((byte)Math.Round(boxOpacity * 255), 0x0B, 0x0B, 0x0D)) : Brushes.Transparent,
+            CornerRadius = new CornerRadius(6 * scale),
+            Padding = current ? new Thickness(16 * scale, 5 * scale, 16 * scale, 6 * scale) : new Thickness(12 * scale, 3 * scale, 12 * scale, 4 * scale),
+            Margin = new Thickness(0, 4 * scale, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            MaxWidth = Math.Max(200, PictureRect().Width * MaxLineWidth),
+            Opacity = line.Role switch { SubtitleStack.Role.Current => 1.0, SubtitleStack.Role.Previous => 0.7, _ => 0.5 },
+            Child = text,
+        };
+    }
+
+    /// <summary>Oyun görüntüsü zemininde ek alan kutusu: altyazıyla aynı dilde, daha küçük ve yarı saydam.</summary>
+    private Border MakeGameRegionBox(string text, CouchSubs.Core.TextBox? area)
+    {
+        var style = controller.Settings.Style;
+        var scale = Scale;
+        var size = Math.Max(12, GameFontSize(style) * 0.6);
+        var middle = area is { } box ? (box.Left + box.Right) / 2 : 0.5;
+        return new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(0xA6, 0x0B, 0x0B, 0x0D)),
+            CornerRadius = new CornerRadius(6 * scale),
+            Padding = new Thickness(12 * scale, 5 * scale, 12 * scale, 6 * scale),
+            Margin = new Thickness(0, 0, 0, 8 * scale),
+            HorizontalAlignment = middle < 0.4 ? HorizontalAlignment.Left : middle > 0.6 ? HorizontalAlignment.Right : HorizontalAlignment.Center,
+            Child = new TextBlock
+            {
+                Text = text,
+                FontFamily = new FontFamily(controller.StreamFont),
+                FontSize = size,
+                FontWeight = FontWeights.Medium,
+                Foreground = new SolidColorBrush(GameTextBrushColor(style)),
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = size * 1.25,
+            },
+        };
+    }
+
+    // --- Sürükle-bırak: oyun görüntüsü zemininde çeviri fareyle istenen yere taşınır; taşınınca yer "serbest" olur
+    // (oyunun altyazısı da görünür kalır, iki altyazı birden). Ayarlar'daki "Konumu sıfırla" eski yere döndürür. ---
+
+    private void OnDragStart(object sender, MouseButtonEventArgs e)
+    {
+        if (!GameMode || e.ClickCount > 1) return;
+        dragGrab = e.GetPosition(linesPanel);
+        if (linesPanel.CaptureMouse()) e.Handled = true;
+    }
+
+    private void OnDragMove(object sender, MouseEventArgs e)
+    {
+        if (!linesPanel.IsMouseCaptured) return;
+        var picture = PictureRect();
+        var at = e.GetPosition(root);
+        // Tutulan nokta fareyle birlikte gider; kaydedilen, çevirinin ortası.
+        var centerX = at.X - dragGrab.X + (linesPanel.ActualWidth / 2);
+        var centerY = at.Y - dragGrab.Y + (linesPanel.ActualHeight / 2);
+        dragPosition = (Math.Clamp((centerX - picture.X) / picture.Width, 0, 1), Math.Clamp((centerY - picture.Y) / picture.Height, 0, 1));
+        if (controller.StreamPlacement != StreamPlacement.Free) controller.StreamPlacement = StreamPlacement.Free;
+        else PositionGameSubtitle();
+    }
+
+    private void OnDragEnd(object sender, MouseButtonEventArgs e)
+    {
+        if (!linesPanel.IsMouseCaptured) return;
+        linesPanel.ReleaseMouseCapture();
+        e.Handled = true;
+    }
+
+    private void FinishDrag()
+    {
+        if (dragPosition is not { } position) return;
+        dragPosition = null;
+        controller.StreamFreePosition = position;
+    }
+}

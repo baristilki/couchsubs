@@ -546,6 +546,33 @@
                             </DockPanel>
                             <CheckBox x:Name="StreamGameAudio" Content="{t:T 'Play the game sound on this computer'}" Margin="0,0,0,4"
                                       Checked="OnStreamGameAudio" Unchecked="OnStreamGameAudio" />
+                            <CheckBox x:Name="StreamMatchGameColor" Content="{t:T 'Use the game\'s subtitle colour'}" Margin="0,0,0,4"
+                                      Checked="OnStreamMatchGameColor" Unchecked="OnStreamMatchGameColor" />
+                            <CheckBox x:Name="StreamMatchGameSize" Content="{t:T 'Match the game\'s subtitle size'}" Margin="0,0,0,12"
+                                      Checked="OnStreamMatchGameSize" Unchecked="OnStreamMatchGameSize" />
+                            <!-- Oyunun İngilizce altyazısı nasıl örtülür; çeviri nerede durur; yazı tipi (StreamWindow.Game.cs). -->
+                            <DockPanel Margin="0,0,0,8">
+                                <TextBlock Text="{t:T 'Game subtitle'}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                <ComboBox x:Name="StreamCoverChoice" Width="240" HorizontalAlignment="Left" SelectionChanged="OnStreamCover">
+                                    <ComboBoxItem Content="{t:T 'Cover with a dark box'}" Tag="Dark" />
+                                    <ComboBoxItem Content="{t:T 'Blur it (no background)'}" Tag="Blur" />
+                                    <ComboBoxItem Content="{t:T 'Leave it (translation above)'}" Tag="None" />
+                                </ComboBox>
+                            </DockPanel>
+                            <DockPanel Margin="0,0,0,8">
+                                <TextBlock Text="{t:T 'Translation position'}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                <ComboBox x:Name="StreamPlacementChoice" Width="240" HorizontalAlignment="Left" SelectionChanged="OnStreamPlacement">
+                                    <ComboBoxItem Content="{t:T 'On the game subtitle'}" Tag="OnGameSubtitle" />
+                                    <ComboBoxItem Content="{t:T 'Where I drag it'}" Tag="Free" />
+                                </ComboBox>
+                                <Button Content="{t:T 'Reset position'}" Margin="8,0,0,0" Padding="12,0" HorizontalAlignment="Left" Click="OnStreamResetPosition" />
+                            </DockPanel>
+                            <DockPanel Margin="0,0,0,4">
+                                <TextBlock Text="{t:T 'Font'}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                <ComboBox x:Name="StreamFontChoice" Width="240" HorizontalAlignment="Left" SelectionChanged="OnStreamFont" />
+                            </DockPanel>
+                            <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,12"
+                                       Text="{t:T 'Drag the translation with the mouse in the stream window to move it; the game subtitle then stays visible too. F11 or double-click: full screen. In the stream window M mutes the game sound, + and - change it.'}" />
                             <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,12"
                                        Text="{t:T 'Discord and OBS take the sound from CouchSubs. Discord streams at most 30 fps without Nitro.'}" />
                             <Button Content="{t:T 'Open the stream window'}" HorizontalAlignment="Left" Click="OnOpenStreamWindow" />

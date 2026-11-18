@@ -1529,6 +1529,110 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         }
     }
 
+    /// <summary>Oyun görüntüsü zemininde çeviri oyunun kendi altyazı renginde gösterilsin mi. Varsayılan açık.</summary>
+    public bool StreamMatchGameColor
+    {
+        get => store.Load<bool?>(StoreKeys.StreamMatchGameColor) ?? true;
+        set
+        {
+            if (value == StreamMatchGameColor) return;
+            store.Save(StoreKeys.StreamMatchGameColor, value);
+            Changed(nameof(StreamMatchGameColor));
+        }
+    }
+
+    /// <summary>Bilgisayarda çalan, Discord/OBS'e giden oyun sesinin düzeyi (0-100). Varsayılan 100.</summary>
+    public int StreamGameVolume
+    {
+        get => Math.Clamp(store.Load<int?>(StoreKeys.StreamGameVolume) ?? 100, 0, 100);
+        set
+        {
+            value = Math.Clamp(value, 0, 100);
+            if (value == StreamGameVolume) return;
+            store.Save(StoreKeys.StreamGameVolume, value);
+            Changed(nameof(StreamGameVolume));
+            ApplyGameVolume();
+        }
+    }
+
+    /// <summary>Oyun sesi kısık mı; düzey korunur, açınca aynı düzeyden sürer.</summary>
+    public bool StreamGameMuted
+    {
+        get => store.Load<bool?>(StoreKeys.StreamGameMuted) ?? false;
+        set
+        {
+            if (value == StreamGameMuted) return;
+            store.Save(StoreKeys.StreamGameMuted, value);
+            Changed(nameof(StreamGameMuted));
+            ApplyGameVolume();
+        }
+    }
+
+    private void ApplyGameVolume()
+    {
+        if (gameAudio is { } audio) audio.Volume = StreamGameMuted ? 0 : StreamGameVolume / 100.0;
+    }
+
+    /// <summary>Oyun görüntüsü zemininde, çeviri görünürken oyunun İngilizce altyazısı nasıl örtülür. Varsayılan bulanık.</summary>
+    public StreamCover StreamCover
+    {
+        get => StreamLayout.CoverFromStored(store.Load<string>(StoreKeys.StreamCover));
+        set
+        {
+            if (value == StreamCover) return;
+            store.Save(StoreKeys.StreamCover, value.ToString().ToLowerInvariant());
+            Changed(nameof(StreamCover));
+        }
+    }
+
+    /// <summary>Oyun görüntüsü zemininde çevirinin yeri: oyunun altyazısının yerinde ya da sürüklenen serbest yerde.</summary>
+    public StreamPlacement StreamPlacement
+    {
+        get => StreamLayout.PlacementFromStored(store.Load<string>(StoreKeys.StreamPlacement));
+        set
+        {
+            if (value == StreamPlacement) return;
+            store.Save(StoreKeys.StreamPlacement, value.ToString().ToLowerInvariant());
+            Changed(nameof(StreamPlacement));
+        }
+    }
+
+    /// <summary>Serbest yerdeki çevirinin ortası, görüntüye oranla (0-1).</summary>
+    public (double X, double Y) StreamFreePosition
+    {
+        get => StreamLayout.FreePositionFromStored(store.Load<string>(StoreKeys.StreamFreePosition));
+        set
+        {
+            store.Save(StoreKeys.StreamFreePosition, StreamLayout.FreePositionToStored(value));
+            Changed(nameof(StreamFreePosition));
+        }
+    }
+
+    /// <summary>Çevirinin yazı boyu oyunun kendi altyazısının boyuna uydurulsun mu. Varsayılan açık.</summary>
+    public bool StreamMatchGameSize
+    {
+        get => store.Load<bool?>(StoreKeys.StreamMatchGameSize) ?? true;
+        set
+        {
+            if (value == StreamMatchGameSize) return;
+            store.Save(StoreKeys.StreamMatchGameSize, value);
+            Changed(nameof(StreamMatchGameSize));
+        }
+    }
+
+    /// <summary>Oyun görüntüsü zemininde çevirinin yazı tipi (<see cref="StreamLayout.Fonts"/>).</summary>
+    public string StreamFont
+    {
+        get => StreamLayout.FontFromStored(store.Load<string>(StoreKeys.StreamFont));
+        set
+        {
+            value = StreamLayout.FontFromStored(value);
+            if (value == StreamFont) return;
+            store.Save(StoreKeys.StreamFont, value);
+            Changed(nameof(StreamFont));
+        }
+    }
+
     /// <summary>Oyun görüntüsünün kare hızı: 30 (Discord'un ücretsiz yayını) ya da 60.</summary>
     public int StreamVideoFps
     {
@@ -1556,6 +1660,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (!on) source.GameVideo = null;
             source.GameVideoFps = StreamVideoFps;
             source.GameAudio = on && StreamGameAudio ? gameAudio ??= services.MakeGameAudioOutput() : null;
+            ApplyGameVolume();
             if (on) source.GameVideo = GameVideo;
         }
         if (!on) GameVideo.Clear();

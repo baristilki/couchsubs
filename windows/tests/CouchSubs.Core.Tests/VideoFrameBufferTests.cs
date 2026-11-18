@@ -79,6 +79,18 @@ public class VideoFrameBufferTests
     }
 
     [Fact]
+    public void EveryWrittenFrameIsAnnounced()
+    {
+        var buffer = new VideoFrameBuffer();
+        var announced = 0;
+        buffer.FrameWritten += () => announced++;
+        Write(buffer, [1, 1, 1, 1], 1, 1, 4);
+        Write(buffer, [2, 2, 2, 2], 1, 1, 4);
+        Write(buffer, [1, 1, 1, 1], 0, 1, 4); // geçersiz kare duyurulmaz
+        Assert.Equal(2, announced);
+    }
+
+    [Fact]
     public void InvalidFramesAreIgnored()
     {
         var buffer = new VideoFrameBuffer();

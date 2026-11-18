@@ -190,7 +190,7 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
             // Kare hızı yalnız oturum açılırken verilebilir; çalışan bağlantı yeni hızla yeniden kurulur.
             RemotePlayLog.Note(value is null ? "oyun görüntüsü kapandı" : $"oyun görüntüsü açıldı ({GameVideoFps} kare/sn, ses {(GameAudio is null ? "kapalı" : "açık")})");
             if (value is null) GameAudio?.Reset();
-            ReconnectNow();
+            Reopen();
         }
     }
 
@@ -205,7 +205,7 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
             value = GameVideoRate.FromStored(value);
             if (Interlocked.Exchange(ref gameVideoFps, value) == value) return;
             RemotePlayLog.Note($"oyun görüntüsü kare hızı: {value}");
-            if (GameVideo is not null) ReconnectNow();
+            if (GameVideo is not null) Reopen();
         }
     }
 
@@ -221,7 +221,7 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
             if (ReferenceEquals(old, value)) return;
             old?.Reset();
             RemotePlayLog.Note(value is null ? "oyun sesi kapandı" : "oyun sesi açıldı");
-            if (GameVideo is not null) ReconnectNow();
+            if (GameVideo is not null) Reopen();
         }
     }
 
@@ -297,6 +297,25 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
         queue.Post(() =>
         {
             CloseBox();
+            policy.Reset();
+            Connect(current);
+        });
+    }
+
+    /// <summary>
+    /// Ayar değişti (kare hızı, ses, oyun görüntüsü): bağlantı kapatılıp kısa bir beklemeyle yeniden açılır. PS5 eski
+    /// oturumu birkaç saniye bırakmıyor; hemen bağlanınca ~10 sn boyunca "Remote Play kullanımda" alınıyordu.
+    /// </summary>
+    internal static readonly TimeSpan ReopenDelay = TimeSpan.FromSeconds(3);
+
+    private void Reopen()
+    {
+        if (!IsRunning) return;
+        var current = Bump(running: true);
+        queue.Post(CloseBox);
+        queue.PostAfter(ReopenDelay, () =>
+        {
+            if (!IsCurrent(current)) return;
             policy.Reset();
             Connect(current);
         });
@@ -675,6 +694,12 @@ internal sealed class FrameDelivery : IDisposable
         this.now = now ?? (() => Environment.TickCount64);
         thread = new Thread(Run) { IsBackground = true, Name = "CouchSubs frames" };
         thread.Start();
+    }
+
+    /// <summary>Bekleyen ya da işlenen kare var mı (testler sonraki kareyi sunmadan önce bunu bekler).</summary>
+    internal bool IsBusy
+    {
+        get { lock (gate) return busy || pending is not null; }
     }
 
     /// <summary>Tampon yalnız bu çağrı süresince geçerlidir.</summary>

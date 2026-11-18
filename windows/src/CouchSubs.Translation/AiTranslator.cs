@@ -248,7 +248,23 @@ public static class AiRequest
     }
 
     /// <summary>Yanıttaki JSON dizisi; tek cümlede model diziyi unutup düz metin dönerse o metin alınır.</summary>
-    public static string[] Translations(string text, int count)
+    public static string[] Translations(string text, int count) =>
+        [.. RawTranslations(text, count).Select(ScrubArrayArtifacts)];
+
+    /// <summary>
+    /// Yerel modeller içinde iki cümle olan tek satırı iki diziye bölüp <c>["Hımm-hmm."] ["Ne yaptın?"]</c> döndürebiliyor;
+    /// ayrıştırılamayınca ekranda <c>Hımm-hmm."] ["Ne yaptın?</c> görünüyordu. Çeviride kalan dizi işaretleri
+    /// (<c>"] ["</c>, baştaki <c>["</c>, sondaki <c>"]</c>) silinir; tırnaksız köşeli parantezli yazıya dokunulmaz.
+    /// </summary>
+    internal static string ScrubArrayArtifacts(string text)
+    {
+        var value = System.Text.RegularExpressions.Regex.Replace(text, @"[""“”]\s*\]\s*,?\s*\[\s*[""“”]", " ");
+        value = System.Text.RegularExpressions.Regex.Replace(value, @"(^|\s)\[\s*[""“”]", "$1");
+        value = System.Text.RegularExpressions.Regex.Replace(value, @"[""“”]\s*\](?=\s|$)", "");
+        return System.Text.RegularExpressions.Regex.Replace(value, @"\s{2,}", " ").Trim();
+    }
+
+    private static string[] RawTranslations(string text, int count)
     {
         var trimmed = text.Trim();
         // Düşünen yerel modeller (ör. Qwen3, DeepSeek-R1) yanıtın başına <think>…</think> koyar; yalnız sonrası alınır.
@@ -261,12 +277,17 @@ public static class AiRequest
         int start = trimmed.IndexOf('['), end = trimmed.LastIndexOf(']');
         if (start >= 0 && end > start)
         {
+            // Yan yana diziler (["a"] ["b"]) tek dizi sayılır.
+            var json = System.Text.RegularExpressions.Regex.Replace(WithoutTrailingComma(trimmed[start..(end + 1)]), @"\]\s*,?\s*\[", ",");
             try
             {
-                if (JsonNode.Parse(WithoutTrailingComma(trimmed[start..(end + 1)])) is JsonArray array && array.All(n => n?.GetValueKind() == JsonValueKind.String))
+                if (JsonNode.Parse(json) is JsonArray array && array.All(n => n?.GetValueKind() == JsonValueKind.String))
                 {
-                    if (array.Count != count) throw new AiException(OnlineKeyState.Unreachable);
-                    return [.. array.Select(n => n!.GetValue<string>().Trim())];
+                    var items = array.Select(n => n!.GetValue<string>().Trim()).ToArray();
+                    // Tek cümle istendi, model iki parçaya böldü: parçalar tek çeviridir.
+                    if (count == 1 && items.Length > 1) return [string.Join(' ', items)];
+                    if (items.Length != count) throw new AiException(OnlineKeyState.Unreachable);
+                    return items;
                 }
             }
             catch (JsonException) { /* dizi değil; düz metin olabilir */ }

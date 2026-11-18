@@ -759,6 +759,23 @@ public class AiTranslatorTests
         Assert.Equal(["Gidelim.", "Yakın dur."], AiRequest.Translations("```json\n[\"Gidelim.\", \"Yakın dur.\"]\n```", 2));
         Assert.Equal(["Gidelim."], AiRequest.Translations("“Gidelim.”", 1));
         Assert.Throws<AiException>(() => AiRequest.Translations("[\"Tek\"]", 2));
+    }
+
+    /// <summary>
+    /// İçinde iki cümle olan tek satırı yerel model iki diziye bölüyordu; ekranda <c>Hımm-hmm."] ["Ne yaptın, Donnie?</c>
+    /// görünüyordu (gerçek Gemma yanıtları).
+    /// </summary>
+    [Fact]
+    public void SplitArraysAreJoinedAndLeftoverBracketsRemoved()
+    {
+        Assert.Equal(["Hımm-hmm. Ne yaptın, Donnie?"], AiRequest.Translations("[\"Hımm-hmm.\"] [\"Ne yaptın, Donnie?\"]", 1));
+        Assert.Equal(["İnan bana, bu onun son durağı. Sadece onu dondurucu gibi saklıyoruz."],
+            AiRequest.Translations("İnan bana, bu onun son durağı.\"] [\"Sadece onu dondurucu gibi saklıyoruz.", 1));
+        Assert.Equal(["Merhaba. Ne, lan, uçağıma ne olmuş?"], AiRequest.Translations("Merhaba. [\"Ne, lan, uçağıma ne olmuş?", 1));
+        Assert.Equal(["Burada oturmuş ördek gibiyiz, resmen. Lan."], AiRequest.Translations("Burada oturmuş ördek gibiyiz, resmen. Lan.\"]", 1));
+        // İki cümle istenince iki dizi yine iki çeviridir; köşeli parantezli düz yazıya dokunulmaz.
+        Assert.Equal(["Gidelim.", "Yakın dur."], AiRequest.Translations("[\"Gidelim.\"] [\"Yakın dur.\"]", 2));
+        Assert.Equal(["[Kapı çalıyor] Kim o?"], AiRequest.Translations("[Kapı çalıyor] Kim o?", 1));
         Assert.Throws<AiException>(() => AiRequest.Translations("Gidelim. Yakın dur.", 2));
         Assert.Throws<AiException>(() => AiRequest.Text(AiProvider.Gemini, """{"promptFeedback":{"blockReason":"OTHER"}}"""));
         Assert.Equal("Koş!", AiRequest.Text(AiProvider.OpenAi, """{"choices":[{"message":{"content":"Koş!"}}]}"""));

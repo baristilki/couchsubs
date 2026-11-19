@@ -539,6 +539,24 @@
                                     <ComboBoxItem Content="{t:T 'Game picture (PS5)'}" Tag="Game" />
                                 </ComboBox>
                             </Grid>
+                            <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,12"
+                                       Text="{t:T 'Game picture (PS5) options and the Discord status are in the PS5 stream tab.'}" />
+                            <Button Content="{t:T 'Open the stream window'}" HorizontalAlignment="Left" Click="OnOpenStreamWindow" />
+                            <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,12,0,0"
+                                       Text="{t:T 'Keep the window open and uncovered while streaming. Subtitles appear in it while the translation is running, even when they are shown only on the TV.'}" />
+                        </StackPanel>
+                    </c:Card>
+                </StackPanel>
+            </TabItem>
+            <!-- PS5 yayını (Discord/OBS, capture card olmadan): yayın penceresinde PS5'in oyun görüntüsü, oyuna uyan altyazı ve
+                 Discord durumu. OBS katmanı (tarayıcı kaynağı) ve düz zeminli yayın penceresi OBS sekmesinde kalır. -->
+            <TabItem Header="{t:T 'PS5 stream'}">
+                <StackPanel>
+                    <TextBlock Text="{t:T 'PS5 stream'}" Style="{StaticResource DisplayText}" Margin="0,0,0,12" />
+                    <c:Card Title="{t:T 'Game picture (PS5)'}">
+                        <StackPanel Grid.IsSharedSizeScope="True">
+                            <CheckBox x:Name="StreamGameOn" Content="{t:T 'Show the PS5 game picture in the stream window'}" Margin="0,0,0,12"
+                                      Checked="OnStreamGameOn" Unchecked="OnStreamGameOn" />
                             <!-- Oyun görüntüsü: PS5 bağlantısından (ikinci hesap) gelen görüntü altyazının arkasına çizilir (StreamWindow.cs). -->
                             <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,12"
                                        Text="{t:T 'Game picture: the window shows the PS5 game with the subtitles on top, so you can share it in Discord or OBS while you keep playing on the TV. Only with the PS5 connection (second account).'}" />
@@ -605,8 +623,6 @@
                             <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,12"
                                        Text="{t:T 'Discord and OBS take the sound from CouchSubs. Discord streams at most 30 fps without Nitro.'}" />
                             <Button Content="{t:T 'Open the stream window'}" HorizontalAlignment="Left" Click="OnOpenStreamWindow" />
-                            <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,12,0,0"
-                                       Text="{t:T 'Keep the window open and uncovered while streaming. Subtitles appear in it while the translation is running, even when they are shown only on the TV.'}" />
                         </StackPanel>
                     </c:Card>
                     <!-- Discord "oynuyor" durumu (DiscordIpcPresence): kullanıcının Discord uygulamasının adı ve ikonu görünür. -->

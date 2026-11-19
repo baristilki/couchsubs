@@ -11794,6 +11794,54 @@
         }
       }
     },
+    "PS5 stream": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PS5 stream"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PS5 yayını"
+          }
+        }
+      }
+    },
+    "Show the PS5 game picture in the stream window": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show the PS5 game picture in the stream window"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yayın penceresinde PS5 oyun görüntüsünü göster"
+          }
+        }
+      }
+    },
+    "Game picture (PS5) options and the Discord status are in the PS5 stream tab.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Game picture (PS5) options and the Discord status are in the PS5 stream tab."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oyun görüntüsü (PS5) seçenekleri ve Discord durumu PS5 yayını sekmesinde."
+          }
+        }
+      }
+    },
     "Play the game sound on this computer": {
       "localizations": {
         "en": {

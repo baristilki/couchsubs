@@ -71,6 +71,7 @@ public partial class SettingsWindow : Window
         else NetworkObsPanel.Visibility = Visibility.Collapsed;
         var streamBackground = controller.StreamBackground.ToString();
         StreamBackgroundChoice.SelectedItem = StreamBackgroundChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == streamBackground);
+        StreamGameOn.IsChecked = controller.StreamBackground == StreamBackground.Game;
         var streamFps = controller.StreamVideoFps.ToString(System.Globalization.CultureInfo.InvariantCulture);
         StreamFpsChoice.SelectedItem = StreamFpsChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == streamFps);
         StreamGameAudio.IsChecked = controller.StreamGameAudio;
@@ -1170,7 +1171,19 @@ public partial class SettingsWindow : Window
     private void OnStreamBackground(object sender, SelectionChangedEventArgs e)
     {
         if (StreamBackgroundChoice.SelectedItem is ComboBoxItem { Tag: string tag } && Enum.TryParse<StreamBackground>(tag, out var background))
+        {
             controller.StreamBackground = background;
+            if (StreamGameOn is not null) StreamGameOn.IsChecked = background == StreamBackground.Game;
+        }
+    }
+
+    /// <summary>PS5 yayını sekmesindeki anahtar: yayın penceresinin zemini oyun görüntüsü ya da (kapatınca) yeşil.</summary>
+    private void OnStreamGameOn(object sender, RoutedEventArgs e)
+    {
+        var on = StreamGameOn.IsChecked == true;
+        if ((controller.StreamBackground == StreamBackground.Game) == on) return;
+        var tag = on ? nameof(StreamBackground.Game) : nameof(StreamBackground.Green);
+        StreamBackgroundChoice.SelectedItem = StreamBackgroundChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == tag);
     }
 
     private void OnOpenStreamWindow(object sender, RoutedEventArgs e) => StreamWindow.Open(controller);

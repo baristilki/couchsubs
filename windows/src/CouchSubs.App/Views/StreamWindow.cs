@@ -72,9 +72,14 @@ public sealed partial class StreamWindow : Window
     /// Discord durumu açıkken pencerenin ikonu Discord uygulamasının ikonudur (oyunun logosu): Discord'un pencere
     /// seçiminde, görev çubuğunda ve Alt+Tab'da CouchSubs logosu görünmez. Yoksa uygulamanın kendi ikonu.
     /// </summary>
+    /// <summary>Oyun görüntüsüyle (Discord yayını) başlık oyunun adı; düz zeminde sabit ad kalır, OBS'nin pencere
+    /// yakalaması pencereyi "CouchSubs Yayın" adıyla bulur.</summary>
+    private string CurrentTitle =>
+        controller.StreamBackground == StreamBackground.Game ? controller.DiscordAppName ?? WindowTitle : WindowTitle;
+
     private void ApplyGameIcon()
     {
-        if (controller.DiscordAppIcon is not { Length: > 0 } png)
+        if (controller.StreamBackground != StreamBackground.Game || controller.DiscordAppIcon is not { Length: > 0 } png)
         {
             ClearValue(IconProperty);
             return;
@@ -97,7 +102,7 @@ public sealed partial class StreamWindow : Window
         this.controller = controller;
         // Discord durumu açıkken başlık Discord uygulamasının adıdır: Discord pencere yayınını başlıkla gösterir
         // ("Yayında: Grand Theft Auto VI"). Kapalıysa sabit ad; yayın programı pencereyi bu adla bulur.
-        Title = controller.DiscordAppName ?? WindowTitle;
+        Title = CurrentTitle;
         ApplyGameIcon();
         // 1280x720 içerik: 16:9, yayın programında kaynak oranı bozulmaz.
         SizeToContent = SizeToContent.Manual;
@@ -357,8 +362,8 @@ public sealed partial class StreamWindow : Window
             boxes.Clear();
             Refresh();
         }
-        if (e.PropertyName == nameof(AppController.DiscordAppName)) Title = controller.DiscordAppName ?? WindowTitle;
-        if (e.PropertyName == nameof(AppController.DiscordAppIcon)) ApplyGameIcon();
+        if (e.PropertyName is nameof(AppController.DiscordAppName) or nameof(AppController.StreamBackground)) Title = CurrentTitle;
+        if (e.PropertyName is nameof(AppController.DiscordAppIcon) or nameof(AppController.StreamBackground)) ApplyGameIcon();
         if (e.PropertyName is nameof(AppController.StreamCover) or nameof(AppController.StreamMatchGameColor)
             or nameof(AppController.StreamPlacement) or nameof(AppController.StreamMatchGameSize) or nameof(AppController.StreamFont)
             or nameof(AppController.StreamFreePosition))

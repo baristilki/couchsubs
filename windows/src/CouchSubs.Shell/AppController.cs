@@ -1577,6 +1577,14 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     /// <summary>TV'ye oyuna uyan görünümü gönderir (yayın penceresi aynı ayarları ve renkleri kendisi okur).</summary>
     private void SendLook()
     {
+        // Oyuna uyan görünüm (renk, boy, yazı tipi, örtü) yalnız yayın penceresi PS5 oyun görüntüsüyleyken TV'ye gider;
+        // yoksa TV kendi altyazı ayarlarıyla görünür (eskiden yeşil zeminli yayın penceresi kullananların ya da hiç
+        // kullanmayanların TV'si de bulanık örtü ve oyun yazı tipine geçiyordu).
+        if (StreamBackground != StreamBackground.Game)
+        {
+            server.SendLook(SubtitleLook.Create(oneLine: false, matchSize: false, font: null, textColor: null, speakers: new Dictionary<string, string>()));
+            return;
+        }
         var matchColor = StreamMatchGameColor && settings.Style.TextColor == SubtitleTextColor.White;
         server.SendLook(SubtitleLook.Create(
             oneLine: StreamMatchGameSize,
@@ -1608,6 +1616,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             store.Save(StoreKeys.StreamBackground, value.StoredName());
             Changed(nameof(StreamBackground));
             ApplyGameVideo();
+            SendLook();
         }
     }
 

@@ -8,6 +8,32 @@
   // Çözünürlük değişikliği dinleyicisi (bir kez kurulur) ve güncel değeri alan işlev.
   var resolutionListener = null;
   var resolutionCallback = null;
+  // HDMI görüntüsü uygulama yüzeyinin tamamını kaplar (yüzde, ekran kökenli; Samsung TVWindow API).
+  var FULL_SCREEN = ['0', '0', '100%', '100%'];
+  // 16:9'dan belirgin geniş yüzey (21:9 = 2,33; 3440x1440 = 2,39; 32:9 = 3,56). 16:9 (1,78) ve yuvarlama payı altında.
+  var WIDE_RATIO = 1.9;
+  // Sayfa her TV'de 1080 CSS piksel yükseklikte düzenlenir (index.html: width=1920); geniş ekranda da öyle kalır.
+  var PAGE_HEIGHT = 1080;
+
+  // Ultrawide ekran (#304): config.xml'deki base_screen_resolution=fullscreen ile yüzey ekranın tamamı olur. Ortak
+  // index.html'in sabit 1920 piksellik görünümü bu yüzeyde sayfayı 1920x800'e indirir, yazılar 16:9 TV'dekinden küçük
+  // kalırdı. Geniş yüzeyde görünüm genişliği yüksekliği 1080 tutacak şekilde verilir (3440x1440 için 2580): yazı ve
+  // kutular 16:9 TV'dekiyle aynı boyda, app.js yerleşimi innerWidth/innerHeight'tan hesaplandığı için ekrana yayılır.
+  // 16:9 yüzeyde (bütün TV'ler, ayarı tanımayan modeller) null döner: hiçbir şey değişmez.
+  function viewportFor(width, height) {
+    if (!(width > 0) || !(height > 0)) return null;
+    var ratio = width / height;
+    return ratio >= WIDE_RATIO ? 'width=' + Math.round(PAGE_HEIGHT * ratio) : null;
+  }
+
+  function fitWideScreen() {
+    try {
+      var content = viewportFor(window.innerWidth, window.innerHeight);
+      if (!content) return;
+      var meta = document.querySelector('meta[name="viewport"]');
+      if (meta) meta.setAttribute('content', content);
+    } catch (e) {}
+  }
 
   function hdmiSources(callback) {
     try {
@@ -43,8 +69,14 @@
     }
   }
 
+  // app.js yerleşimi ölçmeden önce; platform.js ondan önce yüklenir.
+  fitWideScreen();
+
   window.COUCHSUBS_PLATFORM = {
     backKey: 10009,
+
+    // Birim testi için (scripts/tv-tizen.test.js).
+    viewportFor: viewportFor,
 
     // Anynet+ (HDMI-CEC) ya da Otomatik Kaynak Değiştirme TV'yi kendiliğinden HDMI'ya geçirirse uygulama ipucu
     // gösterir (app.js). Menü adları Samsung'unkiler; başka TV'lerde gösterilmez.
@@ -92,7 +124,7 @@
         try {
           tizen.tvwindow.setSource(source, function () {
             tizen.tvwindow.show(function () { onStatus('playing'); }, failed,
-              ['0', '0', '100%', '100%'], 'MAIN', 'BEHIND');
+              FULL_SCREEN, 'MAIN', 'BEHIND');
           }, failed);
         } catch (e) {
           failed();

@@ -50,7 +50,7 @@ class SubtitleServerTest {
 
     @Test
     fun helloIdentifiesTheServer() {
-        val server = SubtitleServer(0)
+        val server = SubtitleServer(0, instanceId = "3f2a-b9")
         val port = server.start()
         try {
             Socket("127.0.0.1", port).use { socket ->
@@ -58,7 +58,9 @@ class SubtitleServerTest {
                 val response = socket.getInputStream().readBytes().toString(Charsets.UTF_8)
                 assertTrue(response, response.startsWith("HTTP/1.1 200 OK"))
                 assertTrue(response.contains("Access-Control-Allow-Origin: *"))
-                assertTrue(response.endsWith("{\"app\":\"couchsubs\"}"))
+                // Kurulum kimliği ve bağlı TV sayısı: aynı ağdaki iki CouchSubs'ı TV bununla ayırır (GitHub #425).
+                assertTrue(response, response.endsWith("{\"app\":\"couchsubs\",\"id\":\"3f2a-b9\",\"tvs\":0}"))
+                assertEquals("{\"app\":\"couchsubs\",\"id\":\"ab\",\"tvs\":2}", SubtitleServer.helloBody("a\"b", 2))
             }
         } finally {
             server.stop()

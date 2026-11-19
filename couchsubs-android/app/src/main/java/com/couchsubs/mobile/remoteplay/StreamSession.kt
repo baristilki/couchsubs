@@ -365,7 +365,13 @@ class StreamSession(
     private fun connect(current: Int) {
         if (!isCurrent(current) || native != 0L) return
         emit(SessionState.Connecting)
-        val info = ConsoleDiscovery.discover(console.host, 2000).firstOrNull() ?: relocate()
+        // Kayıtlı adreste başka bir PS5 yanıt verirse (aynı evde iki PS5, modem adresleri değiştirmiş; GitHub #425)
+        // kayıtlı PS5 adıyla ağda aranır; bulunamazsa eskisi gibi o adrese bağlanılır.
+        val atHost = ConsoleDiscovery.discover(console.host, 2000).firstOrNull()
+        val info = if (atHost != null && ConsoleDiscovery.isRegistered(atHost, console.name)) atHost else {
+            if (atHost != null) Log.i(TAG, "PS5 ${console.host} adresinde başka PS5 yanıt verdi (${atHost.name}), ${console.name} aranıyor")
+            relocate() ?: atHost
+        }
         searchAnswered = info != null
         Log.i(TAG, if (info == null) "PS5 ${console.host} aramaya yanıt vermedi, yine de bağlanılıyor"
             else "PS5 ${info.name} ${info.host} ${if (info.isAwake) "uyanık" else "dinlenmede, uyandırılıyor"}")

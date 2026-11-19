@@ -272,13 +272,21 @@ final class SubtitleServerTests: XCTestCase {
     }
 
     func testHelloIdentifiesTheApp() async throws {
-        let server = SubtitleServer(port: 0)
+        let server = SubtitleServer(port: 0, instanceId: "3f2a-b9")
         let port = try await server.start()
         defer { server.stop() }
         let (data, response) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:\(port)/hello")!)
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
         XCTAssertEqual((response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Access-Control-Allow-Origin"), "*")
-        XCTAssertEqual(String(decoding: data, as: UTF8.self), #"{"app":"couchsubs"}"#)
+        XCTAssertEqual(String(decoding: data, as: UTF8.self), #"{"app":"couchsubs","id":"3f2a-b9","tvs":0}"#)
+    }
+
+    /// Kurulum kimliği kalıcıdır: aynı ağdaki iki CouchSubs'ı TV bununla ayırır (GitHub #425).
+    func testInstallationIdIsStable() {
+        let first = SubtitleServer.installationId
+        XCTAssertFalse(first.isEmpty)
+        XCTAssertEqual(SubtitleServer.installationId, first)
+        XCTAssertEqual(SubtitleServer.helloBody(id: "a\"b", tvs: 2), #"{"app":"couchsubs","id":"ab","tvs":2}"#)
     }
 
     func testUnknownPathIs404() async throws {

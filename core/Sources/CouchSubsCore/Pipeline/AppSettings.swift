@@ -148,6 +148,8 @@ public struct UserSettings: Codable, Equatable {
     public var showSpeakerNames = true
     /// Mac'te değişmeyen altyazı bölgesini en fazla iki kare yeniden kullan; varsayılan kapalı.
     public var fastSubtitleDetection = false
+    /// Yalnız GTA 6'nın lacivert altyazı zemini üstündeki yazıyı oku. Varsayılan kapalı.
+    public var watchSubtitleBackground = false
     /// iPhone Xbox ev yayınında oyun sesi telefonda çalınır. Xbox uzaktan oynatma sürerken sesi istemciye verip TV'yi
     /// susturabilir; kapalıyken ses hiçbir yerden gelmeyebilir, bu yüzden varsayılan açık. PS5'i etkilemez.
     public var xboxAudioOnDevice = true
@@ -195,6 +197,7 @@ public struct UserSettings: Codable, Equatable {
         askGame = try values.decodeIfPresent(Bool.self, forKey: .askGame) ?? defaults.askGame
         showSpeakerNames = try values.decodeIfPresent(Bool.self, forKey: .showSpeakerNames) ?? defaults.showSpeakerNames
         fastSubtitleDetection = try values.decodeIfPresent(Bool.self, forKey: .fastSubtitleDetection) ?? defaults.fastSubtitleDetection
+        watchSubtitleBackground = try values.decodeIfPresent(Bool.self, forKey: .watchSubtitleBackground) ?? defaults.watchSubtitleBackground
         xboxAudioOnDevice = try values.decodeIfPresent(Bool.self, forKey: .xboxAudioOnDevice) ?? defaults.xboxAudioOnDevice
         appearance = (try? values.decodeIfPresent(AppAppearance.self, forKey: .appearance)) ?? defaults.appearance
         frameSource = (try? values.decodeIfPresent(FrameSource.self, forKey: .frameSource)) ?? defaults.frameSource

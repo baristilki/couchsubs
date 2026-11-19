@@ -268,7 +268,7 @@ class TranslationService : Service() {
         glossaryInUse = glossary
         val free = MlKitTranslator(cache(MlKitTranslator.ENGINE_ID), glossary).also { freeTranslator = it }
         val translator = engineTranslator(free)
-        val subtitleServer = SubtitleServer().also { server = it }
+        val subtitleServer = SubtitleServer(instanceId = installationId(this)).also { server = it }
         subtitleServer.sendsToTv = settings.target == SubtitleTarget.TV
         subtitleServer.onClientsChanged = { count ->
             val before = LiveState.status.value.connectedTvs
@@ -393,7 +393,7 @@ class TranslationService : Service() {
             // Ek alanlar saniyede bir, kendi iş parçacığında okunur; altyazı okumasını beklemez, onu bekletmez.
             regionWatcher?.offer(extraAreas, { r ->
                 SubtitleReader.copyRegion(frame, r)?.let {
-                    com.couchsubs.mobile.core.RegionWatcher.Crop(it, com.couchsubs.mobile.core.RegionSignature.of(it.nv21, it.width, it.height))
+                    com.couchsubs.mobile.core.RegionWatcher.Crop(it, com.couchsubs.mobile.core.RegionSignature.of(it.nv21, it.width, it.height), it.gray)
                 }
             }) { task -> runCatching { regionWork.execute(task) } }
             FramePreview.offer(frame, now)
@@ -523,7 +523,8 @@ class TranslationService : Service() {
                 val reading = reader.read(pixels)
                 // Yapay zekâda ekranın bütün yazıları tek istekte gider (bkz. AiTranslator.translateAll).
                 val translator = engineTranslator(free.separate())
-                val items = ScreenTranslation.translate(reading, translator, { screenGeneration.get() != generation }) { shown ->
+                // Yazıların içindeki kumanda simgeleri okunan kareden kesilir (ButtonIcons).
+                val items = ScreenTranslation.translate(reading, translator, { screenGeneration.get() != generation }, pixels.gray) { shown ->
                     if (screenGeneration.get() != generation) return@translate
                     val milliseconds = ScreenTranslation.displayMilliseconds(shown)
                     server.sendScreen(shown, milliseconds)
@@ -720,4 +721,16 @@ class TranslationService : Service() {
         LiveState.update { it.copy(running = false, phase = "", streaming = false, current = "", previous = "", regions = emptyList(), screen = emptyList(), screenState = LiveStatus.ScreenState.IDLE) }
         super.onDestroy()
     }
+}
+
+/**
+ * Bu kurulumun kalıcı kimliği (`/hello` yanıtında; Mac ve Windows'taki gibi): ilk istekte rastgele üretilir ve saklanır.
+ * TV uygulaması aynı ağdaki iki CouchSubs'tan kendisininkini bununla seçer (GitHub #425).
+ */
+private fun installationId(context: Context): String {
+    val prefs = context.getSharedPreferences("server", Context.MODE_PRIVATE)
+    prefs.getString("id", null)?.takeIf { it.isNotEmpty() }?.let { return it }
+    val made = java.util.UUID.randomUUID().toString()
+    prefs.edit().putString("id", made).apply()
+    return made
 }

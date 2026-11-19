@@ -282,10 +282,21 @@ public class SubtitleServerTests
     [Fact]
     public async Task HelloIdentifiesTheApp()
     {
-        using var server = new SubtitleServer(0);
+        using var server = new SubtitleServer(0) { InstanceId = "3f2a-b9" };
         var port = await server.StartAsync();
         using var http = new HttpClient();
-        Assert.Equal("{\"app\":\"couchsubs\"}", await http.GetStringAsync($"http://127.0.0.1:{port}/hello"));
+        Assert.Equal("{\"app\":\"couchsubs\",\"id\":\"3f2a-b9\",\"tvs\":0}", await http.GetStringAsync($"http://127.0.0.1:{port}/hello"));
+    }
+
+    /// <summary>Kurulum kimliği kalıcıdır: aynı ağdaki iki CouchSubs'ı TV bununla ayırır (GitHub #425).</summary>
+    [Fact]
+    public void InstallationIdIsStable()
+    {
+        using var first = new SubtitleServer(0);
+        using var second = new SubtitleServer(0);
+        Assert.False(string.IsNullOrEmpty(first.InstanceId));
+        Assert.Equal(first.InstanceId, second.InstanceId);
+        Assert.Equal("{\"app\":\"couchsubs\",\"id\":\"ab\",\"tvs\":2}", SubtitleServer.HelloBody("a\"b", 2));
     }
 
     // Yeni tarayıcılı TV'ler (Tizen 9.0) yerel ağdaki sunucuya ön istekte izin başlığı ister.

@@ -6,7 +6,7 @@
   'use strict';
 
   // TV uygulamasının sürümü: appinfo.json, tv-tizen/config.xml ve tv-android/app/build.gradle ile aynı tutulur.
-  var APP_VERSION = '0.9.30';
+  var APP_VERSION = '0.9.31';
   var t = window.t;
   var config = window.COUCHSUBS_CONFIG || {};
   var platform = window.COUCHSUBS_PLATFORM;
@@ -111,9 +111,15 @@
       save('hdmi', hdmiPort);
       showHdmi(hdmiPort);
     }
-    if (params.server && params.server !== server) {
-      save('server', params.server);
-      connect(params.server);
+    if (params.server) {
+      // Adresi bilgisayar ya da telefon kendisi verdi: bağlanınca kimliği "kendi CouchSubs'ı" olarak kaydedilir.
+      adoptAddress = params.server;
+      if (params.server !== server) {
+        save('server', params.server);
+        connect(params.server);
+      } else if (eventSource && eventSource.readyState === 1) {
+        learnServer(server);
+      }
     }
   }
 
@@ -375,6 +381,36 @@
     return box.right > box.left && box.bottom > box.top ? box : null;
   }
 
+  function fillText(el, text, icons) {
+    /* Çevirinin içindeki kumanda simgeleri ("Koşmak için [△] basılı tut"): bilgisayar simgeyi oyun karesinden kesip
+       PNG olarak gönderir; icons = [{at, src}], at düz metindeki yeridir. Simge yoksa düz metin yazılır. */
+    el.textContent = '';
+    var list = [];
+    for (var i = 0; icons && i < icons.length; i++) {
+      var icon = icons[i];
+      if (icon && typeof icon.at === 'number' && typeof icon.src === 'string' && icon.src.indexOf('data:image/') === 0) {
+        list.push(icon);
+      }
+    }
+    if (!list.length) {
+      el.textContent = text;
+      return;
+    }
+    list.sort(function (a, b) { return a.at - b.at; });
+    var position = 0;
+    for (var j = 0; j < list.length; j++) {
+      var at = Math.max(position, Math.min(text.length, Math.floor(list[j].at)));
+      if (at > position) el.appendChild(document.createTextNode(text.slice(position, at)));
+      var image = document.createElement('img');
+      image.className = 'icon';
+      image.alt = '';
+      image.src = list[j].src;
+      el.appendChild(image);
+      position = at;
+    }
+    if (position < text.length) el.appendChild(document.createTextNode(text.slice(position)));
+  }
+
   // --- Uzun çeviriyi bölme ---
   // Uzun çeviri en çok 3 satıra, kelime sınırından ve dengeli bölünür; 3 satıra sığmazsa yazı biraz küçülür (en çok
   // %75'e kadar). Konuşan adı ("ARTHUR:") sonraki sözcükle birleşik kalır, hep ilk satırdadır. Satır sınırı TV'de
@@ -453,14 +489,50 @@
     }
   }
 
-  function wrapToWidth(text, el, size) {
+  // Örtü modunda çeviri İngilizce yazının biçimini alır. Örtü İngilizceyi kapatacak boyda kalmak zorunda; çeviri
+  // ekran genişliğine göre bölününce iki satırlık İngilizcenin üstünde tek uzun satır kalıyor, örtü hem geniş hem
+  // yüksek olup ortasında boşluklu, kalın bir siyah kutu çıkıyordu. Ekrana sığan her satır sayısı (1-3) için örtü ile
+  // çevirinin birleşik kutusunun alanı hesaplanır, en küçüğü seçilir: iki satırlık İngilizcede çeviri de aynı
+  // genişlikte iki satıra bölünür, tek satırlıkta (Türkçe biraz uzun da olsa) tek satır kalır. Bir satır daha ancak
+  // kutuyu en az %20 küçültüyorsa eklenir: sığan çeviri yine gereksiz yere bölünmesin.
+  var COVER_LINE_GAIN = 0.8;
+  function wrapToCover(text, words, el, size, room, cover) {
+    var style = window.getComputedStyle(el);
+    var ratio = parseFloat(style.lineHeight) / parseFloat(style.fontSize) || 1.25;
+    var best = null;
+    for (var lines = 1; lines <= Math.min(WRAP_MAX_LINES, words.length); lines++) {
+      var candidate = lines === 1 ? text : wrapBalance(words, lines);
+      var width = lineWidths(el, candidate, size);
+      if (!width || width > room) continue;
+      // İç boşluk: yanlarda toplam bir yazı boyu, üstte ve altta 0.24em.
+      var area = Math.max(cover.width, width + size) * Math.max(cover.height, size * (ratio * lines + 0.48));
+      if (!best || area < best.area * COVER_LINE_GAIN) best = { text: candidate, area: area };
+    }
+    return best ? { text: best.text, scale: 1 } : null;
+  }
+
+  function coverSize(textId) {
+    if (textId !== 'subtitle-text' || placement !== 'cover' || !currentBox) return null;
+    var width = document.documentElement.clientWidth || window.innerWidth || 1920;
+    var height = document.documentElement.clientHeight || window.innerHeight || 1080;
+    return {
+      width: bandShape ? width : (currentBox.right - currentBox.left + 2 * COVER_PAD) * width,
+      height: (currentBox.bottom - currentBox.top + 2 * COVER_PAD) * height
+    };
+  }
+
+  function wrapToWidth(text, el, size, cover) {
     var viewport = document.documentElement.clientWidth || window.innerWidth || 1920;
     // Yatay iç boşluk iki yanda 0.5em: toplam bir yazı boyu.
     var room = viewport * WRAP_WIDTH - size;
     var width = lineWidths(el, text, size);
     if (!width || room <= 0) return null;
-    if (width <= room) return { text: text, scale: 1 };
     var words = wrapTokens(text);
+    if (cover && words.length >= 2) {
+      var shaped = wrapToCover(text, words, el, size, room, cover);
+      if (shaped) return shaped;
+    }
+    if (width <= room) return { text: text, scale: 1 };
     if (words.length < 2) return { text: text, scale: 1 };
     var candidate = text;
     for (var lines = 2; lines <= WRAP_MAX_LINES; lines++) {
@@ -472,9 +544,9 @@
     return { text: candidate, scale: Math.max(WRAP_MIN_SCALE, Math.min(1, room / widest)) };
   }
 
-  function wrapSubtitle(text, el, size) {
+  function wrapSubtitle(text, el, size, cover) {
     if (text.indexOf('\n') >= 0) return { text: text, scale: 1 };
-    var measured = el && size ? wrapToWidth(text, el, size) : null;
+    var measured = el && size ? wrapToWidth(text, el, size, cover) : null;
     if (measured) return measured;
     var length = Array.from ? Array.from(text).length : text.length;
     if (length <= WRAP_MAX_CHARS) return { text: text, scale: 1 };
@@ -653,7 +725,7 @@
       return;
     }
     el.style.maxWidth = '';
-    var wrapped = paragraphs ? { text: text, scale: 1 } : wrapSubtitle(text, el, baseSize);
+    var wrapped = paragraphs ? { text: text, scale: 1 } : wrapSubtitle(text, el, baseSize, coverSize(textId));
     el.textContent = wrapped.text;
     if (!paragraphs) colorSpeakers(el, wrapped.text);
     el.style.whiteSpace = 'pre-line';
@@ -851,7 +923,7 @@
       if (!box || !item.text) continue;
       var el = document.createElement('div');
       el.className = item.paragraphs === true ? 'item paragraphs' : 'item';
-      el.textContent = item.text;
+      fillText(el, item.text, item.icons);
       var left = Math.max(0, box.left - SCREEN_PAD);
       var top = Math.max(0, box.top - SCREEN_PAD);
       var boxHeight = (box.bottom - box.top + 2 * SCREEN_PAD) * height;
@@ -911,7 +983,7 @@
     $('regions').className = '';
     var width = window.innerWidth || 1920;
     var height = window.innerHeight || 1080;
-    el.textContent = data.text;
+    fillText(el, data.text, data.icons);
     el.style.left = el.style.right = el.style.top = el.style.bottom = '';
     if ((box.left + box.right) / 2 > 0.5) {
       el.style.right = (Math.max(0, 1 - box.right - REGION_PAD) * 100) + '%';
@@ -1097,9 +1169,7 @@
   function applyStyle(style) {
     if (style.fontSize) {
       fontBase = style.fontSize;
-      var shown = rawText('subtitle-text');
-      if ($('subtitle-text').rawText !== undefined && shown) setLineText('subtitle-text', shown, !!shownParagraphs, fontBase);
-      else $('subtitle-text').style.fontSize = style.fontSize + 'px';
+      $('subtitle-text').style.fontSize = style.fontSize + 'px';
       $('subtitle-prev-text').style.fontSize = Math.round(style.fontSize * 0.8) + 'px';
       $('subtitle-prev2-text').style.fontSize = Math.round(style.fontSize * 0.8) + 'px';
     }
@@ -1135,6 +1205,9 @@
       $('subtitle-prev-text').style.color = shownColor;
       $('subtitle-prev2-text').style.color = shownColor;
     }
+    // Ekrandaki yazı yeni ayarlarla yeniden bölünür: yazı boyu, kalınlık, yerleşim ve bant bölmeyi değiştirir.
+    var shown = rawText('subtitle-text');
+    if ($('subtitle-text').rawText !== undefined && shown) setLineText('subtitle-text', shown, !!shownParagraphs, fontBase);
     layout();
     if (style.bottomPercent >= 0 && String(style.bottomPercent) !== load('appBottom')) {
       save('appBottom', style.bottomPercent);
@@ -1198,6 +1271,7 @@
       clearTimeout(dropTimer);
       dropTimer = null;
       setStatus('st-conn', t('connected'), 'ok');
+      learnServer(address);
     };
     eventSource.onerror = function () {
       // Bağlantı kısa süre içinde geri gelmezse eski altyazı ekranda asılı kalmasın. Bir anlık kopma yazıyı silmez.
@@ -1553,15 +1627,73 @@
     }
   }
 
+  // --- Kendi CouchSubs'ını tanıma (GitHub #425) ---
+  // Aynı ağda iki bilgisayar/telefon CouchSubs çalıştırınca TV eskiden taramada ilk yanıt verene bağlanıyordu; iki evin
+  // (ya da iki odanın) altyazıları karışıyordu. CouchSubs /hello yanıtında kurulum kimliğini ("id") ve bağlı TV sayısını
+  // ("tvs") verir. TV bağlandığı CouchSubs'ın kimliğini kaydeder; taramada önce onu, yoksa TV'si bağlı olmayanı seçer.
+  var serverId = load('serverId');
+  // Bu adrese bağlanınca kimlik, kayıtlı kimlik olmasa da kaydedilir (adresi bilgisayar başlatma parametresiyle verdi).
+  var adoptAddress = null;
+  // Bağlı olunan CouchSubs kayıtlı kimlik değil (kendisi kapalıyken bulunan): kendi CouchSubs'ı dönünce ona geçilir.
+  var fallback = false;
+  var FALLBACK_SCAN_MS = 60000;
+
+  function helloInfo(text) {
+    try {
+      var info = JSON.parse(text);
+      return info && typeof info === 'object' ? info : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  // Taramada bulunanlar ({ address, id, tvs }) arasından bağlanılacak CouchSubs; emin olunamıyorsa null.
+  // 1) Kayıtlı kimlik. 2) TV'si bağlı olmayan tek CouchSubs (başka TV'ye hizmet eden, başka evin/odanın kurulumudur).
+  // 3) Kayıtlı kimlik varsa başkası seçilmez. 4) İlk kez açılan TV: TV'si bağlı olmayan ilk, o da yoksa ilk bulunan.
+  function pickServer(found, savedId) {
+    var i, idle = [];
+    for (i = 0; i < found.length; i++) if (savedId && found[i].id === savedId) return found[i];
+    for (i = 0; i < found.length; i++) if (!(found[i].tvs > 0)) idle.push(found[i]);
+    if (idle.length === 1) return idle[0];
+    if (savedId) return null;
+    return idle[0] || found[0] || null;
+  }
+  window.__pickServer = pickServer;
+
+  // Bağlantı açılınca CouchSubs'ın kimliği sorulur. Kayıtlı kimlik yoksa ya da adres parametreyle geldiyse kaydedilir;
+  // başka bir kimlikse (kendi CouchSubs'ı kapalı, ya da modem adresleri değiştirmiş) kendi CouchSubs'ı aranmaya devam edilir.
+  function learnServer(address) {
+    var adopt = adoptAddress === address;
+    if (adopt) adoptAddress = null;
+    probe(address, function (ok, info) {
+      if (address !== server) return;
+      var id = ok && info.id ? String(info.id) : null;
+      if (!id) {
+        fallback = false;
+        return;
+      }
+      if (adopt || !serverId) {
+        serverId = id;
+        save('serverId', id);
+      }
+      var wasFallback = fallback;
+      fallback = id !== serverId;
+      if (fallback) scheduleScan(wasFallback ? FALLBACK_SCAN_MS : SCAN_SOON_MS);
+    });
+  }
+
   function probe(address, done) {
     var request = new XMLHttpRequest();
     var finished = false;
-    function finish(ok) {
+    function finish(ok, info) {
       if (finished) return;
       finished = true;
-      done(ok);
+      done(ok, info || {});
     }
-    request.onload = function () { finish(request.status === 200 && request.responseText.indexOf('couchsubs') >= 0); };
+    request.onload = function () {
+      var ok = request.status === 200 && request.responseText.indexOf('couchsubs') >= 0;
+      finish(ok, ok ? helloInfo(request.responseText) : null);
+    };
     request.onerror = function () { finish(false); };
     request.ontimeout = function () { finish(false); };
     try {
@@ -1582,29 +1714,39 @@
       for (var s = 0; s < subnets.length; s++) {
         for (var host = 1; host <= 254; host++) addresses.push('http://' + subnets[s] + '.' + host + ':' + SERVER_PORT);
       }
-      var next = 0, active = 0, found = false;
+      var next = 0, active = 0, done = false, found = [];
       function pump() {
-        while (!found && active < SCAN_PARALLEL && next < addresses.length) {
+        while (!done && active < SCAN_PARALLEL && next < addresses.length) {
           active++;
           tryAddress(addresses[next++]);
         }
-        if (!found && !active && next >= addresses.length) {
-          scanning = false;
-          scheduleScan();
-        }
+        if (!done && !active && next >= addresses.length) finish(pickServer(found, serverId));
       }
+      // Kayıtlı kimlik bulununca tarama hemen biter; yoksa bütün ağ taranıp aralarından seçilir (eskiden ilk bulunan).
       function tryAddress(address) {
-        probe(address, function (ok) {
+        probe(address, function (ok, info) {
           active--;
-          if (found) return;
-          if (!ok) return pump();
-          found = true;
-          scanning = false;
-          // Bulunan adres kaydedilir: TV bir sonraki açılışta eski adrese takılmasın.
-          save('server', address);
-          // Aynı bilgisayarsa EventSource kendisi yeniden bağlanır; kapanıp vazgeçtiyse (CLOSED) yeniden kurulur.
-          if (address !== server || (eventSource && eventSource.readyState === 2)) connect(address);
+          if (done) return;
+          if (ok) {
+            var entry = { address: address, id: info.id ? String(info.id) : null, tvs: typeof info.tvs === 'number' ? info.tvs : null };
+            found.push(entry);
+            if (serverId && entry.id === serverId) return finish(entry);
+          }
+          pump();
         });
+      }
+      function finish(choice) {
+        done = true;
+        scanning = false;
+        if (!choice) {
+          scheduleScan(fallback ? FALLBACK_SCAN_MS : SCAN_PAUSE_MS);
+          return;
+        }
+        // Bulunan adres kaydedilir: TV bir sonraki açılışta eski adrese takılmasın.
+        save('server', choice.address);
+        // Aynı bilgisayarsa EventSource kendisi yeniden bağlanır; kapanıp vazgeçtiyse (CLOSED) yeniden kurulur.
+        if (choice.address !== server || (eventSource && eventSource.readyState === 2)) connect(choice.address);
+        else if (fallback) scheduleScan(FALLBACK_SCAN_MS);
       }
       pump();
     });

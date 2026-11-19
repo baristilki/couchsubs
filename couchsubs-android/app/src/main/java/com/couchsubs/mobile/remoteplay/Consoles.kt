@@ -142,15 +142,15 @@ object ConsoleDiscovery {
         NativeBridge.wake(console.host, credential)
     }
 
-    /** Birden çok PS5 varsa yalnız adı tutan seçilir (modem adresini değiştirmiş olabilir). */
-    fun pickMoved(found: List<ConsoleInfo>, name: String): ConsoleInfo? {
-        val same = found.filter { it.name == name }
-        return when {
-            same.size == 1 -> same[0]
-            found.size == 1 -> found[0]
-            else -> null
-        }
-    }
+    /**
+     * Adresi değişen kayıtlı PS5: adı (kayıtta PS5'in verdiği ad) tek eşleşen; emin değilse null. Eskiden ağda tek PS5
+     * varsa adına bakılmadan o seçiliyordu; aynı evde iki PS5 varken uygulama diğerine geçiyordu (GitHub #425).
+     */
+    fun pickMoved(found: List<ConsoleInfo>, name: String): ConsoleInfo? =
+        found.filter { it.name == name }.singleOrNull()
+
+    /** Aramaya yanıt veren PS5 kayıtlı PS5 mi (ad eşleşmesi; kayıtta ad yoksa her yanıt kabul edilir). */
+    fun isRegistered(info: ConsoleInfo, name: String): Boolean = name.isEmpty() || info.name == name
 
     /** Telefonun Wi-Fi ya da Ethernet adresinin /24 ağındaki diğer adresler. */
     fun subnetAddresses(): List<String> {

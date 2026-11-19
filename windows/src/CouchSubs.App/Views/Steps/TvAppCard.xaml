@@ -30,6 +30,12 @@
                 <TextBlock Style="{StaticResource HintText}" Text="{t:T 'Menu names differ a little by brand. If the app is already on the TV, you can skip this step.'}" />
                 <Button HorizontalAlignment="Left" Margin="0,8,0,0" Content="{t:T 'Install with a USB stick instead'}" Click="OnGuide" />
             </StackPanel>
+            <!-- Aynı ağda birden çok Android TV: izin sorusu yanlış odadaki TV'de çıkmasın diye TV sorulur (#425). -->
+            <StackPanel x:Name="AndroidChoice" Visibility="Collapsed" Margin="0,8,0,0">
+                <TextBlock Style="{StaticResource HintText}" Text="{t:T 'You can see the TV\'s address on the TV in Settings › Network &amp; Internet.'}" />
+                <StackPanel x:Name="AndroidHosts" Margin="0,4,0,0" />
+                <Button HorizontalAlignment="Left" Margin="0,8,0,0" Content="{t:T 'Search again'}" Click="OnRetry" />
+            </StackPanel>
             <StackPanel x:Name="PassphraseArea" Visibility="Collapsed" Margin="0,8,0,0">
                 <TextBlock Style="{StaticResource HintText}" Text="{t:T 'Open the Developer Mode app on the TV, turn on Key Server and keep the app on screen. Type the Passphrase it shows.'}" />
                 <Grid Margin="0,8,0,0">

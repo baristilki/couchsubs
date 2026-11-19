@@ -46,6 +46,9 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     private bool refreshingTvApp;
     /// <summary>"TV uygulamasını yeniden kur"a basıldı: Samsung ve Android TV'de uygulama kuruluysa da TV'de açılır.</summary>
     private bool openTvAppAfterCheck;
+    /// <summary>Birden çok Android TV bulununca kullanıcının seçtiği TV; yalnız bir sonraki denetimde kullanılır. Kurulum
+    /// başarılı olursa TV'nin adresi zaten kaydedilir; olmazsa bir sonraki denemede yeniden sorulur (#425).</summary>
+    private string? androidTvChoice;
     private int? devModeHoursLeft;
     private UserSettings settings;
     private bool isRunning;
@@ -437,6 +440,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (translationChanged && !isRunning) RefreshTranslatorStatus();
             if (isRunning && (old.SourceLanguage != value.SourceLanguage || old.TargetLanguage != value.TargetLanguage
                               || translationChanged || old.FastSubtitleDetection != value.FastSubtitleDetection
+                              || old.WatchSubtitleBackground != value.WatchSubtitleBackground
                               || old.OcrEngine != value.OcrEngine))
             {
                 RefreshTranslatorStatus();
@@ -885,12 +889,18 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
                 TvApp = new TvAppState(TvAppKind.UpToDate, InstalledAppVersion ?? bundled.Version);
                 return;
             }
-            if ((await services.ScanAndroidTvsAsync()).FirstOrDefault() is not { } found)
+            // Birden çok TV varsa ilk bulunana gidilmez: kayıtlı ya da seçilen TV, yoksa kullanıcıya sorulur. Eskiden izin
+            // sorusu başka odadaki TV'de çıkıyor, kurulum "onaylanmadı" diye bitiyordu (#425).
+            var choice = androidTvChoice;
+            androidTvChoice = null;
+            var found = await services.ScanAndroidTvsAsync();
+            var hosts = AndroidTvPick.Hosts(found);
+            if (AndroidTvPick.Pick(found, [choice, target.Host]) is not { } picked)
             {
-                TvApp = new TvAppState(TvAppKind.DevModeOff);
+                TvApp = hosts.Count == 0 ? new TvAppState(TvAppKind.DevModeOff) : new TvAppState(TvAppKind.ChooseAndroidTv, Hosts: hosts);
                 return;
             }
-            host = found;
+            host = picked;
         }
         TvApp = new TvAppState(TvAppKind.Working);
         var open = openTvAppAfterCheck;
@@ -950,6 +960,14 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     /// Kurulan sürüm kaydını unutur ve TV'ye yeniden bakar: uygulama TV'de yoksa kurulur, Android TV'de varsa açılır.
     /// TV'ye ulaşılamazsa kart geliştirici modu / hata ayıklama adımlarını gösterir.
     /// </summary>
+    /// <summary>Birden çok Android TV arasından seçilen TV'ye kurulur (#425).</summary>
+    public async Task ChooseAndroidTvAsync(string host)
+    {
+        androidTvChoice = host;
+        TvApp = new TvAppState(TvAppKind.Working);
+        await RefreshTvAppAsync();
+    }
+
     public async Task ReinstallTvAppAsync()
     {
         if (tv is null) return;
@@ -2505,6 +2523,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         {
             ShowSpeakerNames = settings.ShowSpeakerNames,
             SkipsTurkish = settings.TargetLanguage == "tr",
+            WatchSubtitleBackground = settings.WatchSubtitleBackground,
         };
         built.MetricsReady += metrics => post(() => MetricsText = metrics.Summary(text));
         built.PairShown += (source, translation) =>
@@ -3280,3 +3299,20 @@ public enum ExtraRegionOutcome { Shown, NoText, NotConfigured, NotRunning, Busy,
 
 /// <summary>"Ekranı çevir"in sonucu; <see cref="Cleared"/>: TV'deki çeviriler kaldırıldı ya da süren iş iptal edildi.</summary>
 public enum ScreenOutcome { Shown, NoText, Cleared, NotRunning, TranslatorUnavailable, Failed }
+
+/// <summary>Ağda hata ayıklaması açık bulunan Android TV'ler arasından kurulumun gideceği TV (Mac: AndroidTVPick).</summary>
+public static class AndroidTvPick
+{
+    /// <summary>Bulunan adresler (boşlar ve tekrarlar atılır, sıra korunur).</summary>
+    public static IReadOnlyList<string> Hosts(IEnumerable<string> found) => [.. found.Where(h => h.Length > 0).Distinct()];
+
+    /// <summary><paramref name="preferred"/>: seçilen ya da kayıtlı TV adresi (önce gelen önce). Bulunanlar arasındaysa o; tek TV
+    /// bulunduysa odur; hiç yoksa ya da birden çoksa (kullanıcıya sorulur) null.</summary>
+    public static string? Pick(IEnumerable<string> found, IEnumerable<string?> preferred)
+    {
+        var hosts = Hosts(found);
+        foreach (var host in preferred)
+            if (!string.IsNullOrEmpty(host) && hosts.Contains(host)) return host;
+        return hosts.Count == 1 ? hosts[0] : null;
+    }
+}

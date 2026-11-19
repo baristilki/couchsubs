@@ -8,12 +8,17 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.URLEncoder
 import java.security.MessageDigest
 import java.util.Locale
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 
 /** Çevrimiçi anahtarın durumu (ayarlardaki "Dene" ve ana ekrandaki uyarı için). */
 /**
@@ -189,7 +194,7 @@ abstract class SentenceTranslator<C>(
     private val budget: RequestBudget? = null,
 ) : TextTranslator {
     companion object {
-        /** Hata sonrası bu süre hizmet denenmez. */
+        /** Hata sonrası bu süre hizmet denenmez (DeepL daha kısa bekler: [DeepLTranslator.RETRY_AFTER_MS]). */
         const val RETRY_AFTER_MS = 60_000L
         /** Dakikalık sınır aşılınca en çok bu kadar beklenir (hizmet bekleme önermezse de bu kadar). */
         const val RATE_LIMIT_PAUSE_MS = 20_000L
@@ -220,6 +225,19 @@ abstract class SentenceTranslator<C>(
 
     /** Oynanan oyun (yalnız yapay zekâ kullanır); bilinmiyorsa null. */
     protected open fun game(): String? = null
+
+    /** Hata sonrası hizmetin denenmediği süre. */
+    protected open val retryAfterMs: Long get() = RETRY_AFTER_MS
+
+    /** 429 (çok sık istek) sonrası en az bekleme; DeepL Windows ve Mac/iPhone gibi kendi süresini kullanır. */
+    protected open val rateLimitPauseMs: Long get() = RATE_LIMIT_PAUSE_MS
+
+    /** Hata sonrası bekleme; 429'da (çok sık istek) en az [rateLimitPauseMs] ve yerel çeviri olmasa da istek gitmez. */
+    private fun pauseAfter(error: Exception?) {
+        val rateLimited = (error as? OnlineException)?.rateLimited == true
+        pausedUntil = clock() + if (rateLimited) maxOf(retryAfterMs, rateLimitPauseMs) else retryAfterMs
+        pauseRateLimited = rateLimited
+    }
 
     /** Büyük harfle kalacak ek sözcükler (sözlükteki adlar). */
     protected open val extraNames: Set<String> get() = emptySet()
@@ -260,13 +278,11 @@ abstract class SentenceTranslator<C>(
             return fallback(text, game)
         } catch (error: IOException) {
             report(OnlineKeyState.of(error))
-            pausedUntil = clock() + RETRY_AFTER_MS
-            pauseRateLimited = (error as? OnlineException)?.rateLimited == true
+            pauseAfter(error)
             return fallback(text, game)
         } catch (error: JSONException) {
             report(OnlineKeyState.UNREACHABLE)
-            pausedUntil = clock() + RETRY_AFTER_MS
-            pauseRateLimited = false
+            pauseAfter(null)
             return fallback(text, game)
         }
         var local = false
@@ -343,8 +359,7 @@ abstract class SentenceTranslator<C>(
     protected fun failed(error: Exception) {
         if (error is AiRateLimitedException) return rateLimited(error.limit)
         report(OnlineKeyState.of(error))
-        pausedUntil = clock() + RETRY_AFTER_MS
-        pauseRateLimited = (error as? OnlineException)?.rateLimited == true
+        pauseAfter(error)
     }
 
     /**
@@ -383,6 +398,21 @@ class DeepLTranslator(
     private val key = key.trim()
     private val recent = ArrayDeque<String>()
     private var recentGame: String? = null
+    /** Gerçek bağlantıyla (testlerin sahte [Http]'si değil) çalışırken bağlantıyı sıcak tutan. */
+    private val warmer = if (http === Http.Default && this.key.isNotEmpty()) DeepLConnectionWarmer.Shared else null
+
+    init {
+        // Oturum başında ısınır, oyun boyunca sıcak kalır.
+        warmer?.touch(this.key)
+    }
+
+    override val retryAfterMs: Long get() = DeepLTranslator.RETRY_AFTER_MS
+    override val rateLimitPauseMs: Long get() = DeepLTranslator.RETRY_AFTER_MS
+
+    override fun translate(text: String): String {
+        warmer?.touch(key)
+        return super.translate(text)
+    }
 
     override fun game(): String? = playedGame?.invoke()?.trim()
 
@@ -392,6 +422,15 @@ class DeepLTranslator(
     companion object {
         /** Kalıcı önbellek dosyasındaki motor adı (iPhone ile aynı). */
         const val ENGINE_ID = "deepl"
+        /** Hata sonrası bu süre DeepL denenmez; 1 dk oyunda çok uzundu (Windows ve Mac/iPhone ile aynı). */
+        const val RETRY_AFTER_MS = 15_000L
+
+        /**
+         * Yeniden denenecek ağ hatası: bağlantı koptu, sıfırlandı vb. Zaman aşımı ([java.net.SocketTimeoutException]) ve
+         * kesinti denenmez; DeepL'in durum kodları (429, 456, 403) [OnlineException] olarak gelir, denenmez.
+         */
+        fun isDroppedConnection(error: IOException) =
+            error !is OnlineException && error !is InterruptedIOException && !Thread.currentThread().isInterrupted
 
         /** Ücretsiz anahtarlar ":fx" ile biter ve ayrı adrese gider. */
         fun baseUrl(key: String) = if (key.trim().endsWith(":fx")) "https://api-free.deepl.com/v2/" else "https://api.deepl.com/v2/"
@@ -435,15 +474,82 @@ class DeepLTranslator(
         val wrapped = sentences.map { DeepLMarkup.wrap(it, glossary) }
         val tagged = wrapped.any { it != null }
         val sources = if (tagged) sentences.indices.map { wrapped[it] ?: DeepLMarkup.escape(sentences[it]) } else sentences
-        val (status, response) = http.send(
-            "POST", baseUrl(key) + "translate",
-            mapOf("Authorization" to "DeepL-Auth-Key $key", "Content-Type" to "application/json"), body(sources, context, tagged), 4000,
-        )
+        val send = {
+            http.send(
+                "POST", baseUrl(key) + "translate",
+                mapOf("Authorization" to "DeepL-Auth-Key $key", "Content-Type" to "application/json"), body(sources, context, tagged), 4000,
+            )
+        }
+        val (status, response) = try {
+            send()
+        } catch (error: IOException) {
+            // Açık tutulan bağlantıyı sunucu sessizce kapatmış olabilir: yeni bağlantıyla hemen bir kez daha denenir,
+            // yedek çeviriye (ve DeepL'in beklemesine) ancak ikinci hata düşürür.
+            if (!isDroppedConnection(error)) throw error
+            send()
+        }
         if (status !in 200..299) throw OnlineException(failure(status), rateLimited = status == 429)
         val list = JSONObject(response).optJSONArray("translations") ?: throw OnlineException(OnlineKeyState.UNREACHABLE)
         if (list.length() != sentences.size) throw OnlineException(OnlineKeyState.UNREACHABLE)
         val reply = (0 until list.length()).map { list.getJSONObject(it).getString("text") }
         return if (tagged) reply.map(DeepLMarkup::unwrap) else reply
+    }
+}
+
+/**
+ * Ortak DeepL bağlantısını sıcak tutar (Windows: DeepLTranslator.KeepWarm, Mac/iPhone: DeepLConnectionWarmer): oturum
+ * başında ve son çeviriden sonraki [KEEP_WARM_FOR_MS] boyunca her [KEEP_WARM_EVERY_MS]'de bir kullanım sorgusu
+ * (`/v2/usage`; karakter kotasından yemez) gönderir. Boşta kalan bağlantı sunucuda genelde 60 sn'de kapanıyor,
+ * sessizlikten sonraki ilk satır yeni TLS el sıkışmasını bekliyordu. Süre dolunca durur, sonraki çeviride yeniden başlar.
+ */
+class DeepLConnectionWarmer(
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val scheduler: ScheduledExecutorService? = null,
+    private val ping: (String) -> Unit,
+) {
+    companion object {
+        const val KEEP_WARM_EVERY_MS = 40_000L
+        const val KEEP_WARM_FOR_MS = 10 * 60_000L
+
+        val Shared: DeepLConnectionWarmer by lazy {
+            val executor = Executors.newSingleThreadScheduledExecutor { runnable ->
+                Thread(runnable, "deepl-keep-warm").apply { isDaemon = true }
+            }
+            DeepLConnectionWarmer(scheduler = executor) { key -> KeyCheck.deepL(key) }
+        }
+    }
+
+    private var key = ""
+    private var lastUsed = Long.MIN_VALUE / 2
+    private var task: ScheduledFuture<*>? = null
+
+    /** Anahtarı ve son kullanım anını yazar; sıcak tutma durmuşsa yeniden başlatır. */
+    @Synchronized
+    fun touch(key: String) {
+        if (key.isBlank()) return
+        this.key = key
+        lastUsed = clock()
+        if (task == null) task = scheduler?.scheduleWithFixedDelay({ tick() }, 0, KEEP_WARM_EVERY_MS, TimeUnit.MILLISECONDS)
+    }
+
+    /** Şimdi sorgu gönderilecek anahtar; son çeviriden bu yana [KEEP_WARM_FOR_MS] geçtiyse null (döngü durur). */
+    @Synchronized
+    fun nextPing(): String? {
+        if (clock() - lastUsed > KEEP_WARM_FOR_MS || key.isEmpty()) {
+            task?.cancel(false)
+            task = null
+            return null
+        }
+        return key
+    }
+
+    private fun tick() {
+        val key = nextPing() ?: return
+        try {
+            ping(key)
+        } catch (_: Exception) {
+            // Sıcak tutma sessizdir: hata ana ekrana çıkmaz, sonraki turda yine denenir.
+        }
     }
 }
 

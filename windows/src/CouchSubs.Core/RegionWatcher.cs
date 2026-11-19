@@ -7,6 +7,10 @@ public interface IRegionSender
 {
     /// <summary><paramref name="text"/> boşsa alanın kutusu kalkar.</summary>
     void SendRegion(string id, string text, TextBox? box, double? lineHeight = null);
+
+    /// <summary>Çevirinin içinde kumanda simgeleri varsa (<see cref="ButtonIcons"/>); simgeyi bilmeyen gönderici düz metni yollar.</summary>
+    void SendRegion(string id, string text, TextBox? box, double? lineHeight, IReadOnlyList<IconPlacement>? icons) =>
+        SendRegion(id, text, box, lineHeight);
     void ClearRegions();
 }
 
@@ -39,11 +43,14 @@ public sealed class RegionWatcher
         public string Shown = "";
         public string? RenderedKey;
         public string? RenderedText;
+        public IReadOnlyList<IconPlacement>? RenderedIcons;
         public TextBox? RenderedBox;
         public double? RenderedLineHeight;
     }
 
-    internal sealed record Candidate(IReadOnlyList<string> Paragraphs, TextBox? Box, double? LineHeight, string Key);
+    /// <param name="Icons">Her parçadaki kumanda simgeleri (kareden kesilmiş), parçadaki sırasıyla.</param>
+    internal sealed record Candidate(IReadOnlyList<string> Paragraphs, TextBox? Box, double? LineHeight, string Key,
+                                     IReadOnlyList<IReadOnlyList<IconSlot>>? Icons = null);
 
     private readonly ITextReader reader;
     private readonly ITextTranslator translator;
@@ -157,7 +164,7 @@ public sealed class RegionWatcher
         if (Volatile.Read(ref session) != started) return;
         Interlocked.Increment(ref reads);
         ReadMeasured?.Invoke(now() - clock);
-        var candidate = MakeCandidate(reading, area.Region);
+        var candidate = MakeCandidate(reading, area.Region, crop);
         if (state.LastRead == candidate.Key)
         {
             state.Candidate = null;
@@ -172,27 +179,41 @@ public sealed class RegionWatcher
 
     /// <summary>
     /// Okumadan çevrilecek parçalar: kumanda ipuçları, yazı tanıma çöpleri ve harfsiz göstergeler atılır; satırlar
-    /// yukarıdan aşağı parçalara toplanır.
+    /// yukarıdan aşağı parçalara toplanır. Yazının içindeki kumanda simgeleri <paramref name="frame"/>'den (okunan alan)
+    /// kesilir; çeviride yerleri korunur.
     /// </summary>
-    internal static Candidate MakeCandidate(Reading reading, CropRegion region)
+    internal static Candidate MakeCandidate(Reading reading, CropRegion region, Frame? frame = null)
     {
-        var lines = reading.WithoutButtonPrompts().WithoutOcrNoise().Lines
+        var lines = reading.WithButtonIcons().WithoutButtonPrompts().WithoutOcrNoise().Lines
             .Where(line => ScreenTranslation.IsWords(line.Text))
             // Fork: telefon/menü etiketleri ("PHONE SLEEP", "ALARM") çevrilmez; ek alanda yalnız mesaj ve cümleler kalır.
             .Where(line => !ButtonPrompts.IsActionLabel(line.Text))
             .OrderBy(line => line.Box?.Top ?? 0)
             .ToList();
-        // Fork: parçalara toplanınca birleşen ipuçları ("Hold" + "to interact with Andrew") da atılır.
-        var paragraphs = ScreenTranslation.Paragraphs(lines)
-            .Select(ButtonPrompts.WithoutPromptSentences)
-            .Where(ScreenTranslation.IsWords)
-            .ToList();
+        // Fork: parçalara toplanınca birleşen ipuçları ("Hold" + "to interact with Andrew") da atılır; simgeli ipuçları
+        // (#435) da çevrilmez, tuş ekranda olduğu gibi görünür. Simge listesi paragraflarla aynı sırada kalır.
+        var allParagraphs = ScreenTranslation.Paragraphs(lines);
+        var allIcons = ScreenTranslation.ParagraphIcons(lines);
+        var paragraphs = new List<string>();
+        var icons = new List<IReadOnlyList<IconSlot>>();
+        for (var i = 0; i < allParagraphs.Count; i++)
+        {
+            var kept = ButtonPrompts.WithoutPromptSentences(allParagraphs[i]);
+            if (!ScreenTranslation.IsWords(kept)) continue;
+            var whole = System.Text.RegularExpressions.Regex.Replace(allParagraphs[i].Trim(), @"\s+", " ")
+                == System.Text.RegularExpressions.Regex.Replace(kept, @"\s+", " ");
+            // Paragrafın bir kısmı atıldıysa simge yerleri artık tutmaz: simge işaretleri de kalkar.
+            paragraphs.Add(whole ? kept : kept.Replace(ButtonIcons.Marker.ToString(), ""));
+            icons.Add(whole && i < allIcons.Count ? allIcons[i] : []);
+        }
         var place = new TextBox(region.Left, region.Top, region.Right, region.Bottom);
         var boxes = lines.Where(line => line.Box is not null).Select(line => line.Box!.Value).ToList();
         TextBox? box = boxes.Count == 0 ? null : boxes.Skip(1).Aggregate(boxes[0], (a, b) => a.Union(b)).PlacedIn(place);
         var heights = boxes.Select(b => (b.Bottom - b.Top) * (region.Bottom - region.Top)).Order().ToList();
         double? lineHeight = heights.Count == 0 ? null : heights[heights.Count / 2];
-        return new Candidate(paragraphs, box, lineHeight, TextMatch.Normalize(string.Join(' ', paragraphs)));
+        IReadOnlyList<IReadOnlyList<IconSlot>>? cut = frame is null || icons.All(list => list.Count == 0) ? null
+            : [.. icons.Select(list => ButtonIcons.WithImages(list, frame))];
+        return new Candidate(paragraphs, box, lineHeight, TextMatch.Normalize(string.Join(' ', paragraphs)), cut);
     }
 
     private async Task CommitAsync(Candidate candidate, WatchedArea area, State state, int started)
@@ -201,7 +222,7 @@ public sealed class RegionWatcher
         {
             if (state.RenderedKey != candidate.Key || string.IsNullOrEmpty(state.RenderedText)) return;
             if (state.RenderedBox == candidate.Box && state.RenderedLineHeight == candidate.LineHeight) return;
-            server.SendRegion(area.Id, state.RenderedText, candidate.Box, candidate.LineHeight);
+            server.SendRegion(area.Id, state.RenderedText, candidate.Box, candidate.LineHeight, state.RenderedIcons);
             state.RenderedBox = candidate.Box;
             state.RenderedLineHeight = candidate.LineHeight;
             return;
@@ -218,7 +239,9 @@ public sealed class RegionWatcher
             Log?.Invoke($"ek alan {area.Name}: boşaldı");
             return;
         }
-        string?[] result = [.. candidate.Paragraphs.Select(paragraph => PackLookup?.Invoke(paragraph)?.Text)];
+        // Simgeler paket aramasında yok sayılır, çeviride uydurma adlarla korunur (IconText).
+        var prepared = candidate.Paragraphs.Select(IconText.Protect).ToList();
+        string?[] result = [.. candidate.Paragraphs.Select(paragraph => PackLookup?.Invoke(IconText.Plain(paragraph))?.Text)];
         var fromPack = result.Count(text => text is not null);
         // Zaten Türkçe olan parça çevrilmez: aslı kalır, tümü öyleyse kutu gösterilmez.
         for (var i = 0; i < result.Length; i++)
@@ -228,7 +251,7 @@ public sealed class RegionWatcher
             var missing = Enumerable.Range(0, result.Length).Where(i => result[i] is null).ToList();
             if (missing.Count > 0)
             {
-                var texts = missing.Select(i => candidate.Paragraphs[i]).ToList();
+                var texts = missing.Select(i => prepared[i].Text).ToList();
                 var translations = await translator.TranslateAllAsync(texts).ConfigureAwait(false);
                 for (var i = 0; i < missing.Count && i < translations.Count; i++) result[missing[i]] = translations[i];
             }
@@ -242,14 +265,23 @@ public sealed class RegionWatcher
                     state.Shown = previousShown;
                     state.Candidate = candidate;
                 }
-                Log?.Invoke($"ek alan {area.Name}: {SubtitleLog.Excerpt(string.Join(' ', candidate.Paragraphs))} çevrilemedi ({error.Message})");
+                Log?.Invoke($"ek alan {area.Name}: {SubtitleLog.Excerpt(IconText.Plain(string.Join(' ', candidate.Paragraphs)))} çevrilemedi ({error.Message})");
             }
             return;
         }
         if (Volatile.Read(ref session) != started || state.Shown != candidate.Key) return;
-        var text = candidate.Paragraphs.Select((source, i) => result[i]?.Trim() is { Length: > 0 } translated ? translated : source).ToList();
+        var slots = new List<IconSlot>();
+        var text = new List<string>(candidate.Paragraphs.Count);
+        for (var i = 0; i < candidate.Paragraphs.Count; i++)
+        {
+            var source = candidate.Paragraphs[i];
+            text.Add(result[i]?.Trim() is not { Length: > 0 } translated ? IconText.Indexed(source, slots.Count)
+                : IconText.Restore(translated, prepared[i].Names, slots.Count));
+            slots.AddRange(candidate.Icons is { } all && i < all.Count ? all[i] : []);
+        }
         // Çevirisi aslıyla aynı (ad, sayı, zaten hedef dilde): kutu gösterilmez.
-        var same = candidate.Paragraphs.Select((source, i) => TextMatch.IsSimilar(TextMatch.Normalize(source), TextMatch.Normalize(text[i]), 0.90))
+        var same = candidate.Paragraphs.Select((source, i) =>
+                TextMatch.IsSimilar(TextMatch.Normalize(IconText.Plain(source)), TextMatch.Normalize(IconText.Plain(text[i])), 0.90))
             .All(similar => similar);
         if (same)
         {
@@ -261,10 +293,12 @@ public sealed class RegionWatcher
             return;
         }
         var origin = fromPack == candidate.Paragraphs.Count ? "paket" : fromPack > 0 ? "paket+motor" : "motor";
-        Log?.Invoke($"ek alan {area.Name}: {SubtitleLog.Excerpt(string.Join(' ', candidate.Paragraphs))} → {origin}");
-        server.SendRegion(area.Id, string.Join('\n', text), candidate.Box, candidate.LineHeight);
+        Log?.Invoke($"ek alan {area.Name}: {SubtitleLog.Excerpt(IconText.Plain(string.Join(' ', candidate.Paragraphs)))} → {origin}");
+        var (shown, icons) = IconText.Render(string.Join('\n', text), slots);
+        server.SendRegion(area.Id, shown, candidate.Box, candidate.LineHeight, icons.Count > 0 ? icons : null);
         state.RenderedKey = candidate.Key;
-        state.RenderedText = string.Join('\n', text);
+        state.RenderedText = shown;
+        state.RenderedIcons = icons.Count > 0 ? icons : null;
         state.RenderedBox = candidate.Box;
         state.RenderedLineHeight = candidate.LineHeight;
     }

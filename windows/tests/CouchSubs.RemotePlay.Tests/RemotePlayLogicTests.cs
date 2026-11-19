@@ -392,10 +392,21 @@ public class RegistrationReasonTests
     {
         var a = new ConsoleInfo("192.168.1.20", "PS5-A", true);
         var b = new ConsoleInfo("192.168.1.21", "PS5-B", true);
-        Assert.Equal(a, ConsoleDiscovery.PickMoved([a], "other name"));
+        // Ağda tek PS5 olsa bile adı tutmuyorsa başka evin/odanın PS5'idir (GitHub #425).
+        Assert.Null(ConsoleDiscovery.PickMoved([a], "other name"));
+        Assert.Equal(a, ConsoleDiscovery.PickMoved([a], "PS5-A"));
         Assert.Equal(b, ConsoleDiscovery.PickMoved([a, b], "PS5-B"));
         Assert.Null(ConsoleDiscovery.PickMoved([a, b], "other name"));
         Assert.Null(ConsoleDiscovery.PickMoved([], "PS5-A"));
+    }
+
+    [Fact]
+    public void OtherConsoleAtSavedAddressIsNotTheRegisteredOne()
+    {
+        var a = new ConsoleInfo("192.168.1.20", "PS5-A", true);
+        Assert.True(ConsoleDiscovery.IsRegistered(a, "PS5-A"));
+        Assert.False(ConsoleDiscovery.IsRegistered(a, "PS5-B"));
+        Assert.True(ConsoleDiscovery.IsRegistered(a, ""));
     }
 
     [Fact]

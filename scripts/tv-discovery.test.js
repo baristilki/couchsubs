@@ -63,10 +63,13 @@ function element() {
 // resolution: verilirse platform videoResolution bildirir (Samsung gibi); her çağrıda bu değer callback'e gelir.
 // closeWhenHidden: platform arka planda bağlantıyı bırakmak istiyor mu (Samsung gibi).
 // panelTips: panel ipucunun önceki açılışlarda kaç kez gösterildiği.
-function startTv({ saved, alive, localIp, hasLocalAddress, consolePort, savedHdmi, resolution, closeWhenHidden, panelTips }) {
+// hello: adrese göre /hello yanıtındaki kimlik ve bağlı TV sayısı ({ id, tvs }); verilmeyen adres eski sürüm gibi yalnız
+// {"app":"couchsubs"} döner. savedId: TV'nin kayıtlı CouchSubs kimliği. params: başlatma parametreleri.
+function startTv({ saved, alive, localIp, hasLocalAddress, consolePort, savedHdmi, resolution, closeWhenHidden, panelTips, hello, savedId, params }) {
   const clock = makeClock();
   const storage = new Map();
   if (saved) storage.set('couchsubs.server', saved);
+  if (savedId) storage.set('couchsubs.serverId', savedId);
   if (savedHdmi) storage.set('couchsubs.hdmi', String(savedHdmi));
   if (panelTips !== undefined) storage.set('couchsubs.panelTips', String(panelTips));
   const documentListeners = {};
@@ -113,7 +116,7 @@ function startTv({ saved, alive, localIp, hasLocalAddress, consolePort, savedHdm
       if (alive.has(base)) {
         clock.setTimeout(() => {
           this.status = 200;
-          this.responseText = '{"app":"couchsubs"}';
+          this.responseText = JSON.stringify(Object.assign({ app: 'couchsubs' }, (hello || {})[base]));
           this.onload();
         }, 20);
       } else {
@@ -126,7 +129,7 @@ function startTv({ saved, alive, localIp, hasLocalAddress, consolePort, savedHdm
     backKey: 461,
     init() {},
     exit() { exits++; },
-    launchParams: () => null,
+    launchParams: () => params || null,
     onRelaunch(cb) { relaunchCallback = cb; },
     // TV görüntüyü kısa süre sonra verir (Samsung TVWindow'un yanıtı gibi).
     showHdmi(port, host, onStatus) { clock.setTimeout(() => onStatus('playing'), 30); },
@@ -196,6 +199,7 @@ function startTv({ saved, alive, localIp, hasLocalAddress, consolePort, savedHdm
     savedHdmi: () => storage.get('couchsubs.hdmi'),
     stored: (key) => storage.get('couchsubs.' + key),
     exits: () => exits,
+    pickServer: (found, savedId) => window.__pickServer(found, savedId),
     // Bilgisayar açık uygulamayı yeniden açar (Samsung DEEP_LINK, parametreler PAYLOAD'da).
     relaunch(params) { relaunchCallback(params); },
     // Açık (kapatılmamış) bağlantılar.
@@ -271,6 +275,92 @@ test('kayıtlı adres çalışıyorsa tarama yapılmaz ve kayıt değişmez', ()
   tv.clock.advance(120000);
   assert.strictEqual(tv.lastOpened(), 'http://192.168.1.109:8787/events');
   assert.strictEqual(tv.saved(), 'http://192.168.1.109:8787');
+});
+
+// GitHub #425: aynı ağda iki CouchSubs (iki bilgisayar/telefon) varken TV ilk yanıt verene bağlanıyordu.
+const A = 'http://192.168.1.20:8787';
+const B = 'http://192.168.1.50:8787';
+
+test('iki CouchSubs varken kayıtlı kimlik ilk bulunandan önce gelir', () => {
+  const tv = startTv({
+    saved: 'http://192.168.1.109:8787', savedId: 'id-b',
+    alive: new Set([A, B]), hello: { [A]: { id: 'id-a', tvs: 0 }, [B]: { id: 'id-b', tvs: 0 } },
+    hasLocalAddress: true, localIp: '192.168.1.30'
+  });
+  tv.clock.advance(60000);
+  assert.strictEqual(tv.lastOpened(), B + '/events');
+  assert.strictEqual(tv.saved(), B);
+});
+
+test('ilk kez açılan TV, başka TV\'ye hizmet eden CouchSubs yerine boşta olana bağlanır ve kimliğini kaydeder', () => {
+  const tv = startTv({
+    alive: new Set([A, B]), hello: { [A]: { id: 'id-a', tvs: 1 }, [B]: { id: 'id-b', tvs: 0 } },
+    hasLocalAddress: true, localIp: '192.168.1.30'
+  });
+  tv.clock.advance(60000);
+  assert.strictEqual(tv.lastOpened(), B + '/events');
+  assert.strictEqual(tv.stored('serverId'), 'id-b');
+});
+
+test('kendi CouchSubs\'ı kapalıyken başka TV\'ye hizmet eden CouchSubs\'a geçilmez', () => {
+  const tv = startTv({
+    saved: 'http://192.168.1.109:8787', savedId: 'id-b',
+    alive: new Set([A]), hello: { [A]: { id: 'id-a', tvs: 1 } },
+    hasLocalAddress: true, localIp: '192.168.1.30'
+  });
+  tv.clock.advance(120000);
+  assert.ok(!tv.openStreams().some((s) => s.url === A + '/events'));
+  assert.strictEqual(tv.saved(), 'http://192.168.1.109:8787');
+  assert.strictEqual(tv.stored('serverId'), 'id-b');
+});
+
+test('kayıtlı kimlik varken iki yabancı CouchSubs arasından tahminle seçilmez', () => {
+  const tv = startTv({
+    saved: 'http://192.168.1.109:8787', savedId: 'id-c',
+    alive: new Set([A, B]), hello: { [A]: { id: 'id-a', tvs: 0 }, [B]: { id: 'id-b', tvs: 0 } },
+    hasLocalAddress: true, localIp: '192.168.1.30'
+  });
+  tv.clock.advance(120000);
+  assert.strictEqual(tv.saved(), 'http://192.168.1.109:8787');
+});
+
+test('bilgisayarın başlatma parametresiyle verdiği CouchSubs\'ın kimliği kaydedilir', () => {
+  const tv = startTv({
+    savedId: 'id-a', params: { server: B },
+    alive: new Set([A, B]), hello: { [A]: { id: 'id-a', tvs: 0 }, [B]: { id: 'id-b', tvs: 0 } },
+    hasLocalAddress: true, localIp: '192.168.1.30'
+  });
+  tv.clock.advance(5000);
+  assert.strictEqual(tv.lastOpened(), B + '/events');
+  assert.strictEqual(tv.stored('serverId'), 'id-b');
+  tv.clock.advance(120000);
+  assert.strictEqual(tv.lastOpened(), B + '/events');
+});
+
+test('kendi CouchSubs\'ı kapalıyken boştaki tek CouchSubs kullanılır, kendisi yeni adreste dönünce ona geçilir', () => {
+  const C = 'http://192.168.1.31:8787';
+  const back = 'http://192.168.1.60:8787';
+  const alive = new Set([C]);
+  const tv = startTv({
+    saved: 'http://192.168.1.109:8787', savedId: 'id-b',
+    alive, hello: { [C]: { id: 'id-c', tvs: 0 }, [back]: { id: 'id-b', tvs: 0 } },
+    hasLocalAddress: true, localIp: '192.168.1.30'
+  });
+  tv.clock.advance(60000);
+  assert.strictEqual(tv.lastOpened(), C + '/events');
+  // Kayıtlı kimlik değişmez: telefonla bilgisayar arasında geçen kullanıcıda da kendi bilgisayarı tercih edilir.
+  assert.strictEqual(tv.stored('serverId'), 'id-b');
+  alive.add(back);
+  tv.clock.advance(120000);
+  assert.strictEqual(tv.lastOpened(), back + '/events');
+  assert.strictEqual(tv.saved(), back);
+});
+
+test('kimlik vermeyen eski CouchSubs sürümleri eskisi gibi bulunur', () => {
+  const pick = startTv({ alive: new Set(), hasLocalAddress: false }).pickServer;
+  assert.strictEqual(pick([{ address: A, id: null, tvs: null }], 'id-b').address, A);
+  assert.strictEqual(pick([{ address: A, id: null, tvs: null }, { address: B, id: null, tvs: null }], null).address, A);
+  assert.strictEqual(pick([], null), null);
 });
 
 // Ek alanlar: bilgisayar köşedeki yazıların (görev, telefon) çevirisini "region" olayıyla gönderir.

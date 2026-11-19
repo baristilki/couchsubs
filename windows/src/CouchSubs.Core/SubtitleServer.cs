@@ -141,6 +141,40 @@ public sealed class SubtitleServer(int port = 8787, TimeSpan? pingInterval = nul
         public SemaphoreSlim WriteLock { get; } = new(1, 1);
     }
 
+    /// <summary>Bu kurulumun kalıcı kimliği (<c>/hello</c> yanıtında). Aynı ağda iki CouchSubs varken TV uygulaması kendi
+    /// bilgisayarını ya da telefonunu adres değişse de bununla tanır; eskiden ağda ilk bulduğuna bağlanıyordu (GitHub #425).</summary>
+    public string InstanceId { get; init; } = InstallationId.Value;
+
+    private static readonly Lazy<string> InstallationId = new(LoadInstallationId);
+
+    /// <summary>Kimlik ilk istekte rastgele üretilir ve %LOCALAPPDATA%\CouchSubs\server-id dosyasında saklanır (Linux:
+    /// ~/.local/share/CouchSubs). Dosya yazılamazsa kimlik bu çalışmalık kalır.</summary>
+    private static string LoadInstallationId()
+    {
+        var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CouchSubs", "server-id");
+        try
+        {
+            if (File.Exists(path) && HelloId(File.ReadAllText(path)) is { Length: > 0 } saved) return saved;
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        var made = Guid.NewGuid().ToString("D");
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, made);
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        return made;
+    }
+
+    private static string HelloId(string id) => new([.. id.Where(c => char.IsAsciiLetterOrDigit(c) || c == '-')]);
+
+    /// <summary><c>/hello</c> yanıtı: uygulama, kurulum kimliği ve bağlı TV sayısı (Mac ve Android ile aynı biçim). TV ağda
+    /// birden çok CouchSubs bulursa kayıtlı kimliği, yoksa TV'si bağlı olmayanı seçer.</summary>
+    internal static string HelloBody(string id, int tvs) => $"{{\"app\":\"couchsubs\",\"id\":\"{HelloId(id)}\",\"tvs\":{Math.Max(0, tvs)}}}";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         // Türkçe harfler ı gibi kaçışlarla değil olduğu gibi gönderilir.
@@ -286,6 +320,7 @@ public sealed class SubtitleServer(int port = 8787, TimeSpan? pingInterval = nul
                 ["text"] = item.Translation,
             };
             if (item.Paragraphs) json["paragraphs"] = true;
+            if (item.Icons is { Count: > 0 } icons) json["icons"] = IconsJson(icons);
             return json;
         }).ToList();
         Broadcast(Frame("screen", new SortedDictionary<string, object> { ["duration"] = durationMs, ["items"] = list }), subtitle: true);
@@ -300,9 +335,17 @@ public sealed class SubtitleServer(int port = 8787, TimeSpan? pingInterval = nul
     /// yazının karedeki yerini (<c>box</c>) ve satır yüksekliğini (<c>line</c>) taşır. TV çeviriyi o yerde küçük bir kutuda
     /// gösterir; ana altyazıya dokunmaz. Olayı tanımayan eski TV uygulamaları yok sayar (Mac ile aynı).
     /// </summary>
-    public void SendRegion(string id, string text, TextBox? box, double? lineHeight = null)
+    public void SendRegion(string id, string text, TextBox? box, double? lineHeight = null) =>
+        SendRegion(id, text, box, lineHeight, null);
+
+    /// <summary>
+    /// <paramref name="icons"/>: çevirinin içindeki kumanda simgeleri; <c>icons</c> alanı her simgenin düz metindeki
+    /// yerini (<c>at</c>) ve PNG'sini (<c>src</c>) taşır. Eski TV uygulamaları alanı yok sayıp düz metni gösterir.
+    /// </summary>
+    public void SendRegion(string id, string text, TextBox? box, double? lineHeight, IReadOnlyList<IconPlacement>? icons)
     {
         var json = new SortedDictionary<string, object> { ["id"] = id, ["text"] = text };
+        if (icons is { Count: > 0 }) json["icons"] = IconsJson(icons);
         if (box is { } b) json["box"] = BoxJson(b);
         if (lineHeight is { } line) json["line"] = Round(line);
         Broadcast(Frame("region", json), subtitle: true);
@@ -322,6 +365,9 @@ public sealed class SubtitleServer(int port = 8787, TimeSpan? pingInterval = nul
         Broadcast(Frame("screen-clear", new SortedDictionary<string, object>()), subtitle: true);
         EventSent?.Invoke(new SubtitleEvent(SubtitleEventKind.ScreenClear));
     }
+
+    private static List<SortedDictionary<string, object>> IconsJson(IReadOnlyList<IconPlacement> icons) =>
+        [.. icons.Select(icon => new SortedDictionary<string, object> { ["at"] = icon.At, ["src"] = icon.Image })];
 
     private static SortedDictionary<string, object> BoxJson(TextBox b) => new()
     {
@@ -421,7 +467,7 @@ public sealed class SubtitleServer(int port = 8787, TimeSpan? pingInterval = nul
             else if (method == "GET" && path == "/events") await OpenStream(tcp, target.Contains("viewer=obs", StringComparison.Ordinal));
             else if (method == "GET" && path == "/obs") await RespondAndClose(tcp, ObsOverlay, "text/html; charset=utf-8");
             // TV uygulaması ağdaki bilgisayarı bu yanıtla tanır.
-            else if (method == "GET" && path == "/hello") await RespondAndClose(tcp, "200 OK", "{\"app\":\"couchsubs\"}");
+            else if (method == "GET" && path == "/hello") await RespondAndClose(tcp, "200 OK", HelloBody(InstanceId, ConnectedClients));
             else if (method == "GET" && FindFile(path) is { } file) await RespondAndClose(tcp, file.Data, file.Type);
             else await RespondAndClose(tcp, "404 Not Found");
         }

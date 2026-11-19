@@ -35,7 +35,7 @@ if (signingFile.exists()) {
 def repoRoot = rootProject.projectDir.parentFile
 // Samsung TV uygulamasının sürümü (tv-tizen/config.xml); telefondan kurulumda TV'deki sürümle karşılaştırılır.
 def tizenVersion = (file("$repoRoot/tv-tizen/config.xml").text =~ / version="([0-9.]+)" viewmodes/)[0][1]
-def abis = (findProperty('couchsubs.abis') ?: 'arm64-v8a').toString().split(',')*.trim()
+def abis = (findProperty('couchsubs.abis') ?: 'arm64-v8a,armeabi-v7a').toString().split(',')*.trim()
 // Yerel kütüphane olmadan (yalnız Kotlin ve arayüz) derlemek için: -Pcouchsubs.skipNative=true
 def skipNative = (findProperty('couchsubs.skipNative') ?: 'false').toString().toBoolean()
 // nanopb'nin kod üreteci protobuf paketli bir Python ister (Mac betiğindeki venv gibi).

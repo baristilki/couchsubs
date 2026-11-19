@@ -115,6 +115,45 @@ class ScreenTranslationTest {
         assertEquals(listOf("Türkçe sonuç 1", "Türkçe sonuç 2", "Türkçe sonuç 3"), items.map { it.translation })
     }
 
+    /**
+     * Silah menüsü: iki sütunda aralıklı etiketler, altta bilgi kutusu. Son satır, üstteki satırın altındaki boşluk satır
+     * yüksekliğinin %90'ı olunca ayrı grup oluyor, 31. grup olduğu için de hiç çevrilmiyordu (Windows: LoadoutMenu).
+     */
+    private fun loadoutMenu(labels: Int): List<TextLine> {
+        val lines = (0 until labels).map { i ->
+            val (left, right) = if (i % 2 == 0) 0.05 to 0.20 else 0.78 to 0.95
+            line("Weapon slot ${'A' + i % 26}$i", left, 0.04 + (i / 2) * 0.045, right, 0.02)
+        }.toMutableList()
+        lines += line("Weapons lost during a mission can be", 0.30, 0.75, 0.70, 0.025)
+        lines += line("recovered from a weapon locker.", 0.30, 0.7975, 0.62, 0.025)
+        return lines
+    }
+
+    @Test
+    fun lastLineOfAnInfoBoxIsNotLeftOut() {
+        val groups = ScreenTranslation.groups(Reading(loadoutMenu(29)))
+        assertTrue(groups.any { it.paragraphs == listOf("Weapons lost during a mission can be recovered from a weapon locker.") })
+        assertFalse(groups.any { "recovered from a weapon locker." in it.paragraphs })
+    }
+
+    @Test
+    fun crowdedScreenKeepsTheGroupsWithTheMostText() {
+        val groups = ScreenTranslation.groups(Reading(loadoutMenu(40)))
+        assertEquals(ScreenTranslation.MAX_GROUPS, groups.size)
+        assertEquals(listOf("Weapons lost during a mission can be recovered from a weapon locker."), groups.last().paragraphs)
+        assertEquals(groups.map { it.box.top }.sorted(), groups.map { it.box.top })
+    }
+
+    @Test
+    fun lowercaseLineAfterAFinishedSentenceFarBelowStaysSeparate() {
+        val groups = ScreenTranslation.groups(Reading(listOf(
+            line("Weapons can be recovered.", 0.30, 0.75, 0.70, 0.025),
+            line("then continue on later", 0.30, 0.7975, 0.62, 0.025),
+            line("and this one is far below", 0.30, 0.88, 0.62, 0.025),
+        )))
+        assertEquals(3, groups.size)
+    }
+
     @Test
     fun numbersAndPromptsAreNotTranslated() {
         val groups = ScreenTranslation.groups(Reading(listOf(

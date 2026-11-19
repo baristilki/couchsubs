@@ -98,6 +98,19 @@ struct TVAppCard: View {
                     }
                     Button("Try again") { Task { await model.refreshTVApp() } }.buttonStyle(.secondary)
                 }
+            case .chooseAndroidTV(let hosts):
+                // Aynı ağda iki Android TV: izin sorusu yanlış odadaki TV'de çıkmasın diye TV sorulur (#425).
+                Card(title: "CouchSubs TV app") {
+                    Text("More than one Android TV with debugging on was found on the network. Which one is yours?")
+                    HintText(text: "You can see the TV's address on the TV in Settings › Network & Internet.")
+                    ForEach(hosts, id: \.self) { host in
+                        Button(String(format: String(localized: "Install on the TV at %@"), host)) {
+                            Task { await model.chooseAndroidTV(host) }
+                        }
+                        .buttonStyle(.secondary)
+                    }
+                    Button("Search again") { Task { await model.refreshTVApp() } }.buttonStyle(.secondary)
+                }
             case .hostPcMismatch(let tvIp, let computer):
                 Card(title: "CouchSubs TV app") {
                     ErrorText(error: String(format: String(localized: "The TV's Host PC IP is %1$@, but this computer's address is %2$@. In the TV's Developer Mode window, set Host PC IP to %2$@ and restart the TV fully (hold the power button for about 2 seconds)."), tvIp, computer))

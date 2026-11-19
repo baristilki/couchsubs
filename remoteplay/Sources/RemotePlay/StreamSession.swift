@@ -473,7 +473,18 @@ public final class StreamSession: @unchecked Sendable {
         emit(.connecting)
 
         // PS5 uyuyorsa uyandır; uyanmayı kuyruğu bloklamadan, aralıklı kontrollerle bekle.
-        let info = Console.blockingDiscover(timeout: 2, host: console.host).first ?? relocate()
+        // Kayıtlı adreste başka bir PS5 yanıt verirse (aynı evde iki PS5, modem adresleri değiştirmiş; GitHub #425)
+        // kayıtlı PS5 adıyla ağda aranır; bulunamazsa eskisi gibi o adrese bağlanılır.
+        let atHost = Console.blockingDiscover(timeout: 2, host: console.host).first
+        let info: ConsoleInfo?
+        if let atHost, Self.isRegistered(atHost, name: console.name) {
+            info = atHost
+        } else {
+            if let atHost {
+                RemotePlayLog.write("PS5 oturumu: \(console.host) adresinde başka PS5 yanıt verdi (\(atHost.name)), \(console.name) aranıyor")
+            }
+            info = relocate() ?? atHost
+        }
         searchAnswered = info != nil
         if let info {
             RemotePlayLog.write("PS5 oturumu: \(info.name) \(info.host) \(info.isAwake ? "uyanık" : "dinlenmede, uyandırılıyor")")
@@ -500,11 +511,17 @@ public final class StreamSession: @unchecked Sendable {
         return moved
     }
 
-    /// Taramada bulunanlar arasından kayıtlı PS5: tek PS5 varsa odur, birden çoksa adı tek eşleşen; emin değilse nil.
+    /// Taramada bulunanlar arasından kayıtlı PS5: adı (kayıtta PS5'in verdiği ad) tek eşleşen; emin değilse nil.
+    /// Eskiden ağda tek PS5 varsa adına bakılmadan o seçiliyordu; aynı evde iki PS5 varken biri yeniden başlarken
+    /// uygulama diğerine geçip onun adresini kaydediyordu (GitHub #425).
     static func pickMoved(_ found: [ConsoleInfo], name: String) -> ConsoleInfo? {
-        if found.count == 1 { return found[0] }
         let named = found.filter { $0.name == name }
         return named.count == 1 ? named[0] : nil
+    }
+
+    /// Aramaya yanıt veren PS5 kayıtlı PS5 mi (ad eşleşmesi; kayıtta ad yoksa her yanıt kabul edilir).
+    static func isRegistered(_ info: ConsoleInfo, name: String) -> Bool {
+        name.isEmpty || info.name == name
     }
 
     private func waitForWake(_ current: Int, deadline: Date) {

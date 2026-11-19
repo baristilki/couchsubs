@@ -72,6 +72,7 @@ internal static class Panel
     private sealed record RegisterRequest(string Host, string Pin);
     private sealed record PairRequest(string Name, string Host, TvBrand Brand);
     private sealed record PassphraseRequest(string Passphrase);
+    private sealed record HostRequest(string Host);
     private sealed record KeyRequest(string Key);
     private sealed record TextRequest(string Text);
     private sealed record SettingsRequest(CropRegion? Region, SubtitleStyle? Style, bool? OnlineTranslation);
@@ -94,6 +95,8 @@ internal static class Panel
         app.MapPost("/api/pair", (PairRequest body) => Act(ui, () => controller.PairAsync(new LgTv(body.Name, body.Host.Trim(), body.Brand))));
         app.MapPost("/api/tv-app/install", (PassphraseRequest body) => Act(ui, () => controller.InstallTvAppAsync(body.Passphrase)));
         app.MapPost("/api/tv-app/refresh", () => Act(ui, controller.RefreshTvAppAsync));
+        // Birden çok Android TV bulununca seçilen TV'ye kurulur (#425).
+        app.MapPost("/api/tv-app/android-tv", (HostRequest body) => Act(ui, () => controller.ChooseAndroidTvAsync(body.Host.Trim())));
         app.MapPost("/api/model/download", () => Act(ui, controller.StartModelDownload));
         app.MapPost("/api/test-subtitle", () => Act(ui, controller.SendTestSubtitle));
         app.MapPost("/api/reset", () => Act(ui, controller.ResetSetup));
@@ -158,7 +161,7 @@ internal static class Panel
         redirectPrefix = PsnAccount.RedirectPrefix,
         console = c.Console is { } console ? new { console.Name, console.Host } : null,
         tv = c.Tv,
-        tvApp = new { kind = c.TvApp.Kind, c.TvApp.Version, error = c.TvApp.Error?.ToString(), url = c.TvApp.Url?.AbsoluteUri, c.TvApp.Reason },
+        tvApp = new { kind = c.TvApp.Kind, c.TvApp.Version, error = c.TvApp.Error?.ToString(), url = c.TvApp.Url?.AbsoluteUri, c.TvApp.Reason, c.TvApp.Hosts },
         canInstallTvApp = c.CanInstallTvApp,
         bundledTvApp = services.BundledTvAppVersion,
         devModeHoursLeft = c.DevModeHoursLeft,

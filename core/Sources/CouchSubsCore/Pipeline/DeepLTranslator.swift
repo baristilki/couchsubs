@@ -39,8 +39,12 @@ public final class DeepLTranslator: TextTranslator, OnlineTranslating {
     public static let engineID = "deepl"
     /// Bağlama giden önceki satır sayısı.
     public static let contextLines = 3
-    /// Hata sonrası bu süre DeepL denenmez; her satırda bağlantı zaman aşımını beklemeyelim.
-    private static let retryAfter: TimeInterval = 60
+    /// Hata sonrası bu süre DeepL denenmez; her satırda bağlantı zaman aşımını beklemeyelim. 1 dk oyunda çok uzundu
+    /// (Windows ve Android ile aynı).
+    static let retryAfter: TimeInterval = 15
+
+    /// Uygulamanın ortak DeepL oturumu: bağlantı açık kalır, sıcak tutucu da bunu kullanır.
+    static let sharedSession = makeSession()
 
     private let key: String
     private let fallback: TextTranslator
@@ -58,15 +62,22 @@ public final class DeepLTranslator: TextTranslator, OnlineTranslating {
     private var failure: OnlineKeyState?
     public var onFailureChanged: ((OnlineKeyState?) -> Void)?
 
-    /// `cache`: kalıcı önbellek; verilmezse yalnız bellekte tutulur.
-    public init(key: String, fallback: TextTranslator, session: URLSession = DeepLTranslator.makeSession(),
+    /// Ortak oturumla çalışırken bağlantıyı sıcak tutan; testlerin sahte oturumunda nil.
+    private let warmer: DeepLConnectionWarmer?
+
+    /// `cache`: kalıcı önbellek; verilmezse yalnız bellekte tutulur. `session` verilmezse ortak oturum kullanılır ve
+    /// bağlantı oturum başından itibaren sıcak tutulur.
+    public init(key: String, fallback: TextTranslator, session: URLSession? = nil,
          cache: TranslationCache = TranslationCache(),
          glossary: GlossaryStore = GlossaryStore(directory: GlossaryStore.userDirectory)) {
         self.key = key.trimmingCharacters(in: .whitespacesAndNewlines)
         self.fallback = fallback
-        self.session = session
+        self.session = session ?? Self.sharedSession
         self.cache = cache
         glossaryStore = glossary
+        warmer = session == nil && !self.key.isEmpty ? DeepLConnectionWarmer.shared : nil
+        // Gerçek bağlantıyla oturum başında ısınır, oyun boyunca sıcak kalır.
+        warmer?.touch(key: self.key)
     }
 
     public static func makeSession() -> URLSession {
@@ -85,6 +96,7 @@ public final class DeepLTranslator: TextTranslator, OnlineTranslating {
         // Bağlam, bu satırdan önce gösterilenlerdir; satırın kendisi bağlama girmez.
         let context = recent.isEmpty ? nil : recent.joined(separator: "\n")
         shown(text)
+        warmer?.touch(key: key)
         let glossary = glossaryStore.glossary
         if let cached = cache.value(for: DeepLMarkup.cacheKey(text, glossary: glossary)) { return cached }
         // Hata sonrası beklemede yerel çeviri yoksa (indirilmemiş, açılamadı) satır düşmesin: DeepL yine denenir.
@@ -107,7 +119,16 @@ public final class DeepLTranslator: TextTranslator, OnlineTranslating {
         let sources = tagged ? zip(plain, wrapped).map { $1 ?? DeepLMarkup.escape($0) } : plain
         let translated: [String]
         do {
-            let reply = sources.isEmpty ? [] : try await request(sources, context: context, tagged: tagged)
+            var reply: [String] = []
+            if !sources.isEmpty {
+                do {
+                    reply = try await request(sources, context: context, tagged: tagged)
+                } catch let error as URLError where Self.isDroppedConnection(error) && !Task.isCancelled {
+                    // Açık tutulan bağlantıyı sunucu sessizce kapatmış olabilir: yeni bağlantıyla hemen bir kez daha
+                    // denenir, yedek çeviriye (ve DeepL'in beklemesine) ancak ikinci hata düşürür.
+                    reply = try await request(sources, context: context, tagged: tagged)
+                }
+            }
             translated = tagged ? reply.map(DeepLMarkup.unwrap) : reply
             report(nil)
         } catch is CancellationError {
@@ -202,6 +223,12 @@ public final class DeepLTranslator: TextTranslator, OnlineTranslating {
         }
     }
 
+    /// Yeniden denenecek ağ hatası: bağlantı koptu, sıfırlandı vb. Zaman aşımı ve iptal denenmez (zaman aşımında
+    /// satır zaten 4 sn bekledi); DeepL'in durum kodları (429, 456, 403) `DeepLError` olarak gelir, denenmez.
+    static func isDroppedConnection(_ error: URLError) -> Bool {
+        error.code != .timedOut && error.code != .cancelled
+    }
+
     private struct DeepLError: Error {
         let state: OnlineKeyState
         /// DeepL 429 döndü (çok sık istek): bekleme süresince istek gönderilmez.
@@ -226,6 +253,61 @@ public final class DeepLTranslator: TextTranslator, OnlineTranslating {
         case 456: throw DeepLError(state: .quotaExceeded)
         case 429: throw DeepLError(state: .unreachable, rateLimited: true)
         default: throw DeepLError(state: .unreachable)
+        }
+    }
+}
+
+
+/// Ortak DeepL bağlantısını sıcak tutar (Windows: DeepLTranslator.KeepWarm): oturum başında ve son çeviriden sonraki
+/// `keepWarmFor` boyunca her `keepWarmEvery`'de bir kullanım sorgusu (`/v2/usage`; karakter kotasından yemez) gönderir.
+/// Boşta kalan bağlantı sunucuda genelde 60 sn'de kapanıyor, sessizlikten sonraki ilk satır yeni TLS el sıkışmasını
+/// bekliyordu. Süre dolunca durur, sonraki çeviride yeniden başlar.
+final class DeepLConnectionWarmer: @unchecked Sendable {
+    static let keepWarmEvery: TimeInterval = 40
+    static let keepWarmFor: TimeInterval = 10 * 60
+    static let shared = DeepLConnectionWarmer { key in
+        _ = await DeepLTranslator.check(key: key, session: DeepLTranslator.sharedSession)
+    }
+
+    private let lock = NSLock()
+    private var key = ""
+    private var lastUsed = Date.distantPast
+    private var running = false
+    private let ping: @Sendable (String) async -> Void
+    private let now: @Sendable () -> Date
+
+    init(now: @escaping @Sendable () -> Date = Date.init, ping: @escaping @Sendable (String) async -> Void) {
+        self.now = now
+        self.ping = ping
+    }
+
+    /// Anahtarı ve son kullanım anını yazar; sıcak tutma durmuşsa yeniden başlatır.
+    func touch(key: String) {
+        guard !key.isEmpty else { return }
+        lock.lock()
+        self.key = key
+        lastUsed = now()
+        let start = !running
+        running = true
+        lock.unlock()
+        if start { Task.detached(priority: .utility) { [self] in await run() } }
+    }
+
+    /// Şimdi sorgu gönderilecek anahtar; son çeviriden bu yana `keepWarmFor` geçtiyse nil (döngü durur).
+    func nextPing() -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard now().timeIntervalSince(lastUsed) <= Self.keepWarmFor, !key.isEmpty else {
+            running = false
+            return nil
+        }
+        return key
+    }
+
+    private func run() async {
+        while let key = nextPing() {
+            await ping(key)
+            try? await Task.sleep(nanoseconds: UInt64(Self.keepWarmEvery * 1_000_000_000))
         }
     }
 }

@@ -99,6 +99,41 @@ final class ScreenTranslationTests: XCTestCase {
         XCTAssertEqual(items.map(\.translation), ["Türkçe sonuç 1", "Türkçe sonuç 2", "Türkçe sonuç 3"])
     }
 
+    /// Silah menüsü: iki sütunda aralıklı etiketler, altta bilgi kutusu. Son satır, üstteki satırın altındaki boşluk
+    /// satır yüksekliğinin %90'ı olunca ayrı grup oluyor, 31. grup olduğu için de hiç çevrilmiyordu (Windows: LoadoutMenu).
+    private func loadoutMenu(_ labels: Int) -> [TextLine] {
+        var lines: [TextLine] = (0..<labels).map { i -> TextLine in
+            let (left, right) = i % 2 == 0 ? (0.05, 0.20) : (0.78, 0.95)
+            let letter = Character(UnicodeScalar(UInt8(65 + i % 26)))
+            return line("Weapon slot \(letter)\(i)", left, 0.04 + Double(i / 2) * 0.045, right, height: 0.02)
+        }
+        lines.append(line("Weapons lost during a mission can be", 0.30, 0.75, 0.70, height: 0.025))
+        lines.append(line("recovered from a weapon locker.", 0.30, 0.7975, 0.62, height: 0.025))
+        return lines
+    }
+
+    func testLastLineOfAnInfoBoxIsNotLeftOut() {
+        let groups = ScreenTranslation.groups(Reading(lines: loadoutMenu(29)))
+        XCTAssertTrue(groups.contains { $0.paragraphs == ["Weapons lost during a mission can be recovered from a weapon locker."] })
+        XCTAssertFalse(groups.contains { $0.paragraphs.contains("recovered from a weapon locker.") })
+    }
+
+    func testCrowdedScreenKeepsTheGroupsWithTheMostText() {
+        let groups = ScreenTranslation.groups(Reading(lines: loadoutMenu(40)))
+        XCTAssertEqual(groups.count, ScreenTranslation.maxGroups)
+        XCTAssertEqual(groups.last?.paragraphs, ["Weapons lost during a mission can be recovered from a weapon locker."])
+        XCTAssertEqual(groups.map(\.box.top), groups.map(\.box.top).sorted())
+    }
+
+    func testLowercaseLineAfterAFinishedSentenceFarBelowStaysSeparate() {
+        let groups = ScreenTranslation.groups(Reading(lines: [
+            line("Weapons can be recovered.", 0.30, 0.75, 0.70, height: 0.025),
+            line("then continue on later", 0.30, 0.7975, 0.62, height: 0.025),
+            line("and this one is far below", 0.30, 0.88, 0.62, height: 0.025),
+        ]))
+        XCTAssertEqual(groups.count, 3)
+    }
+
     func testNumbersAndPromptsAreNotTranslated() {
         let groups = ScreenTranslation.groups(Reading(lines: [
             line("23m", 0.50, 0.05, 0.55), line("9", 0.90, 0.05, 0.92), line("R2 Swing", 0.80, 0.90, 0.95), line("HP 120/300", 0.05, 0.90, 0.20),

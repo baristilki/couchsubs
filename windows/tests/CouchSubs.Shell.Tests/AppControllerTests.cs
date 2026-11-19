@@ -2225,6 +2225,37 @@ public class TvAppInstallTests
         Assert.Equal("192.168.1.40", store.Load<LgTv>(StoreKeys.Tv)?.Host);
     }
 
+    /// <summary>Aynı ağda iki Android TV: kurulum ilk bulunana gitmez, TV sorulur; seçilen TV'ye kurulur ve hatırlanır (#425).</summary>
+    [Fact]
+    public async Task SeveralAndroidTvsAreAskedAndTheChosenOneIsInstalled()
+    {
+        var services = new FakeServices();
+        services.Bundled[TvBrand.AndroidTv] = new BundledTvApp("couchsubs-androidtv_0.7.0.apk", "0.7.0");
+        services.AndroidHosts.AddRange(["192.168.1.105", "192.168.1.106"]);
+        var store = new MemoryStore();
+        var controller = Make(services, store);
+        await controller.PairAsync(new LgTv("Android TV", "", TvBrand.AndroidTv));
+        Assert.Equal(TvAppKind.ChooseAndroidTv, controller.TvApp.Kind);
+        Assert.Equal(["192.168.1.105", "192.168.1.106"], controller.TvApp.Hosts);
+        Assert.Empty(services.BrandInstalls);
+
+        await controller.ChooseAndroidTvAsync("192.168.1.106");
+        Assert.Equal(new TvAppState(TvAppKind.UpToDate, "0.7.0"), controller.TvApp);
+        Assert.Equal([(TvBrand.AndroidTv, "192.168.1.106")], services.BrandInstalls);
+        Assert.Equal("192.168.1.106", store.Load<LgTv>(StoreKeys.Tv)?.Host);
+    }
+
+    [Fact]
+    public void AndroidTvPickPrefersTheKnownTvAndOtherwiseAsks()
+    {
+        Assert.Equal("192.168.1.105", AndroidTvPick.Pick(["192.168.1.105"], []));
+        Assert.Null(AndroidTvPick.Pick([], ["192.168.1.105"]));
+        Assert.Null(AndroidTvPick.Pick(["192.168.1.105", "192.168.1.106"], [null, ""]));
+        Assert.Equal("192.168.1.106", AndroidTvPick.Pick(["192.168.1.105", "192.168.1.106"], [null, "192.168.1.106"]));
+        Assert.Null(AndroidTvPick.Pick(["192.168.1.105", "192.168.1.106"], ["192.168.1.7"]));
+        Assert.Equal("192.168.1.105", AndroidTvPick.Pick(["192.168.1.105", "192.168.1.105"], []));
+    }
+
     private static readonly BundledTvApp AndroidApp = new("couchsubs-androidtv_0.7.0.apk", "0.7.0");
 
     // #352, #389: TV'den kaldırılan uygulama; TV sihirbazda yeniden seçilince adres boşalıyor, kayıtlı sürüm kalıyordu.

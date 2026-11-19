@@ -458,7 +458,17 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
         Emit(SessionState.Connecting);
 
         // PS5 uyuyorsa uyandır; uyanmayı kuyruğu bloklamadan, aralıklı kontrollerle bekle.
-        var info = ConsoleDiscovery.Discover(console.Host, TimeSpan.FromSeconds(2)).FirstOrDefault() ?? Relocate();
+        // Kayıtlı adreste başka bir PS5 yanıt verirse (aynı evde iki PS5, modem adresleri değiştirmiş; GitHub #425)
+        // kayıtlı PS5 adıyla ağda aranır; bulunamazsa eskisi gibi o adrese bağlanılır.
+        var atHost = ConsoleDiscovery.Discover(console.Host, TimeSpan.FromSeconds(2)).FirstOrDefault();
+        ConsoleInfo? info;
+        if (atHost is not null && ConsoleDiscovery.IsRegistered(atHost, console.Name)) info = atHost;
+        else
+        {
+            if (atHost is not null)
+                RemotePlayLog.Note($"PS5 oturumu: {console.Host} adresinde başka PS5 yanıt verdi ({atHost.Name}), {console.Name} aranıyor");
+            info = Relocate() ?? atHost;
+        }
         searchAnswered = info is not null;
         RemotePlayLog.Note(info is null
             ? $"PS5 oturumu: {console.Host} aramaya yanıt vermedi, yine de bağlanılıyor"

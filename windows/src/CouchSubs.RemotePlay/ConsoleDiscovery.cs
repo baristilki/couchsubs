@@ -24,14 +24,17 @@ public static class ConsoleDiscovery
                                      TaskCreationOptions.LongRunning, TaskScheduler.Default).WaitAsync(ct);
     }
 
-    /// <summary>Taramada bulunanlar arasından kayıtlı PS5'i seçer: tek PS5 varsa odur, birden çoksa adı tek eşleşen.
-    /// Emin olunamıyorsa null (yanlış konsola bağlanmaya çalışmaktansa adres değiştirilmez).</summary>
+    /// <summary>Taramada bulunanlar arasından kayıtlı PS5'i seçer: adı (kayıtta PS5'in verdiği ad) tek eşleşen.
+    /// Emin olunamıyorsa null (yanlış konsola bağlanmaya çalışmaktansa adres değiştirilmez). Eskiden ağda tek PS5 varsa
+    /// adına bakılmadan o seçiliyordu; aynı evde iki PS5 varken uygulama diğerine geçiyordu (GitHub #425).</summary>
     internal static ConsoleInfo? PickMoved(IReadOnlyList<ConsoleInfo> found, string name)
     {
-        if (found.Count == 1) return found[0];
         var named = found.Where(c => c.Name == name).ToList();
         return named.Count == 1 ? named[0] : null;
     }
+
+    /// <summary>Aramaya yanıt veren PS5 kayıtlı PS5 mi (ad eşleşmesi; kayıtta ad yoksa her yanıt kabul edilir).</summary>
+    internal static bool IsRegistered(ConsoleInfo info, string name) => name.Length == 0 || info.Name == name;
 
     /// <summary>PS5'te o an çalışan oyun: yalnız bağlı PS5'in adresine sorulur (ortak havuz için; bkz. <see cref="RunningGame"/>).</summary>
     public static async Task<RunningGame?> RunningGameAsync(string host, CancellationToken ct = default)

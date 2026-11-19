@@ -44,7 +44,7 @@ TV tarafında değişiklik gerekmez: TV uygulaması ağı `:8787/hello` ile tara
 - OpenSSL 1.1.1w, json-c ve miniupnpc chiaki-ng'nin dış proje tarifleriyle derleme sırasında indirilir (ağ gerekir; ilk
   derleme bir mimari için ~10 dk). nanopb kod üreteci protobuf paketli Python ister (`-Pcouchsubs.python=…` ya da
   `COUCHSUBS_PYTHON`).
-- Yalnız `arm64-v8a` derlenir (`couchsubs.abis`); öykünücü için `x86_64` eklenebilir.
+- `arm64-v8a` ve 32 bit `armeabi-v7a` derlenir (`couchsubs.abis`); öykünücü için `x86_64` eklenebilir.
 - `third-party/patches` yamaları CI'da masaüstündeki gibi uygulanır (`-Pcouchsubs.patchChiaki=true`).
 
 ### Görüntü → yazı tanıma

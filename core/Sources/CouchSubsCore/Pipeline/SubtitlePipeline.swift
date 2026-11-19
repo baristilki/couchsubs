@@ -141,6 +141,8 @@ public final class SubtitlePipeline {
     /// Hedef dil Türkçe: yüksek güvenle Türkçe olan satır (`TurkishText.isSure`) çevirmene gönderilmez (#289). Uygulama
     /// hedef dil Türkçe değilse kapatır.
     public var skipsTurkish = true
+    /// Yalnız GTA 6 altyazı renginin üstündeki OCR satırlarını oku.
+    public var watchSubtitleBackground = false
     /// Hiçbir pakette bulunmayan kararlı satır (ortak havuz için).
     public var onPackMiss: ((String) -> Void)?
     /// Son gösterilen çevirinin nereden geldiği: "paket" ya da "motor" (günlük ve sayım için).
@@ -192,6 +194,7 @@ public final class SubtitlePipeline {
         let startedSession = session
         // Yazı tanıma uzun sürebilir; arayüz takılmasın diye ana iş parçacığının dışında yapılır.
         let reader = self.reader
+        let watchSubtitleBackground = self.watchSubtitleBackground
         let (area, signature) = await Task.detached(priority: .userInitiated) {
             let area = RegionCropper.crop(frame, to: region)
             return (area, RegionCropper.signature(of: area))
@@ -203,7 +206,10 @@ public final class SubtitlePipeline {
         case .read(let deep):
             let started = now()
             let result = await Task.detached(priority: .userInitiated) {
-                Result { try reader.readLines(area, deep: deep) }
+                Result { () throws -> Reading in
+                    let reading = try reader.readLines(area, deep: deep)
+                    return watchSubtitleBackground ? SubtitleBackground.filter(reading, in: area) : reading
+                }
             }.value
             guard session == startedSession else {
                 log("eski okuma \(now() - started) ms sonra bitti, hat sıfırlanmıştı; atıldı")

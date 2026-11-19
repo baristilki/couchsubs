@@ -100,6 +100,15 @@ public class DiscordPresenceTests
         controller.Dispose();
     }
 
+    /// <summary>Ayarlardaki görsele "logo" yazılmış olsa da kapak varken büyük görsel kapaktır.</summary>
+    [Fact]
+    public void LikeGamePrefersTheBannerOverTheImageSetting()
+    {
+        var activity = DiscordPresence.For(Id, "logo", null, true, true, DateTimeOffset.UnixEpoch, Tr, likeGame: true, assets: ["logo", "banner"], appName: "GTA")!;
+        Assert.Equal("banner", activity.LargeImage);
+        Assert.Equal("logo", activity.SmallImage);
+    }
+
     [Fact]
     public void LikeGameWithOnlyALogoShowsItLarge()
     {

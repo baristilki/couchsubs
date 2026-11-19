@@ -3,7 +3,7 @@
 <!-- Android tarafının birkaç kısa metni; sayfa metinleri tv-webos/i18n.js'tedir. -->
 <resources>
     <string name="overlay_running">Showing subtitles over the TV\'s HDMI picture</string>
-    <string name="overlay_stopped">CouchSubs subtitles stopped. Open CouchSubs again to turn them back on.</string>
+    <string name="overlay_stopped">Overlay turned off: subtitles now show inside CouchSubs. Press OK for the panel.</string>
     <string name="overlay_selected">Overlay mode: subtitles appear over the TV\'s own HDMI picture.</string>
     <string name="overlay_fallback">No picture inside CouchSubs. Switching to overlay mode: subtitles appear over the TV\'s own HDMI picture.</string>
     <string name="overlay_choose_input">Switch the TV to the PS5\'s input (HDMI %1$d) with the remote. Subtitles will appear on top.</string>

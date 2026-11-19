@@ -61,15 +61,22 @@ function element() {
 // alive: CouchSubs'ın çalıştığı adresler ("http://ip:8787"). localIp: TV'nin söylediği kendi adresi (yoksa null).
 // consolePort: platform.findConsolePort'un yanıtı ([port, ad, bağlı HDMI sayısı]); savedHdmi: kayıtlı giriş.
 // resolution: verilirse platform videoResolution bildirir (Samsung gibi); her çağrıda bu değer callback'e gelir.
-function startTv({ saved, alive, localIp, hasLocalAddress, consolePort, savedHdmi, resolution }) {
+// closeWhenHidden: platform arka planda bağlantıyı bırakmak istiyor mu (Samsung gibi).
+// panelTips: panel ipucunun önceki açılışlarda kaç kez gösterildiği.
+function startTv({ saved, alive, localIp, hasLocalAddress, consolePort, savedHdmi, resolution, closeWhenHidden, panelTips }) {
   const clock = makeClock();
   const storage = new Map();
   if (saved) storage.set('couchsubs.server', saved);
   if (savedHdmi) storage.set('couchsubs.hdmi', String(savedHdmi));
+  if (panelTips !== undefined) storage.set('couchsubs.panelTips', String(panelTips));
   const documentListeners = {};
   const elements = new Map();
+  // index.html'de gizli başlayan öğeler.
+  for (const id of ['panel-tip', 'source-tip', 'no-picture']) elements.set(id, Object.assign(element(), { className: 'hidden' }));
+  let exits = 0;
   const opened = [];
   const streams = [];
+  let relaunchCallback = null;
 
   class FakeEventSource {
     constructor(url) {
@@ -118,8 +125,9 @@ function startTv({ saved, alive, localIp, hasLocalAddress, consolePort, savedHdm
   const platform = {
     backKey: 461,
     init() {},
+    exit() { exits++; },
     launchParams: () => null,
-    onRelaunch() {},
+    onRelaunch(cb) { relaunchCallback = cb; },
     // TV görüntüyü kısa süre sonra verir (Samsung TVWindow'un yanıtı gibi).
     showHdmi(port, host, onStatus) { clock.setTimeout(() => onStatus('playing'), 30); },
     findConsolePort(cb) { clock.setTimeout(() => cb.apply(null, consolePort || [1, 'PS5']), 20); }
@@ -129,6 +137,7 @@ function startTv({ saved, alive, localIp, hasLocalAddress, consolePort, savedHdm
     platform.videoResolution = (cb) => { resolutionCallback = cb; clock.setTimeout(() => cb(resolution), 5); };
   }
   if (hasLocalAddress) platform.localAddress = (cb) => clock.setTimeout(() => cb(localIp || null), 10);
+  if (closeWhenHidden) platform.closeWhenHidden = true;
 
   const document = {
     hidden: false,
@@ -185,6 +194,17 @@ function startTv({ saved, alive, localIp, hasLocalAddress, consolePort, savedHdm
     },
     server: () => elements.get('st-server') && elements.get('st-server').textContent,
     savedHdmi: () => storage.get('couchsubs.hdmi'),
+    stored: (key) => storage.get('couchsubs.' + key),
+    exits: () => exits,
+    // Bilgisayar açık uygulamayı yeniden açar (Samsung DEEP_LINK, parametreler PAYLOAD'da).
+    relaunch(params) { relaunchCallback(params); },
+    // Açık (kapatılmamış) bağlantılar.
+    openStreams: () => streams.filter((s) => !s.closed),
+    // TV uygulamayı arka plana atar ya da öne getirir.
+    setHidden(hidden) {
+      document.hidden = hidden;
+      for (const fn of documentListeners.visibilitychange || []) fn({});
+    },
     // TV çözünürlük değişikliği bildirir (Samsung addVideoResolutionChangeListener).
     changeResolution(info) { resolutionCallback(info); },
     // Kumanda tuşu.
@@ -361,6 +381,52 @@ test('çözünürlük bildirmeyen ya da hata veren platformda satır gizli kalı
   }
 });
 
+// Samsung arka plana attığı uygulamanın bağlantısını açık tutuyordu; bilgisayar TV uygulamasını bağlı sanıp yeniden
+// açmıyor, altyazı ekrana gelmiyordu.
+test('Samsung: arka plana düşen uygulama bağlantıyı kapatır, yeniden bağlanmaz; öne gelince bağlanır', () => {
+  const tv = startTv({ saved: 'http://192.168.1.109:8787', alive: new Set(['http://192.168.1.109:8787']),
+    hasLocalAddress: false, closeWhenHidden: true });
+  tv.clock.advance(1000);
+  assert.strictEqual(tv.openStreams().length, 1);
+  tv.emit('subtitle', { text: 'Merhaba', duration: 60000 });
+  assert.strictEqual(tv.element('subtitle').className, '');
+  tv.setHidden(true);
+  assert.strictEqual(tv.openStreams().length, 0);
+  assert.strictEqual(tv.element('subtitle').className, 'hidden');
+  // Bağlantı bekçisi ve tarama arka plandayken yeniden bağlanmaz.
+  tv.clock.advance(120000);
+  assert.strictEqual(tv.openStreams().length, 0);
+  tv.setHidden(false);
+  tv.clock.advance(1000);
+  assert.strictEqual(tv.openStreams().length, 1);
+  assert.strictEqual(tv.lastOpened(), 'http://192.168.1.109:8787/events');
+});
+
+test('arka plandayken yeni adres gelirse öne gelince o adrese bağlanılır', () => {
+  const tv = startTv({ saved: 'http://192.168.1.109:8787',
+    alive: new Set(['http://192.168.1.109:8787', 'http://192.168.1.39:8787']), hasLocalAddress: false, closeWhenHidden: true });
+  tv.clock.advance(1000);
+  tv.setHidden(true);
+  // Bilgisayar uygulamayı yeni adresle açar; açılış olayı öne gelmeden önce gelebilir.
+  tv.relaunch({ server: 'http://192.168.1.39:8787' });
+  assert.strictEqual(tv.openStreams().length, 0);
+  tv.setHidden(false);
+  tv.clock.advance(1000);
+  assert.strictEqual(tv.openStreams().length, 1);
+  assert.strictEqual(tv.lastOpened(), 'http://192.168.1.39:8787/events');
+  assert.strictEqual(tv.saved(), 'http://192.168.1.39:8787');
+});
+
+test('closeWhenHidden istemeyen platformda (LG, Android TV) arka plan bağlantıyı kapatmaz', () => {
+  const tv = startTv({ saved: 'http://192.168.1.109:8787', alive: new Set(['http://192.168.1.109:8787']), hasLocalAddress: false });
+  tv.clock.advance(1000);
+  tv.setHidden(true);
+  tv.clock.advance(60000);
+  assert.strictEqual(tv.openStreams().length, 1);
+  tv.setHidden(false);
+  assert.strictEqual(tv.openStreams().length, 1);
+});
+
 // tv-tizen/platform.js: TVWindow API'si sahte tizen nesnesiyle çalıştırılır.
 function tizenPlatform(tvwindow) {
   const context = { window: {}, tizen: { tvwindow }, JSON };
@@ -389,4 +455,47 @@ test('Tizen: TVWindow API yoksa ya da hata verirse çözünürlük null gelir, h
     tizenPlatform(tvwindow).videoResolution((info) => seen.push(info));
     assert.deepStrictEqual(seen, [null]);
   }
+});
+
+test('panel kendiliğinden kapanınca ilk açılışta "Tamam: panel" ipucu çıkar; Tamam paneli açar', () => {
+  const tv = startTv({ saved: 'http://192.168.1.42:8787', alive: new Set(['http://192.168.1.42:8787']) });
+  tv.clock.advance(1000);
+  assert.strictEqual(tv.element('panel').className, '');
+  assert.strictEqual(tv.element('panel-tip').className, 'hidden');
+  tv.clock.advance(8000);
+  assert.strictEqual(tv.element('panel').className, 'hidden');
+  assert.strictEqual(tv.element('panel-tip').className, '');
+  assert.strictEqual(tv.stored('panelTips'), '1');
+  tv.key(13);
+  assert.strictEqual(tv.element('panel-tip').className, 'hidden');
+  assert.strictEqual(tv.element('panel').className, '');
+});
+
+test('panel ipucu kendiliğinden kapanır, aynı açılışta bir daha çıkmaz', () => {
+  const tv = startTv({ saved: 'http://192.168.1.42:8787', alive: new Set(['http://192.168.1.42:8787']) });
+  tv.clock.advance(9000);
+  assert.strictEqual(tv.element('panel-tip').className, '');
+  tv.clock.advance(16000);
+  assert.strictEqual(tv.element('panel-tip').className, 'hidden');
+  tv.key(48); // 0: panel yeniden 8 sn açılır
+  tv.clock.advance(9000);
+  assert.strictEqual(tv.element('panel').className, 'hidden');
+  assert.strictEqual(tv.element('panel-tip').className, 'hidden');
+  assert.strictEqual(tv.stored('panelTips'), '1');
+});
+
+test('Geri yalnız panel ipucunu kapatır, uygulamadan çıkmaz', () => {
+  const tv = startTv({ saved: 'http://192.168.1.42:8787', alive: new Set(['http://192.168.1.42:8787']) });
+  tv.clock.advance(9000);
+  tv.key(461);
+  assert.strictEqual(tv.element('panel-tip').className, 'hidden');
+  assert.strictEqual(tv.exits(), 0);
+});
+
+test('panel ipucu üç açılıştan sonra gösterilmez', () => {
+  const tv = startTv({ saved: 'http://192.168.1.42:8787', alive: new Set(['http://192.168.1.42:8787']), panelTips: 3 });
+  tv.clock.advance(9000);
+  assert.strictEqual(tv.element('panel').className, 'hidden');
+  assert.strictEqual(tv.element('panel-tip').className, 'hidden');
+  assert.strictEqual(tv.stored('panelTips'), '3');
 });

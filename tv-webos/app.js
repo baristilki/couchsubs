@@ -6,7 +6,7 @@
   'use strict';
 
   // TV uygulamasının sürümü: appinfo.json, tv-tizen/config.xml ve tv-android/app/build.gradle ile aynı tutulur.
-  var APP_VERSION = '0.9.28';
+  var APP_VERSION = '0.9.29';
   var t = window.t;
   var config = window.COUCHSUBS_CONFIG || {};
   var platform = window.COUCHSUBS_PLATFORM;
@@ -376,9 +376,10 @@
   }
 
   // --- Uzun çeviriyi bölme ---
-  // Uzun çeviri ekranda tek uzun satır olarak taşmasın: satır başına en çok 42 karakter, en çok 3 satır, kelime
-  // sınırından ve dengeli bölünür; 3 satıra sığmazsa yazı biraz küçülür (en çok %75'e kadar). Konuşan adı ("ARTHUR:")
-  // sonraki sözcükle birleşik kalır, hep ilk satırdadır. Mac, Windows, Android ve OBS (SubtitleWrap) aynı kuralları uygular.
+  // Uzun çeviri en çok 3 satıra, kelime sınırından ve dengeli bölünür; 3 satıra sığmazsa yazı biraz küçülür (en çok
+  // %75'e kadar). Konuşan adı ("ARTHUR:") sonraki sözcükle birleşik kalır, hep ilk satırdadır. Satır sınırı TV'de
+  // ekran genişliğidir (aşağıda wrapToWidth); 42 karakter kuralı yalnız ölçüm yapılamazsa kullanılır. Mac, Windows,
+  // Android ve OBS (SubtitleWrap) hâlâ 42 karakter kuralını uygular.
   var WRAP_MAX_CHARS = 42;
   var WRAP_MAX_LINES = 3;
   var WRAP_MIN_SCALE = 0.75;
@@ -431,9 +432,52 @@
     return out.join('\n');
   }
 
-  function wrapSubtitle(text) {
+  // TV'de bölme karakter sayısına değil ekrandaki gerçek genişliğe göredir: Türkçe çoğu zaman İngilizceden uzun olduğu
+  // için 42 karakter sınırı, ekranda bol yer varken tek satırlık cümleyi dar ve iki satırlık bir kutuya çeviriyordu.
+  // Yazı altyazı alanına (ekranın %84'ü, iç boşluk düşülerek) tek satır sığıyorsa bölünmez; sığmıyorsa en az satıra
+  // dengeli bölünür; 3 satıra da sığmazsa küçülür. Ölçüm yapılamazsa (canvas yok) eski karakter kuralı geçerlidir.
+  // Fork: 0.84 yerine 0.62 — uzun çeviri GTA'da sol alttaki haritaya kadar uzamasın, alt satıra geçsin.
+  var WRAP_WIDTH = 0.62;
+  var measureContext = null;
+
+  function lineWidths(el, text, size) {
+    try {
+      if (!measureContext) measureContext = document.createElement('canvas').getContext('2d');
+      var style = window.getComputedStyle(el);
+      measureContext.font = style.fontWeight + ' ' + size + 'px ' + style.fontFamily;
+      var widest = 0;
+      text.split('\n').forEach(function (line) { widest = Math.max(widest, measureContext.measureText(line).width); });
+      return widest > 0 ? widest : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function wrapToWidth(text, el, size) {
+    var viewport = document.documentElement.clientWidth || window.innerWidth || 1920;
+    // Yatay iç boşluk iki yanda 0.5em: toplam bir yazı boyu.
+    var room = viewport * WRAP_WIDTH - size;
+    var width = lineWidths(el, text, size);
+    if (!width || room <= 0) return null;
+    if (width <= room) return { text: text, scale: 1 };
+    var words = wrapTokens(text);
+    if (words.length < 2) return { text: text, scale: 1 };
+    var candidate = text;
+    for (var lines = 2; lines <= WRAP_MAX_LINES; lines++) {
+      candidate = wrapBalance(words, Math.min(lines, words.length));
+      if (lines >= words.length) break;
+      if ((lineWidths(el, candidate, size) || Infinity) <= room) return { text: candidate, scale: 1 };
+    }
+    var widest = lineWidths(el, candidate, size) || room;
+    return { text: candidate, scale: Math.max(WRAP_MIN_SCALE, Math.min(1, room / widest)) };
+  }
+
+  function wrapSubtitle(text, el, size) {
+    if (text.indexOf('\n') >= 0) return { text: text, scale: 1 };
+    var measured = el && size ? wrapToWidth(text, el, size) : null;
+    if (measured) return measured;
     var length = Array.from ? Array.from(text).length : text.length;
-    if (length <= WRAP_MAX_CHARS || text.indexOf('\n') >= 0) return { text: text, scale: 1 };
+    if (length <= WRAP_MAX_CHARS) return { text: text, scale: 1 };
     var words = wrapTokens(text);
     if (words.length < 2) return { text: text, scale: 1 };
     var scale = Math.min(1, Math.max(WRAP_MIN_SCALE, WRAP_MAX_CHARS * WRAP_MAX_LINES / length));
@@ -564,13 +608,40 @@
       setLookText(el, text, size);
       el.style.whiteSpace = 'normal';
       el.style.fontSize = size + 'px';
+      // Tek satır (oyun görünümü) tarayıcının kendi bölmesine kalır: genişlik sınırı yine WRAP_WIDTH.
+      el.style.maxWidth = Math.round((document.documentElement.clientWidth || window.innerWidth || 1920) * WRAP_WIDTH) + 'px';
       return;
     }
-    var wrapped = paragraphs ? { text: text, scale: 1 } : wrapSubtitle(text);
+    el.style.maxWidth = '';
+    var wrapped = paragraphs ? { text: text, scale: 1 } : wrapSubtitle(text, el, baseSize);
     el.textContent = wrapped.text;
     el.style.whiteSpace = 'pre-line';
-    el.style.fontSize = Math.round(baseSize * wrapped.scale) + 'px';
+    var size = Math.round(baseSize * wrapped.scale);
+    el.style.fontSize = size + 'px';
+    // Altyazı kutusu ekranın alt dörtte birini geçmez ve dengeli bölünmüş satırlar korunur: 3 satıra bölünüp %75'e
+    // küçültülse de genişliğe sığmayan yazıda tarayıcı kendiliğinden yeni satır açıyordu. Yazı, hem yükseklik sınırına
+    // hem bölünmüş satır sayısına sığana dek küçülür. Görev paneli gibi satır satır yazılar bu sınırın dışındadır.
+    // Gizli satır (display: none) ölçülemez, 0 yüksekliğiyle döngüye girmez.
+    if (paragraphs) return;
+    var limit = (document.documentElement.clientHeight || window.innerHeight || 1080) * SUBTITLE_MAX_HEIGHT;
+    var lines = wrapped.text.split('\n').length;
+    while (size > SUBTITLE_MIN_FONT && (el.offsetHeight > limit || extraLines(el, lines))) {
+      size -= 1;
+      el.style.fontSize = size + 'px';
+    }
   }
+
+  // Tarayıcı, bölünmüş satırlardan birini genişliğe sığdıramadığı için kendiliğinden satır açtı mı.
+  function extraLines(el, lines) {
+    var style = window.getComputedStyle(el);
+    var line = parseFloat(style.lineHeight);
+    if (!line) return false;
+    var text = el.clientHeight - (parseFloat(style.paddingTop) || 0) - (parseFloat(style.paddingBottom) || 0);
+    return text > line * lines + line / 2;
+  }
+
+  var SUBTITLE_MAX_HEIGHT = 0.24;
+  var SUBTITLE_MIN_FONT = 16;
 
   function rawText(id) {
     var el = $(id);
@@ -996,13 +1067,14 @@
     setBodyClass('band', bandShape);
     if (typeof style.background === 'number') {
       var alpha = Math.max(0, Math.min(100, style.background)) / 100;
-      // Zemin çok saydamsa yazıya sert kontur eklenir (style.css, body.thin-bg).
-      setBodyClass('thin-bg', alpha < 0.3);
-      textBackground = 'rgba(0, 0, 0, ' + alpha + ')';
-      coverBackground = style.background >= 100 ? '#000' : textBackground;
+      // Zemin saydamsa yazıya sert kontur eklenir (style.css, body.thin-bg).
+      setBodyClass('thin-bg', alpha < 0.5);
+      // Saf siyah değil, hafif mavimsi siyah (#0c0e12): oyun görüntüsünün üstünde daha yumuşak durur.
+      textBackground = 'rgba(12, 14, 18, ' + alpha + ')';
+      coverBackground = style.background >= 100 ? '#0c0e12' : textBackground;
       $('subtitle-text').style.background = textBackground;
-      $('subtitle-prev-text').style.background = 'rgba(0, 0, 0, ' + (alpha * 0.83).toFixed(2) + ')';
-      $('subtitle-prev2-text').style.background = 'rgba(0, 0, 0, ' + (alpha * 0.83).toFixed(2) + ')';
+      $('subtitle-prev-text').style.background = 'rgba(12, 14, 18, ' + (alpha * 0.83).toFixed(2) + ')';
+      $('subtitle-prev2-text').style.background = 'rgba(12, 14, 18, ' + (alpha * 0.83).toFixed(2) + ')';
     }
     // Ayarı göndermeyen bilgisayar (eski Windows sürümü, Mac) eski davranışı bekler: önceki satırlar üstte kalır.
     // Yoksa bir kez kapatılan ayar başka bilgisayara bağlanınca da kapalı kalırdı.
@@ -1010,9 +1082,9 @@
     save('stackPrevious', stackPrevious ? '1' : '0');
     if (!stackPrevious) hidePrevious();
     if (typeof style.bold === 'boolean') {
-      $('subtitle-text').style.fontWeight = style.bold ? '700' : '600';
-      $('subtitle-prev-text').style.fontWeight = style.bold ? '700' : '600';
-      $('subtitle-prev2-text').style.fontWeight = style.bold ? '700' : '600';
+      $('subtitle-text').style.fontWeight = style.bold ? '700' : '400';
+      $('subtitle-prev-text').style.fontWeight = style.bold ? '700' : '400';
+      $('subtitle-prev2-text').style.fontWeight = style.bold ? '700' : '400';
     }
     if (TEXT_COLORS[style.textColor]) {
       styleTextColor = TEXT_COLORS[style.textColor];
@@ -1060,6 +1132,11 @@
   }
 
   function connect(address) {
+    // Arka plandayken bağlanılmaz; adres akılda tutulur, uygulama öne gelince bağlanır (bkz. dropWhileHidden).
+    if (pausedByHidden) {
+      server = address;
+      return;
+    }
     if (demoRunning()) stopDemo();
     if (eventSource) eventSource.close();
     if (address !== server) failures = 0;
@@ -1594,8 +1671,42 @@
     $('source-tip').className = 'hidden';
   }
 
+  // --- Arka plandayken bağlantıyı bırakma (Samsung) ---
+  // Samsung uygulamayı arka plana atınca (Anynet+, Otomatik Kaynak Değiştirme, Home tuşu) sayfa duraklar ama bağlantı
+  // açık kalır. Bilgisayar TV uygulamasının bağlı olduğunu sanıp onu yeniden açmıyordu; altyazı ekrana gelmiyordu.
+  // Bağlantı bırakılınca bilgisayar uygulamayı birkaç saniye içinde yeniden öne getirir (TvKeeper). Yalnız bu davranışı
+  // isteyen platformda (platform.closeWhenHidden) çalışır.
+  var pausedByHidden = false;
+
+  function dropWhileHidden() {
+    if (!platform.closeWhenHidden || leaving || pausedByHidden || !eventSource) return;
+    pausedByHidden = true;
+    eventSource.close();
+    eventSource = null;
+    clearTimeout(dropTimer);
+    dropTimer = null;
+    cancelScan();
+    // Öne gelince eski altyazı ekranda asılı kalmasın.
+    hideSubtitle('hidden');
+    hideScreen();
+    hideRegions();
+    setStatus('st-conn', t('reconnecting'), 'bad');
+  }
+
+  function resumeAfterHidden() {
+    if (!pausedByHidden) return;
+    pausedByHidden = false;
+    if (server) connect(server);
+  }
+
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) noteHidden(); else noteVisible();
+    if (document.hidden) {
+      noteHidden();
+      dropWhileHidden();
+    } else {
+      resumeAfterHidden();
+      noteVisible();
+    }
   });
 
   // --- Panel ve kumanda ---
@@ -1619,10 +1730,17 @@
 
   // Panel açıkken bekleme kutusu kapanır: ikisi üst üste binince yazılar okunmuyor.
   function showPanel(autoHide) {
+    hidePanelTip();
     $('waiting').className = 'hidden';
     $('panel').className = '';
     clearTimeout(panelTimer);
-    if (autoHide) panelTimer = setTimeout(hidePanel, 8000);
+    if (autoHide) panelTimer = setTimeout(autoHidePanel, 8000);
+  }
+
+  // Panel kendiliğinden kapandı: ilk açılışlarda panele nasıl dönüleceği söylenir.
+  function autoHidePanel() {
+    hidePanel();
+    maybeShowPanelTip();
   }
 
   function hidePanel() {
@@ -1632,6 +1750,35 @@
 
   function togglePanel() {
     if ($('panel').className === 'hidden') showPanel(false); else hidePanel();
+  }
+
+  // --- Panel ipucu ---
+  // Bağlanınca panel 8 sn görünüp kapanır; ekranda yalnız konsolun HDMI görüntüsü kalır. Kullanıcı uygulamanın onu
+  // "PlayStation ekranına attığını", uygulamaya ve ayarlara giremediğini sanıyordu. İlk PANEL_TIP_LAUNCHES açılışta panel
+  // kendiliğinden kapanınca altta kısa bir ipucu çıkar: Tamam paneli açar, altyazı ayarları telefonda ya da
+  // bilgisayardadır. Herhangi bir tuş ipucunu kapatır; Geri yalnız ipucunu kapatır, uygulamadan çıkmaz.
+  var PANEL_TIP_LAUNCHES = 3;
+  var PANEL_TIP_MS = 15000;
+  var panelTipTimer = null;
+  var panelTipDone = false; // Bu açılışta ipucu gösterildi ya da gösterilmeyecek.
+
+  function maybeShowPanelTip() {
+    if (panelTipDone || !server || demoRunning() || sourceTipShown() || noPictureShown()) return;
+    if ($('panel').className !== 'hidden') return;
+    panelTipDone = true;
+    var shown = Number(load('panelTips')) || 0;
+    if (shown >= PANEL_TIP_LAUNCHES) return;
+    save('panelTips', shown + 1);
+    $('panel-tip').className = '';
+    clearTimeout(panelTipTimer);
+    panelTipTimer = setTimeout(hidePanelTip, PANEL_TIP_MS);
+  }
+
+  function panelTipShown() { return $('panel-tip').className !== 'hidden'; }
+
+  function hidePanelTip() {
+    clearTimeout(panelTipTimer);
+    $('panel-tip').className = 'hidden';
   }
 
   // Sayı tuşu olmayan kumandalar için: panel açıkken sol ve sağ HDMI girişini değiştirir.
@@ -1646,6 +1793,7 @@
   var lastOkKey = 0;
   document.addEventListener('click', function () {
     if (Date.now() - lastOkKey < 400) return;
+    hidePanelTip();
     if (sourceTipShown()) hideSourceTip();
     else if (noPictureShown()) return;
     else if ($('waiting').className !== 'hidden') startDemo();
@@ -1654,6 +1802,11 @@
 
   document.addEventListener('keydown', function (e) {
     var code = e.keyCode;
+    if (panelTipShown()) {
+      hidePanelTip();
+      // Geri yalnız ipucunu kapatır; Tamam ve diğer tuşlar her zamanki işini de yapar (Tamam paneli açar).
+      if (code === KEY.BACK) { e.preventDefault(); return; }
+    }
     if (code === KEY.OK) lastOkKey = Date.now();
     if (code === KEY.OK && sourceTipShown()) {
       hideSourceTip();

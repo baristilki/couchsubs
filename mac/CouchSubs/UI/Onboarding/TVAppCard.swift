@@ -94,6 +94,7 @@ struct TVAppCard: View {
                     // TV bu Mac'i kabul etmediyse Host PC IP'ye yazılacak adres de görünür (#343).
                     if brand == .samsung, error == .unreachable {
                         HintText(text: "This computer's address (Host PC IP): \(model.computerAddress ?? "?")")
+                        otherAddresses
                     }
                     Button("Try again") { Task { await model.refreshTVApp() } }.buttonStyle(.secondary)
                 }
@@ -103,6 +104,7 @@ struct TVAppCard: View {
                     HintText(text: "1. On the TV, open Apps and scroll to the very bottom of the page.")
                     HintText(text: "2. There, press 1 2 3 4 5 on the remote (or type 12345 on the on-screen keypad). The Developer Mode window opens.")
                     HintText(text: "3. Turn Developer mode On, type this computer's address as Host PC IP: \(computer) and press OK.")
+                    otherAddresses
                     HintText(text: "4. Restart the TV: hold the power button on the remote for about 2 seconds until the TV turns off, then turn it on again. This screen continues by itself.")
                     Button("Try again") { Task { await model.refreshTVApp() } }.buttonStyle(.secondary)
                 }
@@ -114,6 +116,15 @@ struct TVAppCard: View {
                     }
                 }
             }
+        }
+    }
+
+    /// Wi-Fi ve Ethernet ikisi de bağlıysa ya da birden çok ağ varsa Host PC IP için diğer adresler de yazılır.
+    @ViewBuilder
+    private var otherAddresses: some View {
+        let others = model.otherComputerAddresses
+        if !others.isEmpty {
+            HintText(text: "If the TV does not accept this address, try one of this computer's other addresses: \(others.joined(separator: ", "))")
         }
     }
 
@@ -136,6 +147,7 @@ struct TVAppCard: View {
                 HintText(text: "1. On the TV, open Apps and scroll to the very bottom of the page.")
                 HintText(text: "2. There, press 1 2 3 4 5 on the remote (or type 12345 on the on-screen keypad). The Developer Mode window opens.")
                 HintText(text: "3. Turn Developer mode On, type this computer's address as Host PC IP: \(model.computerAddress ?? "?") and press OK.")
+                otherAddresses
                 HintText(text: "4. Restart the TV: hold the power button on the remote for about 2 seconds until the TV turns off, then turn it on again. This screen continues by itself.")
                 HintText(text: "Later you sign in once with a free Samsung account; Samsung needs it to sign the app for your TV.")
                 HintText(text: "If the TV keeps switching to HDMI 1 or another source while the CouchSubs TV app is open, turn off Anynet+ (HDMI-CEC) and Auto Source Switching on the TV: Settings › All Settings › Connection › External Device Manager.")

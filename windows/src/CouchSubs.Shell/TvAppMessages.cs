@@ -22,6 +22,8 @@ public static class TvAppMessages
 
     /// <summary>Samsung bağlantı hatalarında Host PC IP'ye yazılacak adres.</summary>
     public const string ComputerAddressLine = "This computer's address (Host PC IP): %@";
+    /// <summary>Bu bilgisayarın Host PC IP için gösterilenden başka ev ağı adresleri varsa (Wi-Fi ve Ethernet ikisi de bağlı).</summary>
+    public const string OtherAddressesLine = "If the TV does not accept this address, try one of this computer's other addresses: %@";
 
     /// <param name="samsungLog">Samsung kurulum günlüğünün yolu; Samsung hatalarında metnin sonunda yazar.</param>
     /// <param name="computerAddress">TV'nin göreceği bu bilgisayar adresi; Samsung "TV kabul etmedi" hatasında yazılır.</param>

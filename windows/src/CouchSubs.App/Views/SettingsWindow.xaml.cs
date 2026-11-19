@@ -974,6 +974,15 @@ public partial class SettingsWindow : Window
         var slot = area;
         Update(s => slot == 0 ? s with { Region = region, AreaPreset = AreaPresets.Matching(region) } : s.WithExtraRegion(slot, region));
         if (slot == 0) ShowPreset();
+        // Kapalı ek bölgeyi çizmek onu açar: eskiden çerçeve "Bu alanı kullan" işaretlenene dek kilitliydi, ipucu "alanı çiz"
+        // derken sürükleme hiçbir şey yapmıyordu ve bölgenin yeri değiştirilemiyor sanılıyordu.
+        else if (UseArea.IsChecked != true)
+        {
+            var wasLoading = loading;
+            loading = true;
+            UseArea.IsChecked = true;
+            loading = wasLoading;
+        }
     }
 
     /// <summary>Altyazı bölgesinin hazır seçimi işaretlenir; Özel'de kaydırıcılar bölgeyi gösterir.</summary>
@@ -1059,8 +1068,10 @@ public partial class SettingsWindow : Window
             ExtraTargetPanel.Visibility = Visibility.Visible;
             ExtraLivePanel.Visibility = Visibility.Visible;
             ExtraLive.IsChecked = settings.ExtraLive(slot);
+            ShowExtraFullScreenHint(settings);
             (settings.ExtraTarget(slot) switch { ResultTarget.Pc => ExtraPc, ResultTarget.Both => ExtraBoth, _ => ExtraTv }).IsChecked = true;
-            Region.IsEnabled = extra is not null;
+            // Kapalı ek bölge de çizilebilir; çizince açılır (bkz. OnRegion).
+            Region.IsEnabled = true;
             Region.DefaultRegion = ExtraDefaults[slot - 1];
             Region.Centered = false;
             Region.ShowRegion(extra ?? ExtraDefaults[slot - 1]);
@@ -1097,7 +1108,6 @@ public partial class SettingsWindow : Window
     {
         if (loading || area == 0) return;
         var on = UseArea.IsChecked == true;
-        Region.IsEnabled = on;
         var slot = area;
         var region = Region.Region;
         // "Bu bölgeyi kullan" deyip sürekli okumayı ayrıca açmayan kullanıcı bölgenin çevrildiğini sanıyordu (yalnız
@@ -1107,6 +1117,19 @@ public partial class SettingsWindow : Window
         loading = true;
         ExtraLive.IsChecked = live;
         loading = false;
+    }
+
+    /// <summary>
+    /// Altyazı alanı Tam ekranken sürekli okuma durur (bkz. <see cref="UserSettings.ExtraAreasPausedByFullScreen"/>);
+    /// "Sürekli oku" ayarı korunur, kullanıcıya nedeni yazılır.
+    /// </summary>
+    private void ShowExtraFullScreenHint(UserSettings settings)
+    {
+        var paused = settings.ExtraAreasPausedByFullScreen;
+        ExtraFullScreenHint.Text = paused
+            ? Localizer.Current["Extra areas aren't read while the subtitle area is Full screen, because the whole screen is already read. They're read again when you pick another area."]
+            : "";
+        ExtraFullScreenHint.Visibility = paused ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>Ek bölge tuşa basmadan da sürekli okunsun (görev, telefon mesajı, bildirim).</summary>
@@ -1127,7 +1150,6 @@ public partial class SettingsWindow : Window
         loading = true;
         UseArea.IsChecked = true;
         loading = false;
-        Region.IsEnabled = true;
         Region.ShowRegion(region);
         Update(s => s.WithExtraRegion(slot, region));
     }

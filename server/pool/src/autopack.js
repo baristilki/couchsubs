@@ -15,7 +15,7 @@
 
 import { accepts } from "./filter.js";
 import { canon, key } from "./index.js";
-import { gameKey, gameSlug } from "./games.js";
+import { EXTRA_SUFFIX, gameKey, gameSlug } from "./games.js";
 
 /** Bir satırın pakete girmesi için onu okuyan en az farklı kurulum sayısı. */
 export const MIN_INSTALLS = 2;
@@ -304,11 +304,27 @@ async function readIndex(env) {
   return index.packs;
 }
 
+/** Paketin listedeki adı. Aynı oyunun elle hazırlanmış (auto olmayan) paketi listede varsa otomatik paket onun
+ *  eksiğini tamamlar: adına " (ek satırlar)" eklenir ki listede iki kez aynı ad görünmesin. Ek, adın anahtarını da
+ *  değiştirir; uygulamalar elle seçilen oyunu ada göre eşlediğinden (GamePacks.swift resolveLimit) seçim asıl pakete
+ *  gider. Asıl paket yoksa ad değişmez: yalnız ek paketi olan oyunun seçimi bu paketi bulmaya devam eder. */
+export function packTitle(job, packs) {
+  if (job.titleId === GENERAL) return GENERAL_TITLE;
+  const title = job.game || job.titleId;
+  const id = jobPackId(job);
+  const k = gameKey(title);
+  const main = packs.some((p) => p && !p.auto && p.id !== id
+    && ((k && typeof p.title === "string" && gameKey(p.title) === k) || (job.titleId && p.titleId === job.titleId)));
+  return main ? title + EXTRA_SUFFIX : title;
+}
+
 async function buildPack(env, job, cache, known) {
   const id = jobPackId(job);
-  const title = job.titleId === GENERAL ? GENERAL_TITLE : job.game || job.titleId;
-  const { body, count } = packBody(id, title, cache, known, job.titleId === GENERAL ? null : job.titleId);
   const packs = await readIndex(env);
+  // Ad gövdede de durduğundan ad değişince (asıl paket eklendi ya da kalktı) içerik özeti de değişir ve paket aynı
+  // gece yeniden yazılır; listedeki ad böylece kendiliğinden güncellenir.
+  const title = packTitle(job, packs);
+  const { body, count } = packBody(id, title, cache, known, job.titleId === GENERAL ? null : job.titleId);
   const previous = packs.find((p) => p.id === id);
   if (!previous && count < MIN_LINES) return { id, built: false, entries: count };
   const contentSha = await sha256Hex(new TextEncoder().encode(body));
@@ -376,9 +392,16 @@ export async function runAutopack(env, now = new Date()) {
     // scheduled until they have actually published; only then can their rows be excluded.
     titles.push({ titleId: GENERAL, game: null, lines: general?.lines ?? 0 });
     // Ham satır sayısı temizlikten önce: eşiğin altındaki oyun beklemeye kalır (paketi zaten varsa güncellenir).
-    const queue = titles.filter((t) => t.lines >= MIN_LINES || packs.some((p) => p.id === jobPackId(t)));
+    let queue = titles.filter((t) => t.lines >= MIN_LINES || packs.some((p) => p.id === jobPackId(t)));
     // Ortak paket, kendi paketi hazırlanan adların satırlarını almaz.
     const namedGames = named.filter((g) => queue.includes(g)).flatMap((g) => g.games);
+    // Listedeki adı değişecek otomatik paket ("(ek satırlar)" eklenecek ya da kalkacak) çevirisiz, en başta yeniden
+    // yazılır: büyük bir oyunun çevirisi bütün geceyi alıp sıra ona hiç gelmeyebilir.
+    const retitle = queue.filter((t) => {
+      const listed = packs.find((p) => p.id === jobPackId(t));
+      return listed?.auto && listed.title !== packTitle(t, packs);
+    });
+    queue = retitle.map((t) => ({ ...t, retitle: true })).concat(queue.filter((t) => !retitle.includes(t)));
     state = { night, titles, queue, namedGames, translated: 0, done: [] };
     await putJson(env, STATE, state);
     return { phase: "plan", titles: titles.length, queued: queue.length };
@@ -398,7 +421,9 @@ export async function runAutopack(env, now = new Date()) {
     .flatMap((finished) => finished.games?.length ? finished.games : [finished.game]));
   const separate = new Set((state.namedGames ?? []).filter((name) => published.has(name)));
   let rows;
-  if (job.titleId === GENERAL) {
+  if (job.retitle) {
+    rows = [];
+  } else if (job.titleId === GENERAL) {
     if (separate.size) {
       // Oyuna ayrılan satırları LIMIT'ten önce süz; aksi halde en çok okunan 5000 ad satırı ortak havuzu aç bırakır.
       // Oyun adlarını JSON tek bir bağlı parametreyle taşıyarak D1 değişken sayısı sınırına takılmayız.

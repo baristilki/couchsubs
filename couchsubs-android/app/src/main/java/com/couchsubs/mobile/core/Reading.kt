@@ -162,8 +162,44 @@ object ButtonPrompts {
         if (isButton(tokens.last()) && words <= 4 && !SubtitleStabilizer.endsSentence(line)) return true
         if (first in lookalikes && tokens.size in 2..4 && tokens[1][0].isUpperCase() && !SubtitleStabilizer.endsSentence(line))
             return true
-        if (first.lowercase() in verbs && tokens.size in 2..10) return isButton(tokens[1]) || tokens[1] in lookalikes
-        return false
+        if (first.lowercase() in verbs && tokens.size in 2..10 && (isButton(tokens[1]) || tokens[1] in lookalikes)) return true
+        return isIconPrompt(tokens, line)
+    }
+
+    private val connectors = setOf("and", "or")
+    /** Büyük harfle yazılmış kısa İngilizce sözcükler tuş kalıntısı sayılmaz ("HOLD ON TO IT"). */
+    private val shortWords = setOf("on", "up", "it", "in", "at", "out", "off", "me", "us", "him", "her", "my", "an", "the", "you", "its")
+    /** "to"dan sonra eylem yerine bunlar gelirse konuşmadır ("Hold to your course"). */
+    private val objects = setOf(
+        "the", "a", "an", "my", "your", "his", "her", "our", "their", "me", "you", "him", "them", "us", "it", "this", "that",
+    )
+
+    /**
+     * Tuş simgesinin yazı tanımadaki kalıntısı: harfsiz ("@", "•", "9"), tek karakter ("D", "i"; "a" hariç), tuş adı,
+     * "and"/"or" ya da büyük harf içeren en çok üç karakter ("LI", "RE", "Rd", "RB").
+     */
+    private fun isIconRemnant(token: String): Boolean {
+        if (token.none { it.isLetter() } || isButton(token) || token in lookalikes || token.lowercase() in connectors) return true
+        if (token.length == 1) return token != "a"
+        return token.length <= 3 && token.any { it.isUpperCase() } && token.lowercase() !in shortWords
+    }
+
+    /**
+     * GTA 6: "Press/Hold/Use ... to ..." ipucunda tuş simgesi resimdir; yazı tanıma onu ya hiç okumaz ("Press  to open
+     * the map") ya da harf/simge kalıntısı olarak okur ("Press @ to", "Hold I LI to", "Press [RB] to take cover").
+     * Çevrilince tuş kaybolur ve konuşma yerine ipucu görünür. Fiil ile "to" arasında en çok üç kalıntı olabilir; ünlem,
+     * soru, tırnak ya da konuşmacı adı (":") taşıyan satır ve "to"dan sonra eylem yerine nesne gelen satır ("Hold to
+     * your course") konuşma sayılır (Mac: ButtonPrompts.isIconPrompt, Windows: ButtonPrompts.IsIconPrompt, havuz:
+     * server/pool/src/prompts.js).
+     */
+    private fun isIconPrompt(tokens: List<String>, line: String): Boolean {
+        if (line.any { it in "!?\"“”:" }) return false
+        val all = tokens.dropWhile { token -> token.none { it.isLetter() } }
+        if (all.size < 3 || all[0].lowercase() !in verbs) return false
+        val to = (1 until all.size).firstOrNull { all[it].lowercase() == "to" } ?: return false
+        if (to > 4 || !all.subList(1, to).all(::isIconRemnant)) return false
+        val next = all.drop(to + 1).firstOrNull { token -> token.any { it.isLetter() } } ?: return false
+        return all.size - to - 1 <= 10 && next.lowercase() !in objects
     }
 
     /**

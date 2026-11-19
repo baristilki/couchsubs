@@ -77,6 +77,8 @@ public class MainActivity extends Activity implements TvPage.Host {
     private int retuneAttempts;
     private final FallbackWatch watch = new FallbackWatch();
     private boolean watching;
+    /** Kullanıcı katman açıkken CouchSubs'ı kumandadan açtı: bu ekran kayıtlı tercih katman olsa da uygulama içinde kalır. */
+    private boolean leftOverlay;
     /** Ekran önde mi; arka plandayken görüntü izlenmez. */
     private boolean resumed;
     private final Runnable watchTick = this::checkFallback;
@@ -90,20 +92,21 @@ public class MainActivity extends Activity implements TvPage.Host {
         TvPage.storeDisplayMode(this, intent.getStringExtra(EXTRA_DISPLAY_MODE));
 
         if (OverlayService.running && !intent.getBooleanExtra(EXTRA_FROM_OVERLAY, false)) {
-            if (!launchParams.isEmpty()) {
+            if (DisplayMode.whileOverlay(launchParams) == DisplayMode.Relaunch.FORWARD_TO_OVERLAY) {
                 // Bilgisayar uygulamayı yeni adresle açtı: katman sürer, adres ona iletilir.
                 OverlayService.start(this, launchParams);
-            } else {
-                // Kumandadan yeniden açıldı: katman kapanır.
-                OverlayService.stop(this);
-                Toast.makeText(this, R.string.overlay_stopped, Toast.LENGTH_LONG).show();
+                finish();
+                return;
             }
-            finish();
-            return;
+            // Kumandadan yeniden açıldı: katman kapanır, CouchSubs ekranı açılır (panel görünsün; eskiden uygulama da
+            // kapanıyordu ve kullanıcı ekrana hiç ulaşamıyordu).
+            OverlayService.stop(this);
+            Toast.makeText(this, R.string.overlay_stopped, Toast.LENGTH_LONG).show();
+            leftOverlay = true;
         }
 
-        DisplayMode.Start start = DisplayMode.atLaunch(
-                TvPage.storedDisplayMode(this), overlayAllowed(), intent.getStringExtra(EXTRA_OVERLAY_FAILED));
+        DisplayMode.Start start = DisplayMode.atLaunch(TvPage.storedDisplayMode(this), overlayAllowed(),
+                intent.getStringExtra(EXTRA_OVERLAY_FAILED), leftOverlay);
         if (start == DisplayMode.Start.OVERLAY) {
             if (startOverlay()) return;
             start = DisplayMode.Start.IN_APP_OVERLAY_FAILED;
@@ -528,7 +531,9 @@ public class MainActivity extends Activity implements TvPage.Host {
         super.onNewIntent(intent);
         TvPage.storeDisplayMode(this, intent.getStringExtra(EXTRA_DISPLAY_MODE));
         if (page == null) return;
-        if (DisplayMode.OVERLAY.equals(TvPage.storedDisplayMode(this)) && overlayAllowed()) {
+        // Kullanıcı katmanı kapatıp uygulamayı açtıysa kumandadan yeniden açılış (parametresiz) onu katmana geri atmaz.
+        boolean stay = leftOverlay && paramsOf(intent).isEmpty();
+        if (!stay && DisplayMode.OVERLAY.equals(TvPage.storedDisplayMode(this)) && overlayAllowed()) {
             String params = paramsOf(intent);
             if (!params.isEmpty()) launchParams = params;
             switchToOverlay(R.string.overlay_selected);

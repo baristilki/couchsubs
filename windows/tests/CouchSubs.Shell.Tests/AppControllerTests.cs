@@ -333,9 +333,12 @@ internal sealed class FakeServices : IAppServices
     public Task<SamsungPreflight> CheckSamsungAsync(string host) => Task.FromResult(SamsungCheck);
     /// <summary>Samsung TV'de kurulu sürüm (sahte TV'nin vd_applist'i); null: uygulama yok.</summary>
     public string? SamsungOnTv { get; set; }
-    public Task<(string Version, bool Installed)> InstallSamsungAppAsync(string host, BundledTvApp app, Action<TvInstallEvent> onEvent)
+    /// <summary>Her Samsung denetiminde "güncelse de aç" istendi mi.</summary>
+    public List<bool> SamsungOpenRequests { get; } = [];
+    public Task<(string Version, bool Installed)> InstallSamsungAppAsync(string host, BundledTvApp app, bool openIfInstalled, Action<TvInstallEvent> onEvent)
     {
         TvCalls++;
+        SamsungOpenRequests.Add(openIfInstalled);
         if (SamsungOnTv is { } onTv && !DevModeInstaller.IsNewer(app.Version, onTv)) return Task.FromResult((onTv, false));
         Events.ForEach(onEvent);
         if (InstallError is { } error) throw new DevModeException(error, InstallDetail);
@@ -1337,6 +1340,45 @@ public class AppControllerRunTests
         controller.Dispose();
     }
 
+    // "TV'de test et": TV uygulaması bağlı değilse önce TV'de açılır (Samsung 65S95F'de TV'ye hiçbir şey gelmiyordu).
+    private static (AppController Controller, FakeServices Services) SamsungReady()
+    {
+        var services = new FakeServices();
+        var store = new MemoryStore();
+        store.Save(StoreKeys.AccountId, Enumerable.Repeat((byte)1, 8).ToArray());
+        store.Save(StoreKeys.Console, new RegisteredConsole("192.168.1.253", "PS5", Enumerable.Repeat((byte)0x31, 16).ToArray(), Enumerable.Repeat((byte)2, 16).ToArray()));
+        store.Save(StoreKeys.Tv, new LgTv("Samsung", "127.0.0.1", TvBrand.Samsung));
+        store.Save(StoreKeys.TvKey, "samsung-token");
+        var controller = AppControllerTests.Make(services, store);
+        controller.TestTvWait = TimeSpan.FromMilliseconds(300);
+        return (controller, services);
+    }
+
+    [Fact]
+    public async Task TestOnTvOpensTheTvAppWhenTranslationIsNotRunning()
+    {
+        var (controller, services) = SamsungReady();
+        await controller.SendTestSubtitleAsync();
+        var keeper = Assert.Single(services.Keepers);
+        // Geçici bekçi bekleme bitince kapanır; çeviri başlamadan TV'ye dokunmaya devam etmez.
+        Assert.False(keeper.Running);
+        Assert.False(controller.OpeningTvAppForTest);
+        controller.Dispose();
+    }
+
+    [Fact]
+    public async Task TestOnTvAsksTheRunningKeeperToOpenTheTvApp()
+    {
+        var (controller, services) = SamsungReady();
+        await controller.StartAsync();
+        var keeper = Assert.Single(services.Keepers);
+        await controller.SendTestSubtitleAsync();
+        Assert.Single(services.Keepers);
+        Assert.Equal(1, keeper.Reconnects);
+        Assert.True(keeper.Running);
+        controller.Dispose();
+    }
+
     /// #40: bekçinin bağlantısında TV yeni jeton verirse saklanır; sonraki açılışta TV yeniden izin sormaz.
     [Fact]
     public async Task KeeperSavesNewTvToken()
@@ -1770,7 +1812,13 @@ public class AppControllerRunTests
         Assert.Equal("Turn on your PS5", AppController.StatusText(SessionState.Disconnected(DisconnectKind.ConsoleAsleep), true, text));
         Assert.Equal("Remote Play is in use on another device", AppController.StatusText(SessionState.Disconnected(DisconnectKind.InUse), true, text));
         Assert.Equal("The PS5 refused the connection. Set up the PS5 again.", AppController.StatusText(SessionState.Disconnected(DisconnectKind.Refused), true, text));
-        Assert.Equal("Can't reach the PS5. Reconnecting…", AppController.StatusText(SessionState.Disconnected(DisconnectKind.Network), true, text));
+        Assert.Equal("Lost the connection to the PS5. Reconnecting… If this keeps happening, connect the PS5 to the router with a cable.",
+            AppController.StatusText(SessionState.Disconnected(DisconnectKind.Network), true, text));
+        Assert.Equal("PS5 ile bağlantı koptu, yeniden bağlanılıyor… Sık oluyorsa PS5'i modeme kabloyla bağlayın.",
+            AppController.StatusText(SessionState.Disconnected(DisconnectKind.Network), true, Localizer.ForLanguage("tr")));
+        // 0x80108b12: PS5'te Uzaktan Oynatma kapalı (GitHub #9); genel "başka Remote Play açık olabilir" metni yanıltıyordu.
+        Assert.Equal("PS5'te Uzaktan Oynama kapalı (kod 0x80108b12). PS5'te Ayarlar › Sistem › Uzaktan Oynama'ya gidip Uzaktan Oynama'yı Etkinleştir'i açın.",
+            AppController.StatusText(SessionState.Disconnected(DisconnectKind.Rejected, ApplicationReasons.RemotePlayDisabled), true, Localizer.ForLanguage("tr")));
         Assert.Equal("The PS5 didn't accept this pairing. Pair the PS5 again with the second account in Settings.",
             AppController.StatusText(SessionState.Disconnected(DisconnectKind.RegistrationInvalid), true, text));
         Assert.Equal("PS5 not found at 192.168.1.70. Make sure it is on and on the same network. Reconnecting…",
@@ -2248,6 +2296,27 @@ public class TvAppInstallTests
         // "Açılsın" isteği bir kerelik: sonraki denetim uygulamayı açmaz.
         await controller.RefreshTvAppAsync();
         Assert.Equal([false, true, false], services.AndroidOpenRequests);
+    }
+
+    [Fact]
+    public async Task SamsungReinstallOpensTheCurrentAppOnTheTv()
+    {
+        // Samsung'da düğme güncel uygulamayı açmıyordu: TV uygulaması kapalı kalıyor, altyazı gelmiyordu.
+        var services = new FakeServices { SamsungDevMode = true, SamsungOnTv = "0.7.0" };
+        services.Bundled[TvBrand.Samsung] = SamsungApp;
+        var store = new MemoryStore();
+        var controller = Make(services, store);
+        await controller.PairAsync(Samsung);
+        Assert.Equal([false], services.SamsungOpenRequests);
+
+        await controller.ReinstallTvAppAsync();
+        Assert.Equal([false, true], services.SamsungOpenRequests);
+        Assert.Empty(services.BrandInstalls);
+        Assert.Equal(new TvAppState(TvAppKind.UpToDate, "0.7.0"), controller.TvApp);
+
+        // "Açılsın" isteği bir kerelik.
+        await controller.RefreshTvAppAsync();
+        Assert.Equal([false, true, false], services.SamsungOpenRequests);
     }
 
     [Fact]

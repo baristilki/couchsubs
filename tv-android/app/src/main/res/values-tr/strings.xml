@@ -2,7 +2,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <resources>
     <string name="overlay_running">Altyazı TV\'nin HDMI görüntüsünün üstünde gösteriliyor</string>
-    <string name="overlay_stopped">CouchSubs altyazısı kapatıldı. Yeniden açmak için CouchSubs\'ı tekrar başlatın.</string>
+    <string name="overlay_stopped">Katman kapatıldı: altyazı artık CouchSubs\'ın içinde gösteriliyor. Panel için Tamam\'a basın.</string>
     <string name="overlay_selected">Katman modu: altyazı TV\'nin kendi HDMI görüntüsünün üstünde çıkar.</string>
     <string name="overlay_fallback">CouchSubs\'ın içinde görüntü gelmedi. Katman moduna geçiliyor: altyazı TV\'nin kendi HDMI görüntüsünün üstünde çıkar.</string>
     <string name="overlay_choose_input">TV\'yi kumandadan PS5\'in girişine (HDMI %1$d) alın. Altyazı görüntünün üstünde çıkar.</string>

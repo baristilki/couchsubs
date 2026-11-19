@@ -698,19 +698,20 @@ CS_API cs_session *cs_session_start(const char *host, const uint8_t regist_key[0
 		const uint8_t account_id[8], int max_fps,
 		cs_frame_cb frame, cs_event_cb event, cs_log_cb log, void *user)
 {
-	return cs_session_start_ex(host, regist_key, morning, account_id, max_fps, 30, frame, NULL, event, log, user);
+	return cs_session_start_ex(host, regist_key, morning, account_id, max_fps, 1080, frame, event, log, user);
 }
 
+/* Ana proje (upstream) imzası: yalnız çözünürlük (1080 ya da bağlantı sık kopunca 720). */
 CS_API cs_session *cs_session_start_ex(const char *host, const uint8_t regist_key[0x10], const uint8_t morning[0x10],
-		const uint8_t account_id[8], int max_fps, int video_fps,
-		cs_frame_cb frame, cs_audio_cb audio, cs_event_cb event, cs_log_cb log, void *user)
+		const uint8_t account_id[8], int max_fps, int video_height,
+		cs_frame_cb frame, cs_event_cb event, cs_log_cb log, void *user)
 {
-	return cs_session_start_ex2(host, regist_key, morning, account_id, max_fps, video_fps, CS_QUALITY_STANDARD,
-			frame, audio, event, log, user);
+	return cs_session_start_ex2(host, regist_key, morning, account_id, max_fps, 30, video_height, CS_QUALITY_STANDARD,
+			frame, NULL, event, log, user);
 }
 
 CS_API cs_session *cs_session_start_ex2(const char *host, const uint8_t regist_key[0x10], const uint8_t morning[0x10],
-		const uint8_t account_id[8], int max_fps, int video_fps, int quality,
+		const uint8_t account_id[8], int max_fps, int video_fps, int video_height, int quality,
 		cs_frame_cb frame, cs_audio_cb audio, cs_event_cb event, cs_log_cb log, void *user)
 {
 	if(!host || !regist_key || !morning || !account_id)
@@ -750,16 +751,19 @@ CS_API cs_session *cs_session_start_ex2(const char *host, const uint8_t regist_k
 	info.host = host; /* libchiaki adresi oturum açılırken kopyalar */
 	memcpy(info.regist_key, regist_key, sizeof(info.regist_key));
 	memcpy(info.morning, morning, sizeof(info.morning));
-	chiaki_connect_video_profile_preset(&info.video_profile, CHIAKI_VIDEO_RESOLUTION_PRESET_1080p,
+	bool low = video_height == 720;
+	chiaki_connect_video_profile_preset(&info.video_profile,
+			low ? CHIAKI_VIDEO_RESOLUTION_PRESET_720p : CHIAKI_VIDEO_RESOLUTION_PRESET_1080p,
 			video_fps == 60 ? CHIAKI_VIDEO_FPS_PRESET_60 : CHIAKI_VIDEO_FPS_PRESET_30);
 	info.video_profile.codec = hevc ? CHIAKI_CODEC_H265 : CHIAKI_CODEC_H264;
-	if(quality == CS_QUALITY_HIGH)
+	/* Bağlantı sık kopup 720p'ye düşüldüyse yüksek bit hızı istenmez (bant genişliği yetmiyor). */
+	if(quality == CS_QUALITY_HIGH && !low)
 		info.video_profile.bitrate = CS_HIGH_BITRATE_KBPS;
 	if(log)
 	{
 		char line[96];
-		snprintf(line, sizeof(line), "Video: 1080p/%d %s %u kbps", video_fps == 60 ? 60 : 30, hevc ? "HEVC" : "H.264",
-				(unsigned)info.video_profile.bitrate);
+		snprintf(line, sizeof(line), "Video: %dp/%d %s %u kbps", low ? 720 : 1080, video_fps == 60 ? 60 : 30,
+				hevc ? "HEVC" : "H.264", (unsigned)info.video_profile.bitrate);
 		log(2, line, user);
 	}
 	info.video_profile_auto_downgrade = true;

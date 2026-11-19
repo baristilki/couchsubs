@@ -7,19 +7,72 @@ using CouchSubs.Core;
 
 namespace CouchSubs.RemotePlay;
 
-/// <summary>Bağlantı koptuğunda yeniden deneme aralıkları: 2, 4, 8, 16, en çok 30 sn.</summary>
+/// <summary>
+/// Bağlantı koptuğunda yeniden deneme aralıkları: 2, 4, 8, 16, en çok 30 sn (Mac'teki ReconnectPolicy ile aynı kural).
+/// Aralık bağlanınca hemen değil, oturum <see cref="StableAfter"/> kadar sürdükten sonra kapanınca baştan başlar. Eskiden her
+/// bağlanışta sıfırlanıyordu: PS5 oturumu açılıp birkaç saniyede düşürünce (ör. "açıldıktan 3-4 sn sonra kapanıyor")
+/// 2 sn sonra yeniden bağlanılıyor, PS5'te ikinci hesap durmadan girip çıkıyordu.
+/// </summary>
 internal sealed class ReconnectPolicy
 {
+    public static readonly TimeSpan StableAfter = TimeSpan.FromSeconds(60);
     private int attempt;
+    private long? connectedAt;
 
-    public int NextDelay()
+    /// <param name="inUse">Uzaktan Oynatma başka cihazda: sık denemek boşuna, en az 8 sn beklenir (8, 16, 30).</param>
+    public int NextDelay(bool inUse = false)
     {
+        if (inUse) attempt = Math.Max(attempt, 2);
         var delay = Math.Min(30, 2 << attempt);
         attempt = Math.Min(attempt + 1, 5);
         return delay;
     }
 
-    public void Reset() => attempt = 0;
+    public void Reset()
+    {
+        attempt = 0;
+        connectedAt = null;
+    }
+
+    public void Connected(long nowMs) => connectedAt = nowMs;
+
+    /// <summary>Oturum kapandı: uzun sürdüyse aralık baştan başlar, kısa sürdüyse büyümeye devam eder.</summary>
+    public void Ended(long nowMs)
+    {
+        if (connectedAt is { } at && nowMs - at >= (long)StableAfter.TotalMilliseconds) attempt = 0;
+        connectedAt = null;
+    }
+}
+
+/// <summary>
+/// Bağlantı sık kopuyorsa görüntü 720p'ye düşürülür (Mac ve Android'deki QualityFallback ile aynı kural).
+/// 1080p akış ~15 Mbit/sn, 720p ~10 Mbit/sn ister. Kablosuz ağda PS5 akışı birkaç dakikada bir kopuyor ya da görüntü
+/// takılıyordu (GitHub #388, #401); altyazı okumak için 720p yeterlidir. <see cref="Window"/> içinde
+/// <see cref="DropsToLower"/> kopma olursa bu çeviri boyunca 720p kullanılır.
+/// </summary>
+internal sealed class QualityFallback
+{
+    public static readonly TimeSpan Window = TimeSpan.FromMinutes(10);
+    public const int DropsToLower = 2;
+    private readonly Queue<long> drops = new();
+
+    /// <summary>Görüntü 720p'ye düşürüldü mü.</summary>
+    public bool Lowered { get; private set; }
+
+    /// <summary>Akış sürerken bağlantı koptu ya da görüntü takıldı. Bu kopmayla 720p'ye geçildiyse true.</summary>
+    public bool Dropped(long nowMs)
+    {
+        if (Lowered) return false;
+        drops.Enqueue(nowMs);
+        while (drops.Count > 0 && nowMs - drops.Peek() > (long)Window.TotalMilliseconds) drops.Dequeue();
+        if (drops.Count < DropsToLower) return false;
+        Lowered = true;
+        return true;
+    }
+
+    /// <summary>Kopma ağ kaynaklı mı (akış sürerken PS5 ile bağlantı gitti ya da görüntü kesildi). PS5'in reddi, başka
+    /// cihazda kullanım ya da durdurma sayılmaz: düşük çözünürlük bunlara çare değildir.</summary>
+    public static bool CountsAsDrop(DisconnectKind kind) => kind is DisconnectKind.Network or DisconnectKind.Other;
 }
 
 /// <summary>
@@ -86,8 +139,12 @@ internal static class DisconnectReasons
     /// <summary>libchiaki'nin CHIAKI_QUIT_REASON_SESSION_REQUEST_UNKNOWN metni (yerel kütüphane CS_QUIT_OTHER ile verir).</summary>
     internal const string UnknownSessionRequest = "Unknown Session Request Error";
 
-    /// <summary>CHIAKI_RP_APPLICATION_REASON_REGIST_FAILED ve _INVALID_PSN_ID.</summary>
-    internal static readonly uint[] RegistrationRejectedCodes = [0x80108b09, 0x80108b02];
+    /// <summary>CHIAKI_RP_APPLICATION_REASON_REGIST_FAILED, _INVALID_PSN_ID ve 0x80108b26. 0x80108b26'yı libchiaki tanımaz:
+    /// PS5 gönderilen kayıt anahtarını (RP-Registkey) kendi eşli cihaz listesinde bulamadı (eşleme PS5'te silinmiş ya da
+    /// PS5 sıfırlanmış). Yeniden denemek aynı yere çıkar; PS5 yeniden eşlenmelidir.</summary>
+    internal static readonly uint[] RegistrationRejectedCodes = [0x80108b09, 0x80108b02, UnknownRegistKey];
+
+    internal const uint UnknownRegistKey = 0x80108b26;
 
     private static readonly string[] UnreachableLines =
     [
@@ -282,6 +339,10 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
     private readonly SerialQueue queue = new("CouchSubs stream session");
     private readonly FrameDelivery delivery;
     private readonly ReconnectPolicy policy = new();
+    /// <summary>Bağlantı sık koparsa görüntü 720p'ye düşürülür (yalnız kuyrukta).</summary>
+    private readonly QualityFallback quality = new();
+    /// <summary>Geçerli oturum bağlandı mı (yalnız kuyrukta): yalnız akış sürerken olan kopmalar sayılır.</summary>
+    private bool streaming;
     /// <summary>Bağlıyken görüntü gelmezse oturum yeniden kurulur (kare iş parçacığından da yazılır, kendi kilidi var).</summary>
     private readonly PictureWatchdog watchdog = new();
     /// <summary>Yalnız kuyrukta okunup yazılır.</summary>
@@ -451,7 +512,7 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
     private void OpenSession(int current)
     {
         if (!IsCurrent(current) || box is not null) return;
-        var started = SessionBox.Start(this, current, console, accountId, out var failure);
+        var started = SessionBox.Start(this, current, console, accountId, quality.Lowered ? 720 : 1080, out var failure);
         if (started is null)
         {
             RemotePlayLog.Note($"PS5 oturumu başlatılamadı ({console.Host}): {failure}");
@@ -464,6 +525,7 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
     /// <summary>Geçerli oturumu kapatır. Kapatma join içerdiği için kuyruğu bekletmemek adına arka planda yapılır.</summary>
     private void CloseBox()
     {
+        streaming = false;
         watchdog.Ended();
         if (box is not { } closing) return;
         box = null;
@@ -479,7 +541,8 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
                 queue.Post(() =>
                 {
                     if (box?.Generation != eventGeneration || !IsCurrent(eventGeneration)) return;
-                    policy.Reset();
+                    policy.Connected(Environment.TickCount64);
+                    streaming = true;
                     box!.Connected = true;
                     lastNudge = Environment.TickCount64;
                     watchdog.Connected(Environment.TickCount64);
@@ -513,7 +576,10 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
                     // Eski bir oturumun (ör. ReconnectNow ile kapatılanın) kapanma olayı yeni oturumu etkilemez.
                     if (box?.Generation != eventGeneration || !IsCurrent(eventGeneration)) return;
                     NoteHighQualityFailure(box, reason.Kind);
+                    var wasStreaming = streaming;
                     CloseBox();
+                    policy.Ended(Environment.TickCount64);
+                    if (wasStreaming && QualityFallback.CountsAsDrop(reason.Kind)) NoteDrop();
                     if (reason.Kind == DisconnectKind.RegistrationInvalid)
                     {
                         // Kayıt geçersiz: yeniden denemek aynı yere çıkar (eskiden sonsuza kadar "Yeniden bağlanılıyor…").
@@ -545,6 +611,8 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
             NoteHighQualityFailure(box, DisconnectKind.Other, stalled: true);
             RemotePlayLog.Note($"PS5'ten {(int)gap.TotalSeconds} sn'dir görüntü gelmiyor (bağlantı açık); oturum yeniden kuruluyor");
             CloseBox();
+            policy.Ended(Environment.TickCount64);
+            NoteDrop();
             ScheduleReconnect(boxGeneration, new DisconnectReason(DisconnectKind.Other, PictureWatchdog.Reason));
         });
     }
@@ -574,12 +642,20 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
         RemotePlayLog.Note("PS5 yüksek görüntü kalitesini (HEVC) vermedi; standart kaliteyle bağlanılıyor");
     }
 
+    /// <summary>Akış sürerken bağlantı koptu: sık oluyorsa sonraki oturumlar 720p açılır.</summary>
+    private void NoteDrop()
+    {
+        if (quality.Dropped(Environment.TickCount64))
+            RemotePlayLog.Note($"PS5 bağlantısı {QualityFallback.Window.TotalMinutes:0} dk içinde {QualityFallback.DropsToLower} kez koptu; " +
+                               "görüntü 720p'ye düşürülüyor (daha az bant genişliği). Kalıcı çözüm: PS5'i modeme kabloyla bağlayın");
+    }
+
     private void ScheduleReconnect(int current, DisconnectReason reason)
     {
         reason = Classify(reason, searchAnswered, console.Host);
         Emit(new SessionState(SessionPhase.Disconnected, reason));
         if (!IsCurrent(current)) return;
-        var delay = policy.NextDelay();
+        var delay = policy.NextDelay(inUse: reason.Kind == DisconnectKind.InUse);
         queue.PostAfter(TimeSpan.FromSeconds(delay), () => Connect(current));
     }
 
@@ -629,7 +705,9 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
             handle = GCHandle.Alloc(this);
         }
 
-        public static unsafe SessionBox? Start(StreamSession owner, int generation, RegisteredConsole console, byte[] accountId, out string? failure)
+        /// <param name="videoHeight">1080 ya da 720 (bağlantı sık koparsa).</param>
+        public static unsafe SessionBox? Start(StreamSession owner, int generation, RegisteredConsole console, byte[] accountId,
+                                               int videoHeight, out string? failure)
         {
             var box = new SessionBox(owner, generation);
             failure = null;
@@ -649,7 +727,7 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
                     var quality = owner.RequestedQuality;
                     box.High = quality == NativeMethods.QualityHigh;
                     box.native = NativeMethods.SessionStart(console.Host, key, morningPointer, account, NativeFps(owner.GameVideo is not null),
-                                                            owner.RequestedFps, (nint)frame, owner.WantsAudio ? (nint)audio : 0,
+                                                            owner.RequestedFps, videoHeight, (nint)frame, owner.WantsAudio ? (nint)audio : 0,
                                                             (nint)eventCallback, (nint)log, GCHandle.ToIntPtr(box.handle), quality);
                 }
             }

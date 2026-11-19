@@ -62,6 +62,39 @@ final class ReconnectPolicyTests: XCTestCase {
     }
 }
 
+/// Kablosuz ağda akış sık kopuyordu (GitHub #388, #401): on dakikada iki kopmadan sonra 720p istenir.
+final class QualityFallbackTests: XCTestCase {
+    private let start = Date(timeIntervalSince1970: 0)
+
+    func testTwoDropsWithinWindowLowerTo720p() {
+        var quality = QualityFallback()
+        XCTAssertFalse(quality.dropped(at: start))
+        XCTAssertFalse(quality.lowered)
+        XCTAssertTrue(quality.dropped(at: start.addingTimeInterval(120)))
+        XCTAssertTrue(quality.lowered)
+        // Bir kez düşürülür; sonraki kopmalar yeniden bildirmez.
+        XCTAssertFalse(quality.dropped(at: start.addingTimeInterval(130)))
+        XCTAssertTrue(quality.lowered)
+    }
+
+    func testDropsFarApartKeep1080p() {
+        var quality = QualityFallback()
+        XCTAssertFalse(quality.dropped(at: start))
+        XCTAssertFalse(quality.dropped(at: start.addingTimeInterval(QualityFallback.window + 1)))
+        XCTAssertFalse(quality.dropped(at: start.addingTimeInterval(2 * QualityFallback.window + 2)))
+        XCTAssertFalse(quality.lowered)
+    }
+
+    func testOnlyNetworkLikeDropsCount() {
+        XCTAssertTrue(QualityFallback.countsAsDrop(.network))
+        XCTAssertTrue(QualityFallback.countsAsDrop(.other(PictureWatchdog.reason)))
+        XCTAssertFalse(QualityFallback.countsAsDrop(.inUse))
+        XCTAssertFalse(QualityFallback.countsAsDrop(.rejected(0x80108bff)))
+        XCTAssertFalse(QualityFallback.countsAsDrop(.registrationInvalid))
+        XCTAssertFalse(QualityFallback.countsAsDrop(.stopped))
+    }
+}
+
 final class PictureWatchdogTests: XCTestCase {
     private let start = Date(timeIntervalSince1970: 0)
 
@@ -270,6 +303,12 @@ final class DisconnectReasonTests: XCTestCase {
                        .registrationInvalid)
         XCTAssertEqual(DisconnectReason.sessionRequestHint(fromLog: "Reported Application Reason: 0x80108bff (unknown)"),
                        .rejected(0x80108bff))
+        // PS5 bu cihazın kayıt anahtarını eşli cihazlarında bulamadı: yeniden eşlenmeli (sonsuz yeniden deneme yok).
+        XCTAssertEqual(DisconnectReason.sessionRequestHint(fromLog: "Reported Application Reason: 0x80108b26 (unknown)"),
+                       .registrationInvalid)
+        // PS5'te Uzaktan Oynatma kapalı (GitHub #9): kod korunur, ekranda ayarın yolu gösterilir.
+        XCTAssertEqual(DisconnectReason.sessionRequestHint(fromLog: "Reported Application Reason: 0x80108b12 (unknown)"),
+                       .rejected(DisconnectReason.remotePlayDisabled))
         XCTAssertNil(DisconnectReason.sessionRequestHint(fromLog: "Reported Application Reason: garbage"))
         XCTAssertEqual(DisconnectReason.sessionRequestHint(fromLog: "Session request connect failed eventually."), .network)
         XCTAssertEqual(DisconnectReason.sessionRequestHint(fromLog: "Failed to receive session request response"), .network)

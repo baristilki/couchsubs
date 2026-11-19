@@ -175,11 +175,15 @@ private struct TestSubtitleButton: View {
         Button {
             Task { await model.testSubtitle() }
         } label: {
-            Label(onTV ? "Test on TV" : "Test on screen", systemImage: onTV ? "tv" : "macwindow")
+            if model.openingTVAppForTest {
+                Label("Opening the app on the TV…", systemImage: "tv")
+            } else {
+                Label(onTV ? "Test on TV" : "Test on screen", systemImage: onTV ? "tv" : "macwindow")
+            }
         }
         .buttonStyle(CSButtonStyle(kind: .secondary, height: "primaryActionHeight"))
         .fixedSize()
-        .disabled(onTV && !model.hasTV && !model.settings.output.showsOnComputer)
+        .disabled((onTV && !model.hasTV && !model.settings.output.showsOnComputer) || model.openingTVAppForTest)
         .help(Text(onTV ? "Sends a sample subtitle to the TV." : "Shows a sample subtitle on this computer's screen."))
     }
 }

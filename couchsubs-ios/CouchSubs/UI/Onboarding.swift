@@ -291,6 +291,9 @@ struct PS5PairScreen: View {
                         .font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.secondary)
                 }
             }
+            // PS5 bağlıyken "Uzaktan Oynama bağlandı" yazısı kalıcıdır; bildirim ayarı değil, bu ayar gizler (GitHub #177).
+            Text("To hide the \"Remote Play connected\" message on the screen: on the PS5, go to Settings › System › Remote Play and turn on Hide Remote Play Connection Status Pop-Up. Do it for both your main account and the second account.")
+                .font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.secondary)
             if working {
                 HStack(spacing: Mobile.Space.inline) {
                     ProgressView().tint(Mobile.Palette.accent)

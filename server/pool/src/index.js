@@ -13,7 +13,7 @@
 
 import { accepts } from "./filter.js";
 import { runAutopack } from "./autopack.js";
-import { gameKey } from "./games.js";
+import { EXTRA_SUFFIX, gameKey } from "./games.js";
 
 const MAX_LINES = 200;
 const DAILY_LIMIT = 5000;
@@ -31,10 +31,14 @@ export function titleId(value) {
   return TITLE_ID.test(t) ? t : null;
 }
 
-/** Oyun adı: denetim karakterleri ve fazla boşluk atılır, en çok 120 karakter; boşsa null. */
+/** Oyun adı: denetim karakterleri ve fazla boşluk atılır, en çok 120 karakter; boşsa null. Ek paketin adındaki
+ *  " (ek satırlar)" (paketten tanınan oyun bu adla gelir) atılır: satırlar asıl oyunun adıyla toplanır. */
 export function gameName(value) {
   if (typeof value !== "string") return null;
-  const t = value.replace(/\p{C}/gu, " ").replace(/\s+/g, " ").trim().slice(0, MAX_GAME).trim();
+  let t = value.replace(/\p{C}/gu, " ").replace(/\s+/g, " ").trim();
+  const extra = EXTRA_SUFFIX.trim();
+  if (t.endsWith(extra)) t = t.slice(0, -extra.length).trim();
+  t = t.slice(0, MAX_GAME).trim();
   return t || null;
 }
 

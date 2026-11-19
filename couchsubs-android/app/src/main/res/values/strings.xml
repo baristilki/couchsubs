@@ -20,7 +20,8 @@
     <string name="phase_reconnecting">Bağlantı koptu, yeniden bağlanılıyor…</string>
     <string name="phase_in_use">PS5 başka bir Remote Play bağlantısında. Diğer cihazı kapat.</string>
     <string name="phase_not_found_host">PS5 %1$s adresinde bulunamadı. Açık ve aynı ağda olduğundan emin ol. Yeniden bağlanılıyor…</string>
-    <string name="phase_network">PS5\'e ulaşılamıyor. Yeniden bağlanılıyor…</string>
+    <string name="phase_network">PS5 ile bağlantı koptu, yeniden bağlanılıyor… Sık oluyorsa PS5\'i modeme kabloyla bağla.</string>
+    <string name="phase_remote_play_disabled">PS5\'te Uzaktan Oynama kapalı (kod %1$s). PS5\'te Ayarlar › Sistem › Uzaktan Oynama\'ya gidip Uzaktan Oynama\'yı Etkinleştir\'i aç.</string>
     <string name="phase_rejected_code">PS5 bağlantıyı reddetti (kod %1$s). Başka bir Uzaktan Oynatma (PS Remote Play) açık olabilir ya da PS5 başka bir oturumda olabilir. PS Remote Play\'i kapat, PS5\'i yeniden başlatıp tekrar dene.</string>
     <string name="phase_rejected">PS5 oturumu başlatmadı. Başka bir Uzaktan Oynatma (PS Remote Play) açık olabilir ya da PS5 başka bir oturumda olabilir. PS Remote Play\'i kapat, PS5\'i yeniden başlatıp tekrar dene.</string>
     <string name="phase_registration_invalid">PS5 bu eşlemeyi kabul etmedi. Ayarlar\'dan PS5\'i ikinci hesapla yeniden eşle.</string>
@@ -35,7 +36,11 @@
     <string name="error_native">Bu cihazda Remote Play kütüphanesi yüklenemedi.</string>
     <string name="error_port">Altyazı sunucusu açılamadı (8787 kullanımda).</string>
     <string name="error_translation">Çeviri şu an yapılamıyor; yeniden deneniyor.</string>
-    <string name="error_model">Ücretsiz çeviri modeli indirilemedi. İnternet bağlantını kontrol et.</string>
+    <string name="error_model">Ücretsiz çeviri modeli indirilemedi. Yeniden dene; sorun sürerse hata kaydını paylaş.</string>
+    <string name="error_model_network">Çeviri modeli ağ hatası nedeniyle indirilemedi. Bağlantını ve DNS/VPN ayarlarını kontrol edip yeniden dene.</string>
+    <string name="error_model_storage">Çeviri modeli için telefonda yeterli boş alan yok. Yer açıp yeniden dene.</string>
+    <string name="error_model_unavailable">Çeviri modeli hizmeti şu anda kullanılamıyor. Google Play Hizmetleri güncellemelerini kontrol edip yeniden dene.</string>
+    <string name="error_model_timeout">Çeviri modeli indirmesi zaman aşımına uğradı. Bağlantını kontrol edip yeniden dene.</string>
     <string name="screen_translate">Ekranı çevir</string>
     <string name="screen_working">Ekran çevriliyor…</string>
     <string name="screen_remove">Çevirileri kaldır</string>
@@ -78,6 +83,7 @@
     <string name="psn_problem_crashed">Uygulama içi tarayıcı (Android System WebView) çalışmadı. Play Store\'dan güncellemeyi deneyebilirsin.</string>
     <string name="psn_problem_other">Sayfa yüklenirken bir hata oldu.</string>
     <string name="pair_title">PS5\'i eşle</string>
+    <string name="pair_hide_status">Ekrandaki \"Uzaktan Oynama bağlandı\" yazısını gizlemek için: PS5\'te Ayarlar › Sistem › Uzaktan Oynama\'ya gidip Uzaktan Oynama Bağlantı Durumu Açılır Penceresini Gizle\'yi aç. Bunu hem ana hesabında hem ikinci hesapta yap.</string>
     <string name="pair_body">PS5\'te ikinci hesapla Ayarlar › Sistem › Uzaktan Oynatma › Cihazı Eşle\'yi seç, ekrandaki kodu yaz.</string>
     <string name="pair_searching">PS5 aranıyor…</string>
     <string name="pair_address">PS5 adresi (ör. 192.168.1.20)</string>
@@ -251,7 +257,7 @@
     <string name="settings_fast_reading">Değişmeyen altyazı alanını daha sık oku</string>
     <string name="settings_fast_reading_short">Altyazı alanı değişmemiş görünüyorsa 20 yerine 2 kare sonra yeniden oku. Daha fazla CPU kullanır.</string>
     <string name="settings_xbox_audio">Xbox sesini bu cihazda çal</string>
-    <string name="settings_xbox_audio_short">Xbox uzaktan oynatmada sesi bu cihaza yönlendirir; kapatırsanız oyun sessiz kalabilir.</string>
+    <string name="settings_xbox_audio_short">Xbox, uzaktan oynatma sürerken TV\'nin sesini kapatır ve oyun sesini yalnız bu cihaza gönderir (Xbox kısıtı). Kapatırsanız oyunun sesi hiç gelmez. TV\'den ya da hoparlörden duymak için telefonu Bluetooth ile hoparlöre ya da kulaklığa bağlayın.</string>
     <string name="running_now">Şimdi</string>
     <string name="running_ready_translation">hazır çeviri</string>
     <string name="running_ready">hazır</string>
@@ -453,6 +459,7 @@
     <string name="area_drag_note_free">Çerçeveyi sürükleyerek taşı, kenarından ya da köşesinden sürükleyerek boyutlandır.</string>
     <string name="area_preview_empty">Çeviri başlayınca oyun görüntüsü burada görünür.</string>
     <string name="extra_title">Ek alanlar</string>
+    <string name="extra_full_screen_note">Altyazı alanı Tam ekranken ek alanlar okunmaz, çünkü ekranın tamamı zaten okunuyor. Başka bir alan seçince yeniden okunur.</string>
     <string name="extra_note">CouchSubs altyazının yanında görev yazısı, telefon mesajı ya da bildirim gibi en çok üç küçük alanı da sürekli okuyabilir. Her alan yaklaşık saniyede bir okunur, yazısı değişmedikçe yeniden çevrilmez. Çeviri TV\'de ve bu telefonun altyazı ekranında asıl yazının yerinde görünür.</string>
     <string name="extra_add">Ek alan ekle</string>
     <string name="extra_name">Alanın adı</string>

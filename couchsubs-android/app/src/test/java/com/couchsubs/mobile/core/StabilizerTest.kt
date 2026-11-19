@@ -320,6 +320,22 @@ class OcrNoiseTest {
         assertTrue(ButtonPrompts.isPrompt("△ Pick up"))
         assertTrue(ButtonPrompts.isPrompt("Press ✕ to jump"))
         assertFalse(ButtonPrompts.isPrompt("We go now, boy."))
+        // GTA 6: tuş simgesi okunmamış ya da harf/simge kalıntısına dönüşmüş ipuçları (havuzdaki gerçek satırlar).
+        for (line in listOf(
+            "Press to threaten the teller", "Press  to open the map", "Use to select your binoculars",
+            "Hold to open your loadout", "Press @ to open the map", "Press D to greet Joey",
+            "Hold I LI to open your loadout", "Press RE to go back to your weapons and equipment",
+            "Press (9 0 to stop focusing", "Release 2 and R2 to breathe out", "Hold + to look at Joey",
+            "Press [RB] to take cover", "Use ⓁⓇ to steer the boat", "Hold △ to enter", "Press © to call Lucia",
+            "PRESS to VAULT over obstacles", "Press to heal.", "Release Li To Use", "Use i to follow Dutch",
+            "0 0 00 0 Press • to open the index",
+        )) assertTrue(line, ButtonPrompts.isPrompt(line))
+        for (line in listOf(
+            "Press the button, Jason!", "Hold on to something.", "HOLD ON TO IT", "Use it to open the door.",
+            "Hold up, Floyd. I'm coming down there.", "Use a rope to climb down.", "Hold to your course, men.",
+            "Jason: Press to the left", "Use me to get inside.", "\"Press to the wall,\" he said", "Hold to it",
+            "Hold on, Momma Bear!", "Press on, we're almost there.",
+        )) assertFalse(line, ButtonPrompts.isPrompt(line))
     }
 
     /** GTA 6 (#404): etkileşim ve ekipman yazıları tek başına okununca altyazı sayılmaz; kısa konuşma kalır. */

@@ -497,8 +497,15 @@ public sealed record UserSettings
         _ => this,
     };
 
-    /// <summary>Sürekli okunan ek bölgeler (açık ve "Sürekli oku" seçili olanlar).</summary>
-    public IReadOnlyList<WatchedArea> WatchedAreas() =>
+    /// <summary>
+    /// Altyazı alanı Tam ekran: sürekli okunan ek bölgeler okunmaz (ekranın tamamı zaten okunuyor, aynı yazı ikinci kez
+    /// çevrilirdi). Bölgelerin ayarı değişmez; başka bir alan seçilince eskisi gibi okunurlar. Tuşla tek seferlik okuma
+    /// etkilenmez.
+    /// </summary>
+    public bool ExtraAreasPausedByFullScreen => AreaPreset == AreaPreset.Full;
+
+    /// <summary>Sürekli okunan ek bölgeler (açık ve "Sürekli oku" seçili olanlar); Tam ekranda hiçbiri (Mac: activeExtraAreas).</summary>
+    public IReadOnlyList<WatchedArea> WatchedAreas() => ExtraAreasPausedByFullScreen ? [] :
         [.. Enumerable.Range(1, ExtraRegionCount)
             .Where(ExtraLive)
             .Select(slot => ExtraRegion(slot) is { } region ? new WatchedArea("area" + slot, "Area " + slot, region) : null)
@@ -710,8 +717,11 @@ public interface IAppServices
     /// vermezse Info null olur; kurulum yine denenir.
     /// </summary>
     Task<SamsungPreflight> CheckSamsungAsync(string host) => Task.FromResult(new SamsungPreflight(null, null));
-    /// <summary>TV'deki sürüme bakar, eksik ya da eskiyse kurar; TV'deki sürümü ve kurulup kurulmadığını döner.</summary>
-    Task<(string Version, bool Installed)> InstallSamsungAppAsync(string host, BundledTvApp app, Action<TvInstallEvent> onEvent);
+    /// <summary>
+    /// Eksikse ya da eskiyse imzalayıp kurar; TV'deki sürümü ve kurup kurmadığını döner. <paramref name="openIfInstalled"/>:
+    /// uygulama güncelse de TV'de açılır ("TV uygulamasını yeniden kur").
+    /// </summary>
+    Task<(string Version, bool Installed)> InstallSamsungAppAsync(string host, BundledTvApp app, bool openIfInstalled, Action<TvInstallEvent> onEvent);
     Task<bool> IsAndroidDebugOnAsync(string host);
     /// <summary>Ağda ADB'si açık cihazlar.</summary>
     Task<IReadOnlyList<string>> ScanAndroidTvsAsync();

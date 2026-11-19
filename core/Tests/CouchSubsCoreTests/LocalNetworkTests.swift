@@ -84,4 +84,22 @@ final class LocalNetworkTests: XCTestCase {
         XCTAssertEqual(NetworkAddress.choose([vpn], near: nil), "10.8.0.2")
         XCTAssertNil(NetworkAddress.choose([], near: nil))
     }
+
+    // X (Samsung M7): TV adresi bilinmeden seçilen adres listedeki ilk "gerçek" adresti; öncelik yoktu.
+    func testWithoutATVAddressTheDefaultRouteAndWiFiWin() {
+        let parallels = NetworkAddress.Candidate(interface: "vnic0", address: "10.211.55.2", netmask: "255.255.255.0")
+        let hotspot = NetworkAddress.Candidate(interface: "ap1", address: "192.168.2.1", netmask: "255.255.255.0")
+        let thunderbolt = NetworkAddress.Candidate(interface: "en5", address: "192.168.1.35", netmask: "255.255.255.0")
+        let other = NetworkAddress.Candidate(interface: "llw0", address: "169.254.1.1", netmask: "255.255.0.0")
+        XCTAssertEqual(NetworkAddress.choose([parallels, hotspot, other, wifi], near: nil), "192.168.1.34")
+        XCTAssertEqual(NetworkAddress.choose([wifi, thunderbolt], near: nil, routeSource: nil, defaultRoute: "192.168.1.35"), "192.168.1.35")
+        // Varsayılan yol VPN'den (WARP, utun) geçiyorsa VPN adresi seçilmez.
+        XCTAssertEqual(NetworkAddress.choose([vpn, wifi], near: nil, routeSource: nil, defaultRoute: "10.8.0.2"), "192.168.1.34")
+    }
+
+    func testHomeAddressesListEveryRealHomeNetworkAddress() {
+        let thunderbolt = NetworkAddress.Candidate(interface: "en5", address: "192.168.1.35", netmask: "255.255.255.0")
+        XCTAssertEqual(NetworkAddress.homeAddresses([vpn, vm, wifi, thunderbolt, wifi]), ["192.168.1.34", "192.168.1.35"])
+        XCTAssertEqual(NetworkAddress.homeAddresses([vpn, vm]), [])
+    }
 }

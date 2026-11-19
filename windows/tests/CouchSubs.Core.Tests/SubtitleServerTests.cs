@@ -263,7 +263,7 @@ public class SubtitleServerTests
     public void OldSavedStyleGetsNewDefaults()
     {
         var style = System.Text.Json.JsonSerializer.Deserialize<SubtitleStyle>("{\"FontSize\":58,\"BottomPercent\":12}");
-        Assert.Equal(new SubtitleStyle(58, 12, SubtitlePlacement.Cover, 72, false), style);
+        Assert.Equal(new SubtitleStyle(58, 12, SubtitlePlacement.Cover, 90, false), style);
         var again = System.Text.Json.JsonSerializer.Deserialize<SubtitleStyle>(System.Text.Json.JsonSerializer.Serialize(style! with { Placement = SubtitlePlacement.Below }));
         Assert.Equal(SubtitlePlacement.Below, again!.Placement);
     }
@@ -286,6 +286,21 @@ public class SubtitleServerTests
         var port = await server.StartAsync();
         using var http = new HttpClient();
         Assert.Equal("{\"app\":\"couchsubs\"}", await http.GetStringAsync($"http://127.0.0.1:{port}/hello"));
+    }
+
+    // Yeni tarayıcılı TV'ler (Tizen 9.0) yerel ağdaki sunucuya ön istekte izin başlığı ister.
+    [Fact]
+    public async Task PreflightAllowsPrivateNetworkAccess()
+    {
+        using var server = new SubtitleServer(0);
+        var port = await server.StartAsync();
+        using var http = new HttpClient();
+        using var request = new HttpRequestMessage(HttpMethod.Options, $"http://127.0.0.1:{port}/events");
+        request.Headers.Add("Access-Control-Request-Private-Network", "true");
+        using var response = await http.SendAsync(request);
+        Assert.Equal(System.Net.HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal("true", Assert.Single(response.Headers.GetValues("Access-Control-Allow-Private-Network")));
+        Assert.Equal("*", Assert.Single(response.Headers.GetValues("Access-Control-Allow-Origin")));
     }
 
     [Fact]

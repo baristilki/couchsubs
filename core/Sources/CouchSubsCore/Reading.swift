@@ -208,11 +208,49 @@ public enum ButtonPrompts {
             return true
         }
         // "Press ✕ to jump", "Hold R2 to aim"
-        if verbs.contains(first.lowercased()), tokens.count >= 2, tokens.count <= 10 {
-            let second = tokens[1]
-            return isButton(second) || lookalikes.contains(second)
+        if verbs.contains(first.lowercased()), tokens.count >= 2, tokens.count <= 10,
+           isButton(tokens[1]) || lookalikes.contains(tokens[1]) {
+            return true
         }
-        return false
+        return isIconPrompt(tokens, line: line)
+    }
+
+    private static let connectors: Set<String> = ["and", "or"]
+    /// Büyük harfle yazılmış kısa İngilizce sözcükler tuş kalıntısı sayılmaz ("HOLD ON TO IT").
+    private static let shortWords: Set<String> = [
+        "on", "up", "it", "in", "at", "out", "off", "me", "us", "him", "her", "my", "an", "the", "you", "its",
+    ]
+    /// "to"dan sonra eylem yerine bunlar gelirse konuşmadır ("Hold to your course").
+    private static let objects: Set<String> = [
+        "the", "a", "an", "my", "your", "his", "her", "our", "their", "me", "you", "him", "them", "us", "it", "this", "that",
+    ]
+
+    /// Tuş simgesinin yazı tanımadaki kalıntısı: harfsiz ("@", "•", "9"), tek karakter ("D", "i"; "a" hariç), tuş adı,
+    /// "and"/"or" ya da büyük harf içeren en çok üç karakter ("LI", "RE", "Rd", "RB").
+    private static func isIconRemnant(_ token: String) -> Bool {
+        if !token.contains(where: \.isLetter) || buttons.contains(token.uppercased()) || lookalikes.contains(token)
+            || connectors.contains(token.lowercased()) {
+            return true
+        }
+        if token.count == 1 { return token != "a" }
+        return token.count <= 3 && token.contains(where: \.isUppercase) && !shortWords.contains(token.lowercased())
+    }
+
+    /// GTA 6: "Press/Hold/Use ... to ..." ipucunda tuş simgesi resimdir; yazı tanıma onu ya hiç okumaz ("Press  to open
+    /// the map") ya da harf/simge kalıntısı olarak okur ("Press @ to", "Hold I LI to", "Press [RB] to take cover").
+    /// Çevrilince tuş kaybolur ve konuşma yerine ipucu görünür. Fiil ile "to" arasında en çok üç kalıntı olabilir;
+    /// ünlem, soru, tırnak ya da konuşmacı adı (":") taşıyan satır ve "to"dan sonra eylem yerine nesne gelen satır
+    /// ("Hold to your course") konuşma sayılır (Windows: ButtonPrompts.IsIconPrompt, Android: isIconPrompt, havuz:
+    /// server/pool/src/prompts.js).
+    static func isIconPrompt(_ tokens: [String], line: String) -> Bool {
+        if line.contains(where: { "!?\"“”:".contains($0) }) { return false }
+        let all = Array(tokens.drop(while: { !$0.contains(where: \.isLetter) }))
+        guard all.count >= 3, verbs.contains(all[0].lowercased()),
+              let to = all.indices.dropFirst().first(where: { all[$0].lowercased() == "to" }),
+              to <= 4, all[1..<to].allSatisfy(isIconRemnant) else { return false }
+        let rest = all[(to + 1)...].filter { $0.contains(where: \.isLetter) }
+        guard let next = rest.first else { return false }
+        return all.count - to - 1 <= 10 && !objects.contains(next.lowercased())
     }
 
     /// Etkileşim/HUD etiketi: en çok üç sözcük, hiç küçük harf yok (en az bir büyük harf var), cümle sonu noktalaması

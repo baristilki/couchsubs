@@ -100,4 +100,39 @@ public class LocalNetworkTests
         Assert.False(LocalNetwork.IsVirtual(Wifi.Name, Wifi.Description, Wifi.Type));
         Assert.False(LocalNetwork.IsVirtual("Ethernet", "Realtek PCIe GbE Family Controller", System.Net.NetworkInformation.NetworkInterfaceType.Ethernet));
     }
+
+    // X (Samsung M7): TV adresi bilinmeden seçilen adres bağdaştırıcı listesindeki ilk "gerçek" adresti.
+    private static readonly LocalNetwork.AdapterAddress Warp = Adapter("CloudflareWARP", "Cloudflare WARP Interface Tunnel", "172.16.0.2", true);
+    private static readonly LocalNetwork.AdapterAddress Mullvad = Adapter("Mullvad", "Mullvad Tunnel", "10.64.0.5", true);
+    private static readonly LocalNetwork.AdapterAddress Parallels = Adapter("Ethernet 3", "Parallels Shared Networking Adapter", "10.211.55.2", false);
+    private static readonly LocalNetwork.AdapterAddress Clash = Adapter("Meta", "Meta Tunnel", "198.18.0.1", true);
+    private static readonly LocalNetwork.AdapterAddress Tethering = Adapter("Ethernet 4", "Remote NDIS based Internet Sharing Device", "192.168.42.10", true);
+    private static readonly LocalNetwork.AdapterAddress DirectLink = Adapter("Ethernet 5", "Realtek USB GbE", "192.168.0.10", false);
+
+    [Fact]
+    public void MoreVpnAndSharingAdaptersAreRecognised()
+    {
+        foreach (var adapter in new[] { Warp, Mullvad, Parallels, Clash, Tethering })
+            Assert.True(LocalNetwork.IsVirtual(adapter.Name, adapter.Description, adapter.Type) ||
+                        LocalNetwork.HomeAddresses([adapter]).Count == 0, adapter.Description);
+        Assert.Empty(LocalNetwork.HomeAddresses([Warp, Mullvad, Parallels, Clash, Tethering]));
+    }
+
+    [Fact]
+    public void WithoutATvAddressWifiWithAGatewayWinsOverEarlierAdapters()
+    {
+        Assert.Equal("192.168.1.34", LocalNetwork.ChooseComputerAddress([Warp, Tethering, Parallels, Clash, DirectLink, Wifi], null));
+        // İnternete çıkılan bağdaştırıcı (varsayılan yol) biliniyorsa o.
+        Assert.Equal("192.168.1.35", LocalNetwork.ChooseComputerAddress([Wifi, Cable], null, null, IPAddress.Parse("192.168.1.35")));
+        // Varsayılan yol VPN'den geçiyorsa (WARP) VPN adresi seçilmez.
+        Assert.Equal("192.168.1.34", LocalNetwork.ChooseComputerAddress([Warp, Wifi], null, null, IPAddress.Parse("172.16.0.2")));
+    }
+
+    [Fact]
+    public void HomeAddressesListEveryRealHomeNetworkAddressBestFirst()
+    {
+        Assert.Equal(["192.168.1.34", "192.168.1.35", "192.168.0.10"],
+            LocalNetwork.HomeAddresses([HyperV, DirectLink, Warp, Wifi, Vpn, Cable]));
+        Assert.Empty(LocalNetwork.HomeAddresses([HyperV, Vpn]));
+    }
 }

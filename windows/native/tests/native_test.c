@@ -294,6 +294,15 @@ static void test_stop_right_after_start(void)
 	cs_session_stop(session);
 }
 
+/* 720p istenen oturum da açılır ve hemen durdurulabilir (bağlantı sık koparsa uygulama 720p ister). */
+static void test_stop_right_after_start_720p(void)
+{
+	uint8_t key[16] = { 0 }, morning[16] = { 0 }, account[8] = { 0 };
+	cs_session *session = cs_session_start_ex("127.0.0.1", key, morning, account, 15, 720, NULL, NULL, NULL, NULL);
+	CHECK(session != NULL);
+	cs_session_stop(session);
+}
+
 static void count_console(const char *host, const char *name, int awake, void *user)
 {
 	(void)host;
@@ -351,6 +360,7 @@ int main(int argc, char **argv)
 	test_discover_ex_returns_after_timeout();
 	test_session_to_closed_port_quits_and_stops();
 	test_stop_right_after_start();
+	test_stop_right_after_start_720p();
 	if(failures)
 	{
 		fprintf(stderr, "%d check(s) failed\n", failures);

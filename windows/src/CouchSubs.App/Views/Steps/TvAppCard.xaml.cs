@@ -78,6 +78,9 @@ public partial class TvAppCard : UserControl
         Reinstall.Visibility = Visible(state.Kind == TvAppKind.UpToDate && controller?.CanReinstallTvApp == true);
         SamsungHostStep.Text = text["3. Turn Developer mode On, type this computer's address as Host PC IP: %@ and press OK."]
             .Replace("%@", controller?.ComputerAddress ?? "?");
+        // Wi-Fi ve Ethernet ikisi de bağlıysa ya da birden çok ağ varsa diğer adresler de yazılır.
+        if (brand == TvBrand.Samsung && controller?.OtherComputerAddresses is { Length: > 0 } others)
+            SamsungHostStep.Text += "\n" + text.Format(TvAppMessages.OtherAddressesLine, string.Join(", ", others));
 
         Status.Text = state.Kind switch
         {

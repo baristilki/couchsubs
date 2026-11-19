@@ -27,6 +27,31 @@ final class DisplayMode {
         IN_APP_OVERLAY_FAILED
     }
 
+    /** Katman çalışırken CouchSubs yeniden açıldı: ne yapılacağı. */
+    enum Relaunch {
+        /** Bilgisayar ya da telefon yeni adresle açtı: katman sürer, adres ona iletilir, ekran açılmaz. */
+        FORWARD_TO_OVERLAY,
+        /** Kullanıcı kumandadan açtı: katman kapanır ve CouchSubs ekranı (panel) açılır. */
+        OPEN_APP
+    }
+
+    /**
+     * Eskiden kumandadan açılınca katman kapanıp uygulama da kapanıyordu: kullanıcı ekranı hiç göremiyor, "uygulamaya
+     * giremiyorum, PlayStation ekranına atıyor" diyordu. Artık kullanıcı açtıysa CouchSubs ekranı gelir.
+     */
+    static Relaunch whileOverlay(String launchParams) {
+        return launchParams == null || launchParams.isEmpty() ? Relaunch.OPEN_APP : Relaunch.FORWARD_TO_OVERLAY;
+    }
+
+    /**
+     * Kullanıcı katmanı kapatıp uygulamayı açtıysa bu açılışta kayıtlı tercih katman olsa da uygulama içinde kalınır;
+     * yoksa ekran açılır açılmaz yeniden katmana geçerdi.
+     */
+    static Start atLaunch(String preference, boolean canDrawOverlays, String overlayFailure, boolean leftOverlay) {
+        Start start = atLaunch(preference, canDrawOverlays, overlayFailure);
+        return leftOverlay && start == Start.OVERLAY ? Start.IN_APP : start;
+    }
+
     /** Katman servisinin uygulamayı geri açarken bildirdiği neden (bkz. OverlayService). */
     static final String FAILED_PERMISSION = "permission";
     static final String FAILED_WINDOW = "window";

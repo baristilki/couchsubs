@@ -85,30 +85,29 @@ CS_API cs_session *cs_session_start(const char *host, const uint8_t regist_key[0
                                     const uint8_t account_id[8], int max_fps,
                                     cs_frame_cb frame, cs_event_cb event, cs_log_cb log, void *user);
 
+/* cs_session_start ile aynı; video_height 720 ise 720p (~10 Mbit/sn), değilse 1080p (~15 Mbit/sn) istenir. Bağlantı
+ * kablosuz ağda sık koparsa uygulama sonraki oturumları 720p açar. */
+CS_API cs_session *cs_session_start_ex(const char *host, const uint8_t regist_key[0x10], const uint8_t morning[0x10],
+                                       const uint8_t account_id[8], int max_fps, int video_height,
+                                       cs_frame_cb frame, cs_event_cb event, cs_log_cb log, void *user);
+
 /* Çözülmüş oyun sesi: 16 bit işaretli PCM, kanallar iç içe (frames x channels örnek). Bellek yalnız geri çağrı
  * süresince geçerlidir; oturumun ses iş parçacığında gelir. */
 typedef void (*cs_audio_cb)(const int16_t *pcm, int frames, int channels, int rate, void *user);
-
-/* cs_session_start gibi; ek olarak:
- *   video_fps: PS5'ten istenen kare hızı, 30 ya da 60 (başka değer 30 sayılır).
- *   audio:     NULL değilse oyun sesi açılır, Opus çözülüp PCM olarak verilir ("Yayın penceresi" için). NULL ise ses
- *              eskisi gibi kapalıdır. */
-CS_API cs_session *cs_session_start_ex(const char *host, const uint8_t regist_key[0x10], const uint8_t morning[0x10],
-                                       const uint8_t account_id[8], int max_fps, int video_fps,
-                                       cs_frame_cb frame, cs_audio_cb audio, cs_event_cb event, cs_log_cb log,
-                                       void *user);
 
 #define CS_QUALITY_STANDARD 0
 #define CS_QUALITY_HIGH 1
 /* Yüksek kalitede istenen bit hızı (kbps); standart 1080p 15000'dir. */
 #define CS_HIGH_BITRATE_KBPS 30000
 
-/* cs_session_start_ex gibi; quality CS_QUALITY_HIGH ise HEVC ve CS_HIGH_BITRATE_KBPS istenir (HEVC çözücü yoksa
- * H.264, yüksek bit hızıyla). */
+/* cs_session_start_ex gibi; ek olarak (fork):
+ *   video_fps: PS5'ten istenen kare hızı, 30 ya da 60 (başka değer 30 sayılır).
+ *   quality:   CS_QUALITY_HIGH ise HEVC ve CS_HIGH_BITRATE_KBPS (720p'de yüksek bit hızı istenmez; HEVC çözücü yoksa H.264).
+ *   audio:     NULL değilse oyun sesi açılır, Opus çözülüp PCM olarak verilir ("Yayın penceresi" için). */
 CS_API cs_session *cs_session_start_ex2(const char *host, const uint8_t regist_key[0x10], const uint8_t morning[0x10],
-                                        const uint8_t account_id[8], int max_fps, int video_fps, int quality,
-                                        cs_frame_cb frame, cs_audio_cb audio, cs_event_cb event, cs_log_cb log,
-                                        void *user);
+                                        const uint8_t account_id[8], int max_fps, int video_fps, int video_height,
+                                        int quality, cs_frame_cb frame, cs_audio_cb audio, cs_event_cb event,
+                                        cs_log_cb log, void *user);
 
 /* Sol çubuğu yatayda left_x konumuna getirir (0: ortada), diğer tuşlar boşta. PS5 Remote Play bağlantısında hiç kol
  * girdisi olmayınca bağlantı 20 dakikada bir kapanıyordu; ara sıra oyunun ölü bölgesinde kalan küçük bir dürtme

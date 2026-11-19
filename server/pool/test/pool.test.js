@@ -17,6 +17,11 @@ test("Türkçe arayüz, bozulmuş Türkçe, sistem yazısı ve yarım okumalar a
     "Please do not quit or turn off your console while the Rockstar cloud save icon is showing.",
     "GO to the", "Take out the trash and the", "it Auto V's Story Mode.", "FREE MONTH OF GTA+", "PHOTO MODE SELECT",
     "Main menu", "Hold on", "HP 100/100 MP 25/50", "Okay.",
+    // Kumanda ipuçları: tuş simgesi okunmamış ya da bozulmuş (GTA 6, RDR 2, Mafia havuz satırları).
+    "Press to threaten the teller", "Use to select your binoculars", "Hold to open your loadout", "Press @ to open the map",
+    "Press D to greet Joey", "Hold I LI to open your loadout", "Press RE to go back to your weapons and equipment",
+    "Press (9 0 to stop focusing", "Release 2 and R2 to breathe out", "Hold + to look at Joey", "Press [RB] to take cover",
+    "Use ⓁⓇ to steer the boat", "PRESS to VAULT over obstacles", "Press to heal.", "0 0 00 0 Press • to open the index",
   ]) assert.equal(accepts(line), false, line);
 });
 
@@ -25,6 +30,9 @@ test("İngilizce oyun satırları alınır", () => {
     "Herr Müller will see you now.", "This place was designed in a hurry.", "Tell Sam I signed the deal.",
     "I lie to you, you lie to me.", "DON TORRISI WANTS YOU!", "Get down!", "Who's there?", "Line number 7 here",
     "We need to move before the cops show up", "Give me 50 dollars, Enzo.",
+    "Press the button, Jason!", "Hold on to something.", "HOLD ON TO IT, LUCIA.", "Use it to open the door.",
+    "Hold up, Floyd. I'm coming down there.", "Use a rope to climb down.", "Hold to your course, men.",
+    "Jason: Press to the left", "Use me to get inside.", "Press on, we're almost there.",
   ]) assert.equal(accepts(line), true, line);
 });
 
@@ -284,6 +292,9 @@ test("oyun kimliği ve adı doğrulanır", () => {
   assert.equal(gameName("x".repeat(300)).length, 120);
   assert.equal(gameName(""), null);
   assert.equal(gameName(42), null);
+  // Ek paketten tanınan oyun asıl adıyla toplanır.
+  assert.equal(gameName("Marvel's Spider-Man 2 (ek satırlar)"), "Marvel's Spider-Man 2");
+  assert.equal(gameName(" (ek satırlar)"), null);
 });
 
 test("satırın oyunu havuza giren (ikinci) kurulumdan alınır; ilk bilinen oyun kalır", async () => {

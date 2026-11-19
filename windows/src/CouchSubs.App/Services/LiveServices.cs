@@ -89,7 +89,18 @@ public sealed class LiveServices : IAppServices
         if (tv.Brand == TvBrand.Samsung)
         {
             using var samsung = new SamsungClient(tv, key);
-            var token = await samsung.ConnectAsync();
+            string token;
+            try { token = await samsung.ConnectAsync(); }
+            catch (Exception error) when (error is not SsapException { Reason: "rejected" })
+            {
+                if (await SamsungDiscovery.DeveloperInfoAsync(tv.Host) is null) throw;
+                // TV uzaktan kumanda iznini sormadı ya da izin 60 saniyede gelmedi (The Frame'de Sanat Modu, izin kutusu
+                // kapalı TV'ler); TV ağda yanıt veriyor. Eşleşme durmaz: TV uygulaması geliştirici bağlantısıyla (sdb)
+                // kurulup açılır. Önceden "Bağlan" bir dakika bekleyip başa dönüyor, kurulum adımına hiç geçilmiyordu.
+                new TvInstall.InstallLog(TvInstallLogPath).Write(
+                    $"Samsung uzaktan kumanda izni alınamadı ({error.GetType().Name}: {error.Message}); TV 8001'de yanıt verdi, eşleşme izinsiz sürdü.");
+                return new TvPairing(key ?? "", true);
+            }
             try { await samsung.LaunchAsync(SamsungClient.AppId, new Dictionary<string, string> { ["server"] = server }); }
             catch (Exception) { /* TV uygulaması bilgisayarı kendisi de bulabilir */ }
             return new TvPairing(token, true);
@@ -143,7 +154,10 @@ public sealed class LiveServices : IAppServices
                     throw;
                 }
             }, () => SamsungDiscovery.SearchAsync(), onMoved);
-            return new Keeper(new TvKeeper(samsungLocator.ConnectAsync, SamsungClient.AppId, parameters, appConnected));
+            // Önce geliştirici bağlantısı (sdb) denenir; uzaktan kumanda bağlantısıyla açma bazı TV'lerde sessizce çalışmıyordu.
+            var host = tv.Host;
+            return new Keeper(new TvKeeper(() => Task.FromResult<ITvControl>(new SamsungLauncher(() => OpenSamsungAppAsync(host), samsungLocator.ConnectAsync)),
+                SamsungClient.AppId, parameters, appConnected));
         }
         var locator = new TvLocator(tv, async target =>
         {
@@ -233,19 +247,59 @@ public sealed class LiveServices : IAppServices
 
     public Task<bool> IsSamsungDevModeOnAsync(string host) => SamsungTvInstaller.IsDevModeOnAsync(host);
 
+    /// <summary>
+    /// Kurulu TV uygulamasını geliştirici bağlantısıyla (sdb) açar. Geliştirici modu kapalıysa, Host PC IP başka
+    /// bilgisayarınsa ya da TV açmadıysa false döner.
+    /// </summary>
+    private static async Task<bool> OpenSamsungAppAsync(string host)
+    {
+        if (string.IsNullOrEmpty(host) || !await SamsungTvInstaller.IsDevModeOnAsync(host)) return false;
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        var log = new TvInstall.InstallLog(TvInstallLogPath);
+        var installer = new SamsungTvInstaller(host, DataDirectory("samsung"), new SamsungCertificates(http, log)) { Log = log };
+        try
+        {
+            return await Task.Run(() => installer.OpenAsync());
+        }
+        catch (Exception error)
+        {
+            log.Write($"Uygulama açılamadı: {error.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Bekçinin Samsung'da TV uygulamasını açma yolu: önce geliştirici bağlantısı (sdb), olmazsa uzaktan kumanda
+    /// bağlantısı (8002, ilk bağlantıda TV izin sorar). Samsung önplandaki uygulamayı söylemez; bekçi yalnız açar.
+    /// </summary>
+    private sealed class SamsungLauncher(Func<Task<bool>> openWithSdb, Func<Task<ITvControl>> connectRemote) : ITvControl
+    {
+        public async Task LaunchAsync(string appId, IReadOnlyDictionary<string, string> parameters, CancellationToken cancellationToken = default)
+        {
+            if (await openWithSdb()) return;
+            using var remote = await connectRemote();
+            await remote.LaunchAsync(appId, parameters, cancellationToken);
+        }
+
+        public Task<string> ForegroundAppIdAsync(CancellationToken cancellationToken = default) => Task.FromResult("");
+
+        public void Dispose() { }
+    }
+
     public async Task<SamsungPreflight> CheckSamsungAsync(string host)
     {
         var info = await SamsungDiscovery.DeveloperInfoAsync(host);
         return new SamsungPreflight(info, AppController.LocalAddress(host));
     }
 
-    public async Task<(string Version, bool Installed)> InstallSamsungAppAsync(string host, BundledTvApp app, Action<TvInstallEvent> onEvent)
+    public async Task<(string Version, bool Installed)> InstallSamsungAppAsync(string host, BundledTvApp app, bool openIfInstalled, Action<TvInstallEvent> onEvent)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(1) };
         var log = new TvInstall.InstallLog(TvInstallLogPath);
         var installer = new SamsungTvInstaller(host, DataDirectory("samsung"), new SamsungCertificates(http, log))
         {
             Log = log,
+            OpenIfInstalled = openIfInstalled,
             Progress = step => onEvent(new TvInstallEvent(TvInstallEventKind.Progress, Step: step)),
             SignIn = token => SamsungLogin.SignInAsync(url => onEvent(new TvInstallEvent(TvInstallEventKind.SignIn, new Uri(url))),
                 TimeSpan.FromMinutes(10), token),

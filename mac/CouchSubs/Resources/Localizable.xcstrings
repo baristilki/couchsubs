@@ -1,6 +1,7 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "If the TV does not accept this address, try one of this computer's other addresses: %@": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"If the TV does not accept this address, try one of this computer's other addresses: %@"}},"tr":{"stringUnit":{"state":"translated","value":"TV bu adresi kabul etmezse bu bilgisayarın diğer adreslerinden birini deneyin: %@"}}}},
     "Reinstall the TV app": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Reinstall the TV app"}},"tr":{"stringUnit":{"state":"translated","value":"TV uygulamasını yeniden kur"}}}},
     "The TV's Host PC IP is %1$@, but this computer's address is %2$@. In the TV's Developer Mode window, set Host PC IP to %2$@ and restart the TV fully (hold the power button for about 2 seconds).": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"The TV's Host PC IP is %1$@, but this computer's address is %2$@. In the TV's Developer Mode window, set Host PC IP to %2$@ and restart the TV fully (hold the power button for about 2 seconds)."}},"tr":{"stringUnit":{"state":"translated","value":"TV'deki Host PC IP %1$@, bu bilgisayarın adresi %2$@. TV'de Geliştirici modu penceresinde Host PC IP'yi %2$@ yapıp TV'yi tam yeniden başlatın (güç tuşunu 2 sn basılı tutun)."}}}},
     "TV's IP address (on the TV under Settings › Network)": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"TV's IP address (on the TV under Settings › Network)"}},"tr":{"stringUnit":{"state":"translated","value":"TV'nin IP adresi (TV'de Ayarlar › Ağ'da yazar)"}}}},
@@ -21,6 +22,7 @@
     "Advanced recognition reads white subtitles on bright scenes (sky, snow, daylight) much better. It runs on your graphics card, or on the CPU when there is none, and uses more of it than the Windows recognition. The model is downloaded once (31 MB).": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Advanced recognition reads white subtitles on bright scenes (sky, snow, daylight) much better. It runs on your graphics card, or on the CPU when there is none, and uses more of it than the Windows recognition. The model is downloaded once (31 MB)."}},"tr":{"stringUnit":{"state":"translated","value":"Gelişmiş yazı tanıma, açık sahnelerdeki (gökyüzü, kar, gündüz) beyaz altyazıyı çok daha iyi okur. Ekran kartında, yoksa işlemcide çalışır ve Windows'un yazı tanımasından daha fazla kaynak kullanır. Model bir kez indirilir (31 MB)."}}}},
     "Downloading the model… %lld%%": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Downloading the model… %lld%%"}},"tr":{"stringUnit":{"state":"translated","value":"Model indiriliyor… %%%lld"}}}},
     "Extra instruction": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Extra instruction"}},"tr":{"stringUnit":{"state":"translated","value":"Ek talimat"}}}},
+    "Extra areas aren't read while the subtitle area is Full screen, because the whole screen is already read. They're read again when you pick another area.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Extra areas aren't read while the subtitle area is Full screen, because the whole screen is already read. They're read again when you pick another area."}},"tr":{"stringUnit":{"state":"translated","value":"Altyazı alanı Tam ekranken ek alanlar okunmaz, çünkü ekranın tamamı zaten okunuyor. Başka bir alan seçince yeniden okunur."}}}},
     "Example: Translate swear words without softening them.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Example: Translate swear words without softening them."}},"tr":{"stringUnit":{"state":"translated","value":"Örn: Küfürleri yumuşatmadan çevir."}}}},
     "Added to the end of the AI translator's instructions (up to 1000 characters). Leave it empty if you don't need it.": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Added to the end of the AI translator's instructions (up to 1000 characters). Leave it empty if you don't need it."}},"tr":{"stringUnit":{"state":"translated","value":"Yapay zekâ çevirmeninin talimatının sonuna eklenir (en çok 1000 karakter). Gerekmiyorsa boş bırakın."}}}},
     "Use": {"localizations":{"en":{"stringUnit":{"state":"translated","value":"Use"}},"tr":{"stringUnit":{"state":"translated","value":"Kullan"}}}},
@@ -106,7 +108,9 @@
     "Restore the old Xbox frame rate": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Restore the old Xbox frame rate"}}, "tr": {"stringUnit": {"state": "translated", "value": "Xbox kare hızlandırmasını eskiye döndür"}}}},
     "On: read an Xbox frame every 200 ms to use less CPU. Off (default): every 66 ms for faster subtitles.": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "On: read an Xbox frame every 200 ms to use less CPU. Off (default): every 66 ms for faster subtitles."}}, "tr": {"stringUnit": {"state": "translated", "value": "Açık: Xbox karesini 200 ms'de bir okuyarak CPU kullanımını azaltır. Kapalı (varsayılan): daha hızlı altyazı için 66 ms'de bir okur."}}}},
     "Play Xbox sound on this computer": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Play Xbox sound on this computer"}}, "tr": {"stringUnit": {"state": "translated", "value": "Xbox sesini bu bilgisayarda çal"}}}},
-    "Xbox Remote Play can silence the TV while a stream is active. When on, game sound plays on this computer.": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Xbox Remote Play can silence the TV while a stream is active. When on, game sound plays on this computer."}}, "tr": {"stringUnit": {"state": "translated", "value": "Xbox Uzaktan Oynatma sırasında TV'nin sesi kapanabilir. Açıkken oyun sesi bu bilgisayarda çalınır."}}}},
+    "While Xbox Remote Play is running, the Xbox mutes the TV and sends game sound only to this computer (an Xbox limitation). If you turn this off, the game has no sound. To hear it from the TV or speakers, set the sound output of this computer to them.": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "While Xbox Remote Play is running, the Xbox mutes the TV and sends game sound only to this computer (an Xbox limitation). If you turn this off, the game has no sound. To hear it from the TV or speakers, set the sound output of this computer to them."}}, "tr": {"stringUnit": {"state": "translated", "value": "Xbox Uzaktan Oynatma sürerken Xbox TV'nin sesini kapatır ve oyun sesini yalnız bu bilgisayara gönderir (Xbox kısıtı). Kapatırsanız oyunun sesi hiç gelmez. Sesi TV'den ya da hoparlörden duymak için bu bilgisayarın ses çıkışını onlara ayarlayın."}}}},
+    "Play Xbox sound on this device": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Play Xbox sound on this device"}}, "tr": {"stringUnit": {"state": "translated", "value": "Xbox sesini bu cihazda çal"}}}},
+    "While remote play is running, the Xbox mutes the TV and sends game sound only to this device (an Xbox limitation). If you turn this off, the game has no sound. To hear it from the TV or speakers, connect this phone to a Bluetooth speaker or headphones.": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "While remote play is running, the Xbox mutes the TV and sends game sound only to this device (an Xbox limitation). If you turn this off, the game has no sound. To hear it from the TV or speakers, connect this phone to a Bluetooth speaker or headphones."}}, "tr": {"stringUnit": {"state": "translated", "value": "Xbox, uzaktan oynatma sürerken TV'nin sesini kapatır ve oyun sesini yalnız bu cihaza gönderir (Xbox kısıtı). Kapatırsanız oyunun sesi hiç gelmez. TV'den ya da hoparlörden duymak için telefonu Bluetooth ile hoparlöre ya da kulaklığa bağlayın."}}}},
     "CPU works on every computer. GPU needs a compatible NVIDIA card; the first time you choose it, CouchSubs downloads about 565 MB of CUDA files from NVIDIA (about 790 MB on disk). If unavailable, CouchSubs uses CPU.": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "CPU works on every computer. GPU needs a compatible NVIDIA card; the first time you choose it, CouchSubs downloads about 565 MB of CUDA files from NVIDIA (about 790 MB on disk). If unavailable, CouchSubs uses CPU."}}, "tr": {"stringUnit": {"state": "translated", "value": "CPU her bilgisayarda çalışır. GPU için uyumlu bir NVIDIA kartı gerekir; ilk seçimde NVIDIA'dan yaklaşık 565 MB CUDA dosyası indirilir (diskte yaklaşık 790 MB). Kullanılamazsa CPU'ya geçilir."}}}},
     "GPU could not be used; free translation is running on CPU.": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "GPU could not be used; free translation is running on CPU."}}, "tr": {"stringUnit": {"state": "translated", "value": "GPU kullanılamadı; ücretsiz çeviri CPU'da çalışıyor."}}}},
     "Your console": {
@@ -3741,6 +3745,22 @@
         }
       }
     },
+    "To hide the \"Remote Play connected\" message on the screen: on the PS5, go to Settings › System › Remote Play and turn on Hide Remote Play Connection Status Pop-Up. Do it for both your main account and the second account.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To hide the \"Remote Play connected\" message on the screen: on the PS5, go to Settings › System › Remote Play and turn on Hide Remote Play Connection Status Pop-Up. Do it for both your main account and the second account."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ekrandaki \"Uzaktan Oynama bağlandı\" yazısını gizlemek için: PS5'te Ayarlar › Sistem › Uzaktan Oynama'ya gidip Uzaktan Oynama Bağlantı Durumu Açılır Penceresini Gizle'yi açın. Bunu hem ana hesabınızda hem ikinci hesapta yapın."
+          }
+        }
+      }
+    },
     "Still as the new user, go to Settings › System › Remote Play and turn on Enable Remote Play.": {
       "localizations": {
         "en": {
@@ -3752,7 +3772,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hâlâ yeni kullanıcıdayken Ayarlar › Sistem › Uzaktan Oynatma'ya gidip Uzaktan Oynatmayı Etkinleştir'i açın."
+            "value": "Hâlâ yeni kullanıcıdayken Ayarlar › Sistem › Uzaktan Oynama'ya gidip Uzaktan Oynama'yı Etkinleştir'i açın."
           }
         }
       }
@@ -7965,18 +7985,34 @@
         }
       }
     },
-    "Can't reach the PS5. Reconnecting…": {
+    "Lost the connection to the PS5. Reconnecting… If this keeps happening, connect the PS5 to the router with a cable.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Can't reach the PS5. Reconnecting…"
+            "value": "Lost the connection to the PS5. Reconnecting… If this keeps happening, connect the PS5 to the router with a cable."
           }
         },
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "PS5'e ulaşılamıyor. Yeniden bağlanılıyor…"
+            "value": "PS5 ile bağlantı koptu, yeniden bağlanılıyor… Sık oluyorsa PS5'i modeme kabloyla bağlayın."
+          }
+        }
+      }
+    },
+    "Remote Play is turned off on the PS5 (code %@). On the PS5, go to Settings › System › Remote Play and turn on Enable Remote Play.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remote Play is turned off on the PS5 (code %@). On the PS5, go to Settings › System › Remote Play and turn on Enable Remote Play."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PS5'te Uzaktan Oynama kapalı (kod %@). PS5'te Ayarlar › Sistem › Uzaktan Oynama'ya gidip Uzaktan Oynama'yı Etkinleştir'i açın."
           }
         }
       }

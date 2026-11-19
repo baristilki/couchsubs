@@ -430,6 +430,9 @@
                                           Checked="OnExtraLive" Unchecked="OnExtraLive" />
                                 <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,0"
                                            Text="{t:T 'While translating, this area is read about once a second. Its translation shows where the subtitles show, next to the original text, until the text changes.'}" />
+                                <!-- Tam ekranda sürekli okuma durur; metin kodda verilir (bkz. ShowExtraFullScreenHint). -->
+                                <TextBlock x:Name="ExtraFullScreenHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                           Visibility="Collapsed" />
                                 <WrapPanel Margin="0,10,0,0">
                                     <Button Content="{t:T 'Quest (top right)'}" Tag="Quest" Click="OnExtraPreset" Margin="0,0,8,0" />
                                     <Button Content="{t:T 'Notification (bottom left)'}" Tag="Notification" Click="OnExtraPreset" Margin="0,0,8,0" />
@@ -708,7 +711,7 @@
                             <CheckBox x:Name="XboxAudioOnComputer" Content="{t:T 'Play Xbox sound on this computer'}"
                                       Checked="OnXboxAudioOnComputer" Unchecked="OnXboxAudioOnComputer" />
                             <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,16"
-                                       Text="{t:T 'Xbox Remote Play can silence the TV while a stream is active. When on, game sound plays on this computer.'}" />
+                                       Text="{t:T 'While Xbox Remote Play is running, the Xbox mutes the TV and sends game sound only to this computer (an Xbox limitation). If you turn this off, the game has no sound. To hear it from the TV or speakers, set the sound output of this computer to them.'}" />
                             <CheckBox x:Name="XboxLegacyFrameRate" Content="{t:T 'Restore the old Xbox frame rate'}"
                                       Checked="OnXboxLegacyFrameRate" Unchecked="OnXboxLegacyFrameRate" />
                             <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,0"

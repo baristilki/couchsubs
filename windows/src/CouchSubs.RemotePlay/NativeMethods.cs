@@ -59,22 +59,20 @@ internal static unsafe partial class NativeMethods
     /// <param name="eventCallback">void (*)(int event, int quit_reason, const char *reason_text, void *user)</param>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    internal static partial nint cs_session_start(string host, byte* registKey, byte* morning, byte* accountId, int maxFps,
-                                                  nint frame, nint eventCallback, nint log, nint user);
+    /// <param name="videoHeight">1080 ya da 720 (bağlantı sık koparsa daha az bant genişliği).</param>
+    internal static partial nint cs_session_start_ex(string host, byte* registKey, byte* morning, byte* accountId, int maxFps,
+                                                     int videoHeight, nint frame, nint eventCallback, nint log, nint user);
 
-    /// <summary>cs_session_start + kare hızı (30/60) ve oyun sesi.</summary>
+    /// <summary>
+    /// Fork: cs_session_start_ex + kare hızı (30/60), oyun sesi ve görüntü kalitesi (<see cref="QualityHigh"/>: HEVC ve
+    /// yüksek bit hızı). Çözünürlük (1080/720) ana projedeki gibi.
+    /// </summary>
     /// <param name="audio">void (*)(const int16_t *pcm, int frames, int channels, int rate, void *user); 0: ses kapalı</param>
-    [LibraryImport(Library, EntryPoint = "cs_session_start_ex", StringMarshalling = StringMarshalling.Utf8)]
-    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    private static partial nint cs_session_start_ex(string host, byte* registKey, byte* morning, byte* accountId, int maxFps,
-                                                    int videoFps, nint frame, nint audio, nint eventCallback, nint log, nint user);
-
-    /// <summary>cs_session_start_ex + görüntü kalitesi (<see cref="QualityHigh"/>: HEVC ve yüksek bit hızı).</summary>
     [LibraryImport(Library, EntryPoint = "cs_session_start_ex2", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     private static partial nint cs_session_start_ex2(string host, byte* registKey, byte* morning, byte* accountId, int maxFps,
-                                                     int videoFps, int quality, nint frame, nint audio, nint eventCallback,
-                                                     nint log, nint user);
+                                                     int videoFps, int videoHeight, int quality, nint frame, nint audio,
+                                                     nint eventCallback, nint log, nint user);
 
     internal const int QualityStandard = 0;
     internal const int QualityHigh = 1;
@@ -102,42 +100,32 @@ internal static unsafe partial class NativeMethods
         }
     }
 
-    /// <summary>Eski DLL'de (ses ve 60 kare öncesi) cs_session_start_ex yoktur; o zaman ses ve 60 kare olmadan açılır.</summary>
-    private static bool? hasStartEx;
     private static bool? hasStartEx2;
 
+    /// <summary>
+    /// Oturumu açar. Yerel kitaplıkta cs_session_start_ex2 yoksa (ana projenin DLL'i) ana projenin cs_session_start_ex'i
+    /// kullanılır: 30 kare, ses yok, standart kalite.
+    /// </summary>
     internal static nint SessionStart(string host, byte* registKey, byte* morning, byte* accountId, int maxFps, int videoFps,
-                                      nint frame, nint audio, nint eventCallback, nint log, nint user, int quality = QualityStandard)
+                                      int videoHeight, nint frame, nint audio, nint eventCallback, nint log, nint user,
+                                      int quality = QualityStandard)
     {
-        if (hasStartEx2 != false && quality != QualityStandard)
+        if (hasStartEx2 != false)
         {
             try
             {
-                var session = cs_session_start_ex2(host, registKey, morning, accountId, maxFps, videoFps, quality, frame, audio, eventCallback, log, user);
+                var session = cs_session_start_ex2(host, registKey, morning, accountId, maxFps, videoFps, videoHeight, quality,
+                                                   frame, audio, eventCallback, log, user);
                 hasStartEx2 = true;
                 return session;
             }
             catch (EntryPointNotFoundException)
             {
                 hasStartEx2 = false;
-                RemotePlayLog.Note("yerel kitaplık eski: yüksek görüntü kalitesi yok, standart açılıyor");
+                RemotePlayLog.Note("yerel kitaplık eski: oyun sesi, 60 kare ve yüksek kalite yok");
             }
         }
-        if (hasStartEx != false && (videoFps != 30 || audio != 0))
-        {
-            try
-            {
-                var session = cs_session_start_ex(host, registKey, morning, accountId, maxFps, videoFps, frame, audio, eventCallback, log, user);
-                hasStartEx = true;
-                return session;
-            }
-            catch (EntryPointNotFoundException)
-            {
-                hasStartEx = false;
-                RemotePlayLog.Note("yerel kitaplık eski: oyun sesi ve 60 kare yok, 30 kare sessiz açılıyor");
-            }
-        }
-        return cs_session_start(host, registKey, morning, accountId, maxFps, frame, eventCallback, log, user);
+        return cs_session_start_ex(host, registKey, morning, accountId, maxFps, videoHeight, frame, eventCallback, log, user);
     }
 
     [LibraryImport(Library)]

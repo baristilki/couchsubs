@@ -196,8 +196,9 @@ public enum GameCatalog {
         return Array((first + found.filter { !GameName.key($0).hasPrefix(wanted) }).prefix(limit))
     }
 
-    /// Paket listesinden oyun adları (ortak havuz paketi bir oyun değildir).
+    /// Paket listesinden oyun adları (ortak havuz paketi bir oyun değildir; asıl paketi olan oyunun "(ek satırlar)"
+    /// paketi de ayrı oyun değildir, server/pool/src/autopack.js packTitle).
     public static func packGames(_ packs: [GamePackLibrary.Info]) -> [String] {
-        packs.filter { $0.id != GameSense.generalPack }.map(\.title)
+        packs.filter { $0.id != GameSense.generalPack && !$0.title.hasSuffix("(ek satırlar)") }.map(\.title)
     }
 }

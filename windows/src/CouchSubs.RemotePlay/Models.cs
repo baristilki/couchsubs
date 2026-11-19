@@ -45,7 +45,8 @@ public enum DisconnectKind
     /// <summary>Kayıtlı adreste PS5 aramaya yanıt vermedi ve oturum da açılamadı (ayrıntı: adres).</summary>
     NotFound,
     Other,
-    /// <summary>PS5 oturum isteğinde kaydı kabul etmedi (0x80108b09 kayıt geçersiz, 0x80108b02 hesap tanınmıyor).
+    /// <summary>PS5 oturum isteğinde kaydı kabul etmedi (0x80108b09 kayıt geçersiz, 0x80108b02 hesap tanınmıyor, 0x80108b26
+    /// PS5 bu cihazın eşlemesini bulamadı).
     /// Yeniden denemek aynı yere çıkar; PS5 ikinci hesapla yeniden eşlenmelidir.</summary>
     RegistrationInvalid,
     /// <summary>PS5 Ayarlar'daki giriş şifresini kabul etmedi. Yeniden gönderilmez (yanlış şifreyle döngüye girilmez).</summary>
@@ -78,6 +79,15 @@ public static class LoginPasscode
 }
 
 public sealed record DisconnectReason(DisconnectKind Kind, string? Detail = null);
+
+/// <summary>PS5'in oturum isteğine verdiği, libchiaki'nin tanımadığı "RP-Application-Reason" kodları (Mac ve Android'de aynı).</summary>
+public static class ApplicationReasons
+{
+    /// <summary>PS5'te Uzaktan Oynatma kapalı (Ayarlar > Sistem > Uzaktan Oynatma > Uzaktan Oynatmayı Etkinleştir). GitHub #9'da
+    /// kullanıcı ayarı açınca düzeldi. <see cref="DisconnectKind.Rejected"/> ayrıntısında bu yazımla gelir; ayar açılınca
+    /// bağlanılsın diye yeniden denenir.</summary>
+    public const string RemotePlayDisabled = "0x80108b12";
+}
 
 public enum SessionPhase { Connecting, Streaming, Disconnected }
 

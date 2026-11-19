@@ -209,6 +209,8 @@ fun PairScreen(onBack: (() -> Unit)? = null, onSkip: (() -> Unit)? = null, onDon
             Text(stringResource(R.string.pair_code_note), style = Tokens.Type.caption, color = Tokens.Color.secondary)
         }
         problem?.let { NoteTile(stringResource(R.string.pair_failed, it)) }
+        // PS5 bağlıyken "Uzaktan Oynama bağlandı" yazısı kalıcıdır; bildirim ayarı değil, bu ayar gizler (GitHub #177).
+        Text(stringResource(R.string.pair_hide_status), style = Tokens.Type.caption, color = Tokens.Color.secondary)
         if (working) Text(stringResource(R.string.pair_working), style = Tokens.Type.body, color = Tokens.Color.secondary)
     }
 }

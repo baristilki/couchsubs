@@ -46,7 +46,7 @@ public sealed record SubtitleStyle(
     int FontSize = 46,
     int BottomPercent = 7,
     SubtitlePlacement Placement = SubtitlePlacement.Cover,
-    int Background = 72,
+    int Background = 90,
     bool Bold = false,
     SubtitleTextColor TextColor = SubtitleTextColor.White,
     TvDisplayMode DisplayMode = TvDisplayMode.InApp,
@@ -417,7 +417,7 @@ public sealed class SubtitleServer(int port = 8787, TimeSpan? pingInterval = nul
             var target = parts.Length > 1 ? parts[1] : "";
             var path = target.Split('?')[0];
 
-            if (method == "OPTIONS") await RespondAndClose(tcp, "204 No Content");
+            if (method == "OPTIONS") await RespondAndClose(tcp, "204 No Content", "", PreflightHeaders);
             else if (method == "GET" && path == "/events") await OpenStream(tcp, target.Contains("viewer=obs", StringComparison.Ordinal));
             else if (method == "GET" && path == "/obs") await RespondAndClose(tcp, ObsOverlay, "text/html; charset=utf-8");
             // TV uygulaması ağdaki bilgisayarı bu yanıtla tanır.
@@ -463,9 +463,17 @@ public sealed class SubtitleServer(int port = 8787, TimeSpan? pingInterval = nul
         tcp.Dispose();
     }
 
-    private static async Task RespondAndClose(TcpClient tcp, string status, string body = "")
+    /// <summary>
+    /// Ön istek (CORS preflight) yanıtı. Chromium'un yerel ağ erişimi denetimi (Private Network Access) yerel ağdaki
+    /// sunucudan <c>Access-Control-Allow-Private-Network</c> ister; yeni tarayıcılı TV'ler (Tizen 9.0 ve sonrası) bu
+    /// başlık olmadan bilgisayara bağlanmayabilir. Başlık eski TV'lerde yok sayılır.
+    /// </summary>
+    internal const string PreflightHeaders = "Access-Control-Allow-Methods: GET, OPTIONS\r\nAccess-Control-Allow-Headers: *\r\n" +
+                                             "Access-Control-Allow-Private-Network: true\r\nAccess-Control-Max-Age: 600\r\n";
+
+    private static async Task RespondAndClose(TcpClient tcp, string status, string body = "", string extraHeaders = "")
     {
-        var head = $"HTTP/1.1 {status}\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n{body}";
+        var head = $"HTTP/1.1 {status}\r\nAccess-Control-Allow-Origin: *\r\n{extraHeaders}Content-Length: {body.Length}\r\nConnection: close\r\n\r\n{body}";
         await tcp.GetStream().WriteAsync(Encoding.ASCII.GetBytes(head));
         tcp.Dispose();
     }

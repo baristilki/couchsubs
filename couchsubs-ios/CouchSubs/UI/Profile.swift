@@ -81,7 +81,7 @@ struct ProfileScreen: View {
                 // Yalnız Xbox: uzaktan oynatmada Xbox sesi istemciye verip TV'yi susturabilir (PS5'te ses TV'de kalır).
                 if model.isXbox {
                     toggleRow("Play Xbox sound on this device",
-                              "Xbox remote play sends the sound to this device; if you turn this off, the game may stay silent.",
+                              "While remote play is running, the Xbox mutes the TV and sends game sound only to this device (an Xbox limitation). If you turn this off, the game has no sound. To hear it from the TV or speakers, connect this phone to a Bluetooth speaker or headphones.",
                               isOn: $model.settings.xboxAudioOnDevice)
                     RowDivider()
                 }

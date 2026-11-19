@@ -16,6 +16,10 @@ const ROMAN = { ii: "2", iii: "3", iv: "4", v: "5", vi: "6", vii: "7", viii: "8"
   xiii: "13", xiv: "14", xv: "15", xvi: "16" };
 const MAX = 80;
 
+/** Asıl paketi olan oyunun otomatik (havuz) paketinin adına eklenen ek (autopack.js packTitle). Paketten tanınan oyunun
+ *  adı uygulamalardan havuza bu ekle dönebilir; havuz adı kaydederken eki atar (index.js gameName). */
+export const EXTRA_SUFFIX = " (ek satırlar)";
+
 /** "Grand Theft Auto VI™" → "gta 6"; boşsa "". */
 export function gameKey(value) {
   if (typeof value !== "string") return "";

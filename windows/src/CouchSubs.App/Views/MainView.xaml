@@ -72,7 +72,16 @@
                                     <ColumnDefinition Width="8" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <Button Style="{StaticResource CompactButton}" Click="OnTest">
+                                <Button Click="OnTest">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource CompactButton}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding OpeningTvAppForTest}" Value="True">
+                                                    <Setter Property="IsEnabled" Value="False" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{x:Static c:Glyphs.Captions}" Style="{StaticResource GlyphText}" FontSize="14" Margin="0,0,8,0"
                                                    VerticalAlignment="Center" />
@@ -83,6 +92,10 @@
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding ShowsOnTv}" Value="True">
                                                             <Setter Property="Text" Value="{t:T 'Test on TV'}" />
+                                                        </DataTrigger>
+                                                        <!-- TV uygulaması bağlı değilse önce TV'de açılır, bağlanınca deneme altyazısı gider. -->
+                                                        <DataTrigger Binding="{Binding OpeningTvAppForTest}" Value="True">
+                                                            <Setter Property="Text" Value="{t:T 'Opening the app on the TV…'}" />
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>

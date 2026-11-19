@@ -89,6 +89,16 @@ try
             return 0;
         }
 
+        case "samsung-open":
+        {
+            // Bekçi kurulu TV uygulamasını geliştirici bağlantısıyla (sdb, was_execute) açar; "installed" açıldı mı.
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            var installer = new SamsungTvInstaller(Option("--host"), Option("--profiles"), new SamsungCertificates(http, log)) { Log = log };
+            var opened = await installer.OpenAsync(cancel.Token);
+            Emit("done", ("version", ""), ("installed", opened));
+            return 0;
+        }
+
         case "self-test":
             // Yayın derlemesinde XML imzasının AOT ile çalıştığını doğrular (scripts/build-tv-helper.sh).
             await SelfTestAsync();
@@ -96,7 +106,7 @@ try
             return 0;
 
         default:
-            Console.Error.WriteLine("kullanım: couchsubs-tv-helper android-scan | android-install --host IP --package APK --version V --key-dir DİZİN [--open] | samsung-install --host IP --package WGT --version V --profiles DİZİN [--log DOSYA] | self-test");
+            Console.Error.WriteLine("kullanım: couchsubs-tv-helper android-scan | android-install --host IP --package APK --version V --key-dir DİZİN [--open] | samsung-install --host IP --package WGT --version V --profiles DİZİN [--log DOSYA] | samsung-open --host IP --profiles DİZİN [--log DOSYA] | self-test");
             return 2;
     }
 }

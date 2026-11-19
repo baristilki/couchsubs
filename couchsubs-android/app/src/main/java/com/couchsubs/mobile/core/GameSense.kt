@@ -189,7 +189,7 @@ object GameCatalog {
         return (first + rest).take(limit)
     }
 
-    /** Paket listesinden oyun adları (ortak havuz paketi bir oyun değildir). */
+    /** Paket listesinden oyun adları (ortak havuz paketi ve asıl paketi olan oyunun "(ek satırlar)" paketi oyun değildir). */
     fun packGames(packs: List<GamePackLibrary.Info>): List<String> =
-        packs.filter { it.id != GameSense.GENERAL_PACK }.map { it.title }
+        packs.filter { it.id != GameSense.GENERAL_PACK && !it.title.endsWith("(ek satırlar)") }.map { it.title }
 }

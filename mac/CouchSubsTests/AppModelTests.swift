@@ -535,6 +535,22 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(store.load(String.self, for: StoreKey.tvKey), "tv-key")
     }
 
+    /// "TV'de test et": TV uygulaması bağlı değilse önce TV'de açılır (Samsung 65S95F'de TV'ye hiçbir şey gelmiyordu);
+    /// çeviri sürmüyorsa geçici bekçi bekleme bitince kapanır.
+    func testTestOnTVOpensTheTVAppWhenItIsNotConnected() async {
+        let services = FakeServices()
+        let store = MemoryStore()
+        store.save(LGTV(name: "Samsung", host: "127.0.0.1", brand: .samsung), for: StoreKey.tv)
+        store.save("tv-key", for: StoreKey.tvKey)
+        let model = AppModel(services: services, store: store, defaults: .isolated())
+        model.settings.output = .tv
+        model.testTVWait = .milliseconds(300)
+        await model.testSubtitle()
+        XCTAssertEqual(services.keepers.count, 1)
+        XCTAssertFalse(services.keepers[0].running)
+        XCTAssertFalse(model.openingTVAppForTest)
+    }
+
     /// #40: Samsung jetonla gelen bağlantıda jeton göndermeyince saklı jeton silinmemeli (yoksa TV her seferinde izin sorar).
     func testPairingWithoutNewTokenKeepsSavedToken() async throws {
         let services = FakeServices()
@@ -842,7 +858,12 @@ final class AppModelRunTests: XCTestCase {
         XCTAssertEqual(AppModel.statusText(.disconnected(.consoleAsleep), running: true), String(localized: "Turn on your PS5"))
         XCTAssertEqual(AppModel.statusText(.disconnected(.inUse), running: true), String(localized: "Remote Play is in use on another device"))
         XCTAssertEqual(AppModel.statusText(.disconnected(.refused), running: true), String(localized: "The PS5 refused the connection. Set up the PS5 again."))
-        XCTAssertEqual(AppModel.statusText(.disconnected(.network), running: true), String(localized: "Can't reach the PS5. Reconnecting…"))
+        XCTAssertEqual(AppModel.statusText(.disconnected(.network), running: true),
+                       String(localized: "Lost the connection to the PS5. Reconnecting… If this keeps happening, connect the PS5 to the router with a cable."))
+        // 0x80108b12: PS5'te Uzaktan Oynatma kapalı (GitHub #9); genel "başka Remote Play açık olabilir" metni yanıltıyordu.
+        let disabled = AppModel.statusText(.disconnected(.rejected(DisconnectReason.remotePlayDisabled)), running: true)
+        XCTAssertTrue(disabled.contains("0x80108b12"))
+        XCTAssertNotEqual(disabled, AppModel.statusText(.disconnected(.rejected(0x80108bff)), running: true))
         XCTAssertEqual(AppModel.statusText(.disconnected(.registrationInvalid), running: true),
                        String(localized: "The PS5 didn't accept this pairing. Pair the PS5 again with the second account in Settings."))
         // PS5 oturum isteğini reddetti: kod metinde, libchiaki'nin "Unknown Session Request Error"u değil (GitHub #33, #202).

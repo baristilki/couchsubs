@@ -95,6 +95,29 @@ struct BundledTVApp: Equatable {
     }
 }
 
+/// Bekçinin Samsung'da TV uygulamasını açma yolu: önce geliştirici bağlantısı (sdb), olmazsa uzaktan kumanda bağlantısı
+/// (8002, ilk bağlantıda TV izin sorar). Samsung önplandaki uygulamayı söylemez; bekçi yalnız açar.
+final class SamsungLauncher: TVControlling, @unchecked Sendable {
+    private let openWithSdb: () async -> Bool
+    private let connectRemote: () async throws -> TVControlling
+
+    init(openWithSdb: @escaping () async -> Bool, connectRemote: @escaping () async throws -> TVControlling) {
+        self.openWithSdb = openWithSdb
+        self.connectRemote = connectRemote
+    }
+
+    func launch(appId: String, params: [String: Any]) async throws {
+        if await openWithSdb() { return }
+        let remote = try await connectRemote()
+        defer { remote.close() }
+        try await remote.launch(appId: appId, params: params)
+    }
+
+    func foregroundAppId() async throws -> String { "" }
+
+    func close() {}
+}
+
 /// Denetlenemeyen TV'ler için: TV uygulaması kendisi bağlanır.
 final class IdleKeeper: KeeperControlling {
     func start(interval: Duration) {}
@@ -177,7 +200,18 @@ final class LiveServices: AppServices {
         case .samsung:
             let client = SamsungClient(tv: tv, token: key)
             defer { client.close() }
-            let token = try await client.connect()
+            let token: String
+            do {
+                token = try await client.connect()
+            } catch {
+                // TV uzaktan kumanda iznini sormadı ya da izin 60 saniyede gelmedi (The Frame'de Sanat Modu, izin kutusu
+                // kapalı TV'ler) ama ağda yanıt veriyor: eşleşme durmaz, TV uygulaması geliştirici bağlantısıyla kurulup
+                // açılır. Önceden "Bağlan" bir dakika bekleyip başa dönüyordu. Açıkça reddedildiyse hata gösterilir.
+                if (error as? SamsungClient.SamsungError) == .rejected { throw error }
+                guard await SamsungDiscovery.developerInfo(host: tv.host) != nil else { throw error }
+                TVInstallLog.write("Samsung uzaktan kumanda izni alınamadı (\(error)); TV 8001'de yanıt verdi, eşleşme izinsiz sürdü.")
+                return TVPairing(key: key ?? "", launched: true)
+            }
             try? await client.launch(appId: AppIdentity.samsungAppId, params: ["server": server])
             return TVPairing(key: token, launched: true)
         case .lg:
@@ -212,8 +246,12 @@ final class LiveServices: AppServices {
                 }
                 return client
             }, search: { await SamsungDiscovery.search() }, onMoved: onMoved)
-            return TVKeeper(connect: { try await locator.connect() }, appId: AppIdentity.samsungAppId, params: params,
-                            appConnected: appConnected)
+            // Önce geliştirici bağlantısı (sdb) denenir: uzaktan kumanda bağlantısıyla açma Tizen 9.0'da (2025 Neo QLED,
+            // OLED) sessizce çalışmıyor, arka plana düşen TV uygulaması geri gelmiyordu (Windows'ta #412).
+            let host = tv.host
+            return TVKeeper(connect: { SamsungLauncher(openWithSdb: { await Self.openSamsungApp(host: host) },
+                                                       connectRemote: { try await locator.connect() }) },
+                            appId: AppIdentity.samsungAppId, params: params, appConnected: appConnected)
         case .lg:
             break
         }
@@ -288,6 +326,16 @@ final class LiveServices: AppServices {
                                     "--log", TVInstallLog.file.path], onEvent: onEvent)
         let version = result.version.flatMap { $0.isEmpty ? nil : $0 } ?? app.version
         return (version, result.installed)
+    }
+
+    /// Kurulu TV uygulamasını geliştirici bağlantısıyla (sdb, `was_execute`) açar. Geliştirici modu kapalıysa, Host PC IP
+    /// başka bilgisayarınsa ya da TV açmadıysa false döner.
+    static func openSamsungApp(host: String) async -> Bool {
+        guard !host.isEmpty, await isPortOpen(host: host, port: 26101) else { return false }
+        let result = try? await TVHelper.run(["samsung-open", "--host", host,
+                                              "--profiles", TVHelper.dataDirectory.appendingPathComponent("samsung").path,
+                                              "--log", TVInstallLog.file.path])
+        return result?.installed == true
     }
 
     func isAndroidDebugOn(host: String) async -> Bool { await Self.isPortOpen(host: host, port: 5555) }
@@ -1212,6 +1260,13 @@ final class AppModel: ObservableObject {
         Self.localAddress(near: tv?.host.isEmpty == false ? tv!.host : nil)
     }
 
+    /// Host PC IP için gösterilenin dışındaki ev ağı adresleri (Wi-Fi ve Ethernet ikisi de bağlıysa ya da birden çok ağ
+    /// varsa). TV gösterilen adresi kabul etmezse bunlar denenir.
+    var otherComputerAddresses: [String] {
+        let chosen = computerAddress
+        return NetworkAddress.homeAddresses().filter { $0 != chosen }
+    }
+
     /// Key Server'dan anahtarı alır (TV ekranındaki parolayla) ve uygulamayı kurar.
     func installTVApp(passphrase: String) async {
         guard let tv, let bundled = services.bundledTVAppVersion else { return }
@@ -1275,7 +1330,44 @@ final class AppModel: ObservableObject {
     /// Ana ekrandaki "TV'de test et": sunucu henüz açık değilse açılır, deneme altyazısı gönderilir.
     func testSubtitle() async {
         try? await startServer()
+        // TV uygulaması bağlı değilse deneme altyazısı kimseye gitmiyordu: bekçi yalnız çeviri sürerken çalışır, TV
+        // uygulaması kapalıysa ya da bilgisayarı arıyorsa "TV'de test et"e TV'de hiçbir şey çıkmıyordu (Samsung 65S95F).
+        // Önce TV uygulaması açılır (Samsung'da geliştirici bağlantısıyla) ve bağlanması beklenir.
+        if settings.output.showsOnTV, hasTV, let tv, tv.brand != .androidTV, server.connectedClients == 0 {
+            await openTVAppForTest(tv)
+        }
         sendTestSubtitle()
+    }
+
+    /// "TV'de test et"te TV uygulamasının açılıp bağlanması için en çok bu kadar beklenir.
+    var testTVWait: Duration = .seconds(20)
+    /// Deneme altyazısından önce TV uygulaması açılıp bağlanması bekleniyor (düğme bunu gösterir).
+    @Published private(set) var openingTVAppForTest = false
+
+    /// TV uygulamasını açar ve bağlanmasını bekler. Çeviri sürüyorsa bekçi hemen yeniden dener; sürmüyorsa geçici bir
+    /// bekçi kurulur, bekleme bitince kapanır.
+    private func openTVAppForTest(_ tv: LGTV) async {
+        var temporary: KeeperControlling?
+        if let keeper {
+            keeper.reconnect()
+        } else {
+            let server = self.server
+            let made = services.makeKeeper(tv: tv, key: store.load(String.self, for: StoreKey.tvKey), params: ["server": serverAddress(for: tv)],
+                                           appConnected: { server.connectedClients > 0 }, onMoved: { [weak self] moved in
+                Task { @MainActor in self?.tvMoved(to: moved) }
+            }, onKey: { [weak self] key in
+                Task { @MainActor in self?.store.save(key, for: StoreKey.tvKey) }
+            })
+            made.start(interval: .seconds(5))
+            temporary = made
+        }
+        openingTVAppForTest = true
+        let deadline = ContinuousClock.now + testTVWait
+        while server.connectedClients == 0, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        temporary?.stop()
+        openingTVAppForTest = false
     }
 
     func sendTestSubtitle() {
@@ -1920,7 +2012,13 @@ final class AppModel: ObservableObject {
         // Eskiden ağ hatası, bulunamayan PS5 ve diğer nedenler hep yalnız "Yeniden bağlanılıyor…" idi.
         case .notFound(let host):
             return String(format: String(localized: "PS5 not found at %@. Make sure it is on and on the same network. Reconnecting…"), host)
-        case .network: return String(localized: "Can't reach the PS5. Reconnecting…")
+        // Kablosuz ağda akış sık kopuyordu (GitHub #388, #401): yeniden bağlanılır, kalıcı çözüm kablodur.
+        case .network:
+            return String(localized: "Lost the connection to the PS5. Reconnecting… If this keeps happening, connect the PS5 to the router with a cable.")
+        // 0x80108b12: PS5'te Uzaktan Oynatma kapalı (GitHub #9). Ayar açılınca yeniden denemede bağlanılır.
+        case .rejected(.some(DisconnectReason.remotePlayDisabled)):
+            return String(format: String(localized: "Remote Play is turned off on the PS5 (code %@). On the PS5, go to Settings › System › Remote Play and turn on Enable Remote Play."),
+                          String(format: "0x%08x", DisconnectReason.remotePlayDisabled))
         // Eskiden "Yeniden bağlanılıyor… (Unknown Session Request Error)" görünüyordu (GitHub #33, #202).
         case .rejected(let code?):
             return String(format: String(localized: "The PS5 rejected the connection (code %@). Another Remote Play app (PS Remote Play) may be open, or the PS5 may be in another session. Close PS Remote Play, restart the PS5, then try again."), String(format: "0x%08x", code))

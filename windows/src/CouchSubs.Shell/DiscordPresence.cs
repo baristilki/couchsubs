@@ -50,16 +50,14 @@ public static class DiscordPresence
 
     /// <summary>
     /// Discord uygulamasının Art Assets'inde kapak ("banner") varsa büyük görsel, logo ("logo") varsa köşedeki küçük
-    /// görseldir; üstüne gelince oyunun adı. Kapak görseli yoksa ayarlardaki görsel kullanılır (ayarlara "logo" yazılsa
-    /// da kapak varken büyük görsel kapaktır: logo büyük görselde iki kez görünüyordu). Hiçbiri yoksa Discord
-    /// uygulamanın ikonunu gösterir.
+    /// görseldir; üstüne gelince oyunun adı. Ayarlardaki görsel yazıldıysa büyük görsel odur (ör. "logo": büyük
+    /// görselde logo, köşede de logo; "banner": afiş). Hiçbiri yoksa Discord uygulamanın ikonunu gösterir.
     /// </summary>
     private static DiscordActivity LikeGame(string id, string image, DateTimeOffset since, IReadOnlyCollection<string> assets, string? appName)
     {
         string? Find(string[] names) => names.FirstOrDefault(name => assets.Contains(name, StringComparer.OrdinalIgnoreCase));
-        var cover = Find(CoverAssets) ?? (string.IsNullOrWhiteSpace(image) ? null : image.Trim());
+        var cover = string.IsNullOrWhiteSpace(image) ? Find(CoverAssets) : image.Trim();
         var logo = Find(LogoAssets);
-        if (string.Equals(cover, logo, StringComparison.OrdinalIgnoreCase)) logo = null;
         // Kapak yoksa logo büyük görsel olur (köşede ikinci kez gösterilmez).
         if (cover is null && logo is not null) (cover, logo) = (logo, null);
         return new DiscordActivity(id, null, null, cover, cover is null ? null : appName, since)

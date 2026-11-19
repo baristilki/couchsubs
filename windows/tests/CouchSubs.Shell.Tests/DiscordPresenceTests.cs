@@ -100,13 +100,15 @@ public class DiscordPresenceTests
         controller.Dispose();
     }
 
-    /// <summary>Ayarlardaki görsele "logo" yazılmış olsa da kapak varken büyük görsel kapaktır.</summary>
+    /// <summary>Ayarlardaki görsel büyük görseli seçer: "logo" yazılınca büyük görsel logo, boşsa afiş.</summary>
     [Fact]
-    public void LikeGamePrefersTheBannerOverTheImageSetting()
+    public void LikeGameImageSettingChoosesTheLargeImage()
     {
-        var activity = DiscordPresence.For(Id, "logo", null, true, true, DateTimeOffset.UnixEpoch, Tr, likeGame: true, assets: ["logo", "banner"], appName: "GTA")!;
-        Assert.Equal("banner", activity.LargeImage);
-        Assert.Equal("logo", activity.SmallImage);
+        var logo = DiscordPresence.For(Id, "logo", null, true, true, DateTimeOffset.UnixEpoch, Tr, likeGame: true, assets: ["logo", "banner"], appName: "GTA")!;
+        Assert.Equal("logo", logo.LargeImage);
+        Assert.Equal("logo", logo.SmallImage);
+        var banner = DiscordPresence.For(Id, "", null, true, true, DateTimeOffset.UnixEpoch, Tr, likeGame: true, assets: ["logo", "banner"], appName: "GTA")!;
+        Assert.Equal("banner", banner.LargeImage);
     }
 
     [Fact]

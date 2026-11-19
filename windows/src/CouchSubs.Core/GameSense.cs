@@ -76,6 +76,20 @@ public sealed class GameSense
         }
     }
 
+    /// <summary>
+    /// Oturum başında tahmin: bu PS5'te en son oynanan oyun. PS5'in yeni sistem yazılımları (14.x) keşif yanıtında
+    /// çalışan oyunu hiç bildirmiyor; satırlardan tanıma da en az <see cref="Threshold"/> paket satırı bekliyor. Tahmin
+    /// paket tanıması gibi davranır: başka bir paketin satırları çoğunluğa geçince ya da kullanıcı seçince değişir.
+    /// </summary>
+    public void Assume(RunningGame? game)
+    {
+        lock (gate)
+        {
+            if (game is null || pack is not null) return;
+            pack = game;
+        }
+    }
+
     /// <summary>PS5'in bildirdiği oyun (keşif yanıtı; bilinmiyorsa null).</summary>
     public void SetConsole(RunningGame? game)
     {

@@ -2125,14 +2125,19 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     {
         if (RunningGame.Named(name)?.Name is not { } clean) return;
         gameSense.Choose(clean);
-        if (GameConsoleName is { } consoleName)
-        {
-            var saved = store.Load<Dictionary<string, string>>(StoreKeys.LastGames) ?? new Dictionary<string, string>();
-            saved[consoleName] = clean;
-            store.Save(StoreKeys.LastGames, saved);
-        }
+        RememberGame(clean);
         AskingGame = false;
         PublishGame();
+    }
+
+    /// <summary>Bu PS5'te son oynanan oyun saklanır (seçilen ya da satırlardan tanınan); sonraki çeviri onunla başlar.</summary>
+    private void RememberGame(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name) || GameConsoleName is not { } consoleName) return;
+        var saved = store.Load<Dictionary<string, string>>(StoreKeys.LastGames) ?? new Dictionary<string, string>();
+        if (saved.GetValueOrDefault(consoleName) == name) return;
+        saved[consoleName] = name;
+        store.Save(StoreKeys.LastGames, saved);
     }
 
     /// <summary>"Değiştir": kart elle açılır.</summary>
@@ -2266,6 +2271,9 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     private void StartGameSense()
     {
         gameSense.StartSession();
+        // PS5 çalışan oyunu bildirmiyorsa (sistem yazılımı 14.x) son oynanan oyunla başlanır; satırlar başka oyunu
+        // gösterirse ya da kullanıcı değiştirirse o geçer.
+        gameSense.Assume(RunningGame.Named(LastPlayedGame));
         publishedGame = null;
         AskingGame = false;
         PublishGame();
@@ -2442,6 +2450,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
                 {
                     AskingGame = false;
                     PublishGame();
+                    RememberGame(gameSense.Current?.Name);
                 }
                 LastSource = source;
                 LastTranslation = translation;

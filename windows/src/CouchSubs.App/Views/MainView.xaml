@@ -153,94 +153,53 @@
                         </StackPanel>
                     </c:Card>
 
-                    <!-- Bağlantılar: PS5 ve TV tek kartta iki satır (ikon, ad, durum, nokta). TV satırı altyazı TV'ye gitmiyorsa yok. -->
-                    <c:Card Margin="0,12,0,0" Padding="14,10">
-                        <StackPanel>
-                            <DockPanel Margin="0,4">
-                                <Ellipse DockPanel.Dock="Right" Width="8" Height="8" VerticalAlignment="Top" Margin="8,7,2,0">
-                                    <Ellipse.Style>
-                                        <Style TargetType="Ellipse">
-                                            <Setter Property="Fill" Value="{DynamicResource textSecondaryBrush}" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Ps5Tone}" Value="Good">
-                                                    <Setter Property="Fill" Value="{DynamicResource successBrush}" />
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding Ps5Tone}" Value="Warning">
-                                                    <Setter Property="Fill" Value="{DynamicResource warningBrush}" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Ellipse.Style>
-                                </Ellipse>
-                                <Border Style="{StaticResource StatusIcon}">
-                                    <TextBlock Text="{x:Static c:Glyphs.Controller}" Style="{StaticResource GlyphText}" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                </Border>
-                                <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding ConsoleTitle}" Style="{StaticResource CaptionText}" />
-                                    <TextBlock Text="{Binding Ps5StatusText}" TextWrapping="Wrap" Margin="0,2,0,0">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
-                                                <Setter Property="Foreground" Value="{DynamicResource textSecondaryBrush}" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding Ps5Tone}" Value="Good">
-                                                        <Setter Property="Foreground" Value="{DynamicResource textPrimaryBrush}" />
-                                                        <Setter Property="FontWeight" Value="SemiBold" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </StackPanel>
-                            </DockPanel>
-
-                            <StackPanel Visibility="{Binding ShowsOnTv, Converter={StaticResource VisibleIf}}">
-                                <Border Style="{StaticResource InfoDivider}" Margin="0,6" />
-                                <DockPanel Margin="0,4">
-                                    <Ellipse DockPanel.Dock="Right" Width="8" Height="8" VerticalAlignment="Top" Margin="8,7,2,0">
-                                        <Ellipse.Style>
-                                            <Style TargetType="Ellipse">
-                                                <Setter Property="Fill" Value="{DynamicResource textSecondaryBrush}" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding TvTone}" Value="Good">
-                                                        <Setter Property="Fill" Value="{DynamicResource successBrush}" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding TvTone}" Value="Warning">
-                                                        <Setter Property="Fill" Value="{DynamicResource warningBrush}" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Ellipse.Style>
-                                    </Ellipse>
-                                    <Border Style="{StaticResource StatusIcon}">
-                                        <TextBlock Text="{x:Static c:Glyphs.Tv}" Style="{StaticResource GlyphText}" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                    </Border>
-                                    <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
-                                        <TextBlock Text="TV" Style="{StaticResource CaptionText}" />
-                                        <TextBlock Text="{Binding TvStatusText}" TextWrapping="Wrap" Margin="0,2,0,0">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
-                                                    <Setter Property="Foreground" Value="{DynamicResource textSecondaryBrush}" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding TvTone}" Value="Good">
-                                                            <Setter Property="Foreground" Value="{DynamicResource textPrimaryBrush}" />
-                                                            <Setter Property="FontWeight" Value="SemiBold" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                        <!-- TV yok: TV adımı; TV uygulaması bağlanmıyor (ör. TV'den kaldırıldı): yeniden kur. -->
-                                        <WrapPanel Margin="0,6,0,0">
-                                            <Button Content="{t:T 'Connect a TV'}" Style="{StaticResource CompactButton}" Padding="12,0" Margin="0,0,8,0" Click="OnConnectTv"
-                                                    Visibility="{Binding NeedsTv, Converter={StaticResource VisibleIf}}" />
-                                            <Button Content="{t:T 'Reinstall the TV app'}" Style="{StaticResource CompactButton}" Padding="12,0" Click="OnReinstallTvApp"
-                                                    Visibility="{Binding CanReinstallTvApp, Converter={StaticResource VisibleIf}}" />
-                                        </WrapPanel>
-                                    </StackPanel>
-                                </DockPanel>
+                    <!-- Durum karoları: PS5 ve TV yan yana (TV karosu altyazı TV'ye gitmiyorsa yok, PS5 iki sütunu kaplar). -->
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <c:Card>
+                            <c:Card.Style>
+                                <Style TargetType="c:Card" BasedOn="{StaticResource {x:Type c:Card}}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ShowsOnTv}" Value="False">
+                                            <Setter Property="Grid.ColumnSpan" Value="3" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Ps5Tone}" Value="Good">
+                                            <Setter Property="Kind" Value="Active" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </c:Card.Style>
+                            <c:StatusRow Title="{Binding ConsoleTitle}" Glyph="{x:Static c:Glyphs.Controller}" Value="{Binding Ps5StatusText}" Tone="{Binding Ps5Tone}" />
+                        </c:Card>
+                        <c:Card Grid.Column="2" Visibility="{Binding ShowsOnTv, Converter={StaticResource VisibleIf}}">
+                            <c:Card.Style>
+                                <Style TargetType="c:Card" BasedOn="{StaticResource {x:Type c:Card}}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding TvTone}" Value="Good">
+                                            <Setter Property="Kind" Value="Active" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </c:Card.Style>
+                            <StackPanel>
+                                <c:StatusRow Title="TV" Glyph="{x:Static c:Glyphs.Tv}" Value="{Binding TvStatusText}" Tone="{Binding TvTone}" />
+                                <!-- Kart dar: düğme kartın genişliğinde, yazı ortalı en çok iki satır. -->
+                                <Button Style="{StaticResource CompactButton}" Margin="0,12,0,0" Padding="8,4" Click="OnConnectTv"
+                                        Visibility="{Binding NeedsTv, Converter={StaticResource VisibleIf}}">
+                                    <TextBlock Text="{t:T 'Connect a TV'}" TextWrapping="Wrap" TextAlignment="Center" />
+                                </Button>
+                                <!-- TV uygulaması bağlanmıyor (ör. TV'den kaldırıldı): TV adımı açılır, uygulama yeniden kurulur ya da açılır. -->
+                                <Button Style="{StaticResource CompactButton}" Margin="0,12,0,0" Padding="8,4" Click="OnReinstallTvApp"
+                                        Visibility="{Binding CanReinstallTvApp, Converter={StaticResource VisibleIf}}">
+                                    <TextBlock Text="{t:T 'Reinstall the TV app'}" TextWrapping="Wrap" TextAlignment="Center" />
+                                </Button>
                             </StackPanel>
-                        </StackPanel>
-                    </c:Card>
+                        </c:Card>
+                    </Grid>
 
                     <!-- Altyazının yeri: TV, bilgisayar ekranı ya da ikisi -->
                     <local:SubtitleOutputCard x:Name="OutputCard" Margin="0,12,0,0" />

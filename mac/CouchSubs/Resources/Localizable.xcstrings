@@ -11762,6 +11762,38 @@
         }
       }
     },
+    "Adjust window": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adjust window"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pencereyi ayarla"
+          }
+        }
+      }
+    },
+    "Adjust": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adjust"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ayarla"
+          }
+        }
+      }
+    },
     "Play the game sound on this computer": {
       "localizations": {
         "en": {

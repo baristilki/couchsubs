@@ -134,4 +134,18 @@ public class GameSenseTests
         Assert.Equal("Grand Theft Auto VI", GameCatalog.Suggestions("gta 6", [], null)[0]);
         Assert.Empty(GameCatalog.Suggestions("zzzz", [], null));
     }
+
+    /// <summary>PS5 oyunu bildirmeyince son oynanan oyunla başlanır; başka paketin satırları çoğunluğa geçince o geçer.</summary>
+    [Fact]
+    public void AssumedGameShowsAtOnceAndYieldsToPackLines()
+    {
+        var sense = new GameSense();
+        sense.Assume(RunningGame.Named("Grand Theft Auto VI"));
+        Assert.Equal("Grand Theft Auto VI", sense.Current?.Name);
+        Assert.Equal(GameSense.GameSource.Pack, sense.Source);
+        Assert.False(sense.ShouldAsk(TimeSpan.FromMinutes(5), enabled: true));
+        for (var i = 0; i < GameSense.Threshold - 1; i++) sense.NoteLine("gta-v", "Grand Theft Auto V");
+        Assert.True(sense.NoteLine("gta-v", "Grand Theft Auto V"));
+        Assert.Equal("Grand Theft Auto V", sense.Current?.Name);
+    }
 }

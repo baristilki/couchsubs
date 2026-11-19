@@ -28,6 +28,8 @@
   <!-- Paket sunucusu (server/packs): `dotnet publish -p:CouchSubsPacksUrl=https://…` ile verilir; boşsa paket indirme kapalı (PackUpdater). -->
   <ItemGroup>
     <AssemblyMetadata Include="CouchSubsPacksUrl" Value="$(CouchSubsPacksUrl)" />
+    <!-- Güncelleme deposu ("sahip/ad"): `-p:CouchSubsRepository=$GITHUB_REPOSITORY`; boşsa ana proje (Updater). -->
+    <AssemblyMetadata Include="CouchSubsRepository" Value="$(CouchSubsRepository)" />
   </ItemGroup>
 
   <ItemGroup>

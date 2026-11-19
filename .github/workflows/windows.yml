@@ -189,7 +189,7 @@ jobs:
         run: |
           if [[ "$GITHUB_REF_TYPE" == tag ]]; then VERSION="${GITHUB_REF_NAME#v}"; else VERSION=0.1.0-dev; fi
           dotnet publish windows/src/CouchSubs.App -c Release -r win-x64 --self-contained -o publish/CouchSubs -p:Version="$VERSION" \
-            -p:CouchSubsPacksUrl=https://couchsubs-packs.enmera.workers.dev
+            -p:CouchSubsPacksUrl=https://couchsubs-packs.enmera.workers.dev -p:CouchSubsRepository="$GITHUB_REPOSITORY"
 
       # CTranslate2'nin resmi Windows wheel'i CPU ve NVIDIA CUDA kodunu içerir. Python uygulamayla birlikte
       # gelir; kullanıcının Python kurması gerekmez. CUDA bulunmazsa uygulama CPU'ya döner.

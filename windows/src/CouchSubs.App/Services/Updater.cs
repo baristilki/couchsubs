@@ -13,7 +13,20 @@ namespace CouchSubs.App.Services;
 /// </summary>
 internal sealed class Updater : IUpdater
 {
-    private const string Repository = "https://github.com/yorulmazsinan/couchsubs";
+    /// <summary>
+    /// Güncellemelerin geldiği GitHub deposu ("sahip/ad"): derlemedeki <c>CouchSubsRepository</c> bilgisi (GitHub Actions'ta
+    /// derleyen depo, <c>GITHUB_REPOSITORY</c>), yoksa ana proje. Fork'ta derlenen uygulama böylece kendi sürümlerinden
+    /// güncellenir; ana projenin sürümü onun üstüne kurulup fork'taki değişiklikleri silmez.
+    /// </summary>
+    internal static readonly string RepositoryPath = Configured() ?? "yorulmazsinan/couchsubs";
+    private static readonly string Repository = $"https://github.com/{RepositoryPath}";
+
+    private static string? Configured()
+    {
+        var value = typeof(Updater).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
+            .OfType<System.Reflection.AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "CouchSubsRepository")?.Value;
+        return value is { Length: > 0 } && System.Text.RegularExpressions.Regex.IsMatch(value, @"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$") ? value : null;
+    }
     private readonly UpdateManager manager = new(new GithubSource(Repository, null, false));
     private UpdateInfo? pending;
 
@@ -42,7 +55,7 @@ internal sealed class Updater : IUpdater
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
             http.DefaultRequestHeaders.UserAgent.ParseAdd("CouchSubs");
             using var document = System.Text.Json.JsonDocument.Parse(
-                await http.GetStringAsync("https://api.github.com/repos/yorulmazsinan/couchsubs/releases/latest"));
+                await http.GetStringAsync($"https://api.github.com/repos/{RepositoryPath}/releases/latest"));
             var tag = document.RootElement.GetProperty("tag_name").GetString()?.TrimStart('v');
             return tag is not null && AppVersion.IsNewer(tag, AppVersion.Current(typeof(Updater).Assembly)) ? tag : null;
         }

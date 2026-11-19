@@ -106,6 +106,20 @@ public class SubtitleStackTests
         Assert.Equal(["Birinci", "Bunun için vaktimiz yok, evlat."], Texts(stack, 0.8));
     }
 
+    /// <summary>
+    /// Tekrar tekrar beliren görev yazısı ("Leave when ready") düzeltilmiş okuma olarak gelince üstte kalan satır yeni
+    /// satırla aynıysa kalkar: aynı çeviri üstte küçük, altta büyük iki kez görünüyordu.
+    /// </summary>
+    [Fact]
+    public void RevisedLineDoesNotLeaveTheSameTextAbove()
+    {
+        var stack = new SubtitleStack();
+        stack.Show("Hazır olduğunda çık", 8000, false, 0);
+        stack.Show("Hazır olduğunda", 8000, false, 0.5);
+        stack.Show("Hazır olduğunda çık.", 8000, false, 0.8, replaces: true);
+        Assert.Equal(["Hazır olduğunda çık."], Texts(stack, 0.8));
+    }
+
     [Fact]
     public void ParagraphsNeverStack()
     {

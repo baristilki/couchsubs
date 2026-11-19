@@ -27,7 +27,7 @@ public sealed partial class StreamWindow
     private const double CoverPad = 0.012;
     /// <summary>Çevirinin en çok kaplayacağı genişlik (görüntüye oranla): cümle yan yana uzar, ama çok uzunsa ekranı
     /// boydan boya kaplamasın diye (oyun altyazıları gibi) alt satıra geçer.</summary>
-    private const double MaxLineWidth = 0.72;
+    private const double MaxLineWidth = 0.6;
 
     private readonly Border cover = new()
     {
@@ -72,10 +72,15 @@ public sealed partial class StreamWindow
     /// </summary>
     private readonly Image blurred = new() { Stretch = Stretch.Uniform, Visibility = Visibility.Collapsed, IsHitTestVisible = false };
 
+    /// <summary>Oyun görüntüsü zemininde ek alan çevirileri (telefon mesajı, görev paneli…) kendi alanlarının üstünde,
+    /// İngilizcesini örterek (TV'deki gibi); düz zeminde eskisi gibi üstte sıralı.</summary>
+    private readonly Grid regionLayer = new() { IsHitTestVisible = false };
+
     private void InitGameLayout()
     {
         RenderOptions.SetBitmapScalingMode(blurred, BitmapScalingMode.Linear);
         root.Children.Insert(root.Children.IndexOf(game) + 1, blurred);
+        root.Children.Insert(root.Children.IndexOf(linesHost), regionLayer);
         linesPanel.MouseLeftButtonDown += OnDragStart;
         linesPanel.MouseMove += OnDragMove;
         linesPanel.MouseLeftButtonUp += OnDragEnd;
@@ -302,6 +307,40 @@ public sealed partial class StreamWindow
             MaxWidth = Math.Max(200, PictureRect().Width * MaxLineWidth),
             Opacity = line.Role switch { SubtitleStack.Role.Current => 1.0, SubtitleStack.Role.Previous => 0.7, _ => 0.5 },
             Child = text,
+        };
+    }
+
+    /// <summary>
+    /// Ek alanın çevirisi alanın kendi yerinde: kutu İngilizce yazının kapladığı yeri örter (en az o kadar), Türkçe
+    /// uzunsa aşağı uzar; yazı alanın satır boyuna yakın.
+    /// </summary>
+    private Border MakePlacedRegion(string text, CouchSubs.Core.TextBox area)
+    {
+        var style = controller.Settings.Style;
+        var picture = PictureRect();
+        var rect = ToPicture(area, picture, 0.004);
+        var size = Math.Clamp(GameFontSize(style) * 0.6, 12, Math.Max(12, rect.Height * 0.9));
+        return new Border
+        {
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(Math.Max(0, rect.Left), Math.Max(0, rect.Top), 0, 0),
+            MinWidth = rect.Width,
+            MinHeight = rect.Height,
+            MaxWidth = Math.Max(rect.Width, picture.Width * 0.35),
+            Background = new SolidColorBrush(Color.FromArgb(0xE6, 0x10, 0x10, 0x14)),
+            CornerRadius = new CornerRadius(6 * Scale),
+            Padding = new Thickness(10 * Scale, 6 * Scale, 10 * Scale, 6 * Scale),
+            Child = new TextBlock
+            {
+                Text = text,
+                FontFamily = new FontFamily(controller.StreamFont),
+                FontSize = size,
+                FontWeight = FontWeights.Medium,
+                Foreground = new SolidColorBrush(GameTextBrushColor(style)),
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = size * 1.25,
+            },
         };
     }
 

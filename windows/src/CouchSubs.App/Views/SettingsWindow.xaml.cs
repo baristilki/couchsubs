@@ -1097,7 +1097,13 @@ public partial class SettingsWindow : Window
         Region.IsEnabled = on;
         var slot = area;
         var region = Region.Region;
-        Update(s => s.WithExtraRegion(slot, on ? region : null));
+        // "Bu bölgeyi kullan" deyip sürekli okumayı ayrıca açmayan kullanıcı bölgenin çevrildiğini sanıyordu (yalnız
+        // kısayol tuşuyla okunuyordu): bölge açılınca sürekli okuma da açılır, istenirse altından kapatılır.
+        var live = on;
+        Update(s => s.WithExtraRegion(slot, on ? region : null).WithExtraLive(slot, live));
+        loading = true;
+        ExtraLive.IsChecked = live;
+        loading = false;
     }
 
     /// <summary>Ek bölge tuşa basmadan da sürekli okunsun (görev, telefon mesajı, bildirim).</summary>

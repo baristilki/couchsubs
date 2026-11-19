@@ -408,7 +408,14 @@ public sealed partial class StreamWindow : Window
         // Oyun görüntüsü zemininde çeviri oyunun altyazısının yerine ya da serbest yere konur (StreamWindow.Game.cs).
         UpdateGameLayoutMode(lines.Count);
         regionsPanel.Children.Clear();
-        foreach (var (text, area) in regions.Values.OrderBy(region => region.Box?.Top ?? 0)) regionsPanel.Children.Add(MakeRegionBox(text, area));
+        regionLayer.Children.Clear();
+        var onPicture = controller.StreamBackground == StreamBackground.Game && controller.GameVideoActive;
+        foreach (var (text, area) in regions.Values.OrderBy(region => region.Box?.Top ?? 0))
+        {
+            // Oyun görüntüsü üstünde çeviri kendi alanında (telefon mesajı telefonda, görev yazısı solda), TV'deki gibi.
+            if (onPicture && area is { } placed) regionLayer.Children.Add(MakePlacedRegion(text, placed));
+            else regionsPanel.Children.Add(MakeRegionBox(text, area));
+        }
         linesPanel.Children.Clear();
         foreach (var id in boxes.Keys.Except(lines.Select(l => l.Id)).ToList()) boxes.Remove(id);
         foreach (var line in lines)

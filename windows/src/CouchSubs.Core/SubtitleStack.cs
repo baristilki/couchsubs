@@ -60,7 +60,15 @@ public sealed class SubtitleStack
         // durmasın diye üste çıkmaz; görev paneli gibi çok satırlı yazılar da üst üste binmez.
         if (replaces && current is not null && !paragraphs)
         {
-            // Üstteki satırlar olduğu gibi kalır.
+            // Üstteki satırlar olduğu gibi kalır; ancak yeni satırla aynı olan kalkar: oyunda tekrar tekrar beliren görev
+            // yazısı ("Leave when ready") düzeltilmiş okuma olarak gelince aynı çeviri üstte küçük, altta büyük iki kez
+            // görünüyordu (TV uygulaması bunu zaten ayıklıyordu).
+            if (older is { } stale && SameLine(stale.Text, text)) older = null;
+            if (previous is { } same && SameLine(same.Text, text))
+            {
+                previous = older;
+                older = null;
+            }
         }
         else if (StackPrevious && current is { } shown && now - shown.ShownAt < StackWithin && !paragraphs && !shown.Paragraphs && !SameLine(shown.Text, text))
         {

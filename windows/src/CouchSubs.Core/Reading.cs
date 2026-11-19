@@ -228,6 +228,33 @@ public static class ButtonPrompts
         return IsIconPrompt(tokens, line);
     }
 
+    /// <summary>
+    /// Fork: parçadaki ipucu cümleleri atılır. Yazı tanıma tuş simgesinin olduğu yerden satırı böldüğünde ("Hold" ve
+    /// "to interact with Andrew") parçaların ikisi de ipucu görünmüyor, birleşince ipucu çevriliyordu; ek alanda
+    /// birkaç ipucu da tek parçaya toplanabiliyor ("Press to fight. Hold to block. to dodge. Press"). Atılan ipucunun
+    /// ardından gelen "to ..." kalıntısı ve tek başına kalan fiil ("Press") da atılır. Kalan yoksa boş döner.
+    /// </summary>
+    public static string WithoutPromptSentences(string text)
+    {
+        var kept = new List<string>();
+        var dropped = true; // parçanın başındaki "to dodge." de simgesi okunmamış bir ipucunun kalıntısıdır
+        foreach (var part in System.Text.RegularExpressions.Regex.Split(text.Trim(), @"(?<=[.…])\s+"))
+        {
+            var sentence = part.Trim();
+            if (sentence.Length == 0) continue;
+            var bare = sentence.TrimEnd('.', '…', ' ');
+            var remnant = dropped && sentence.StartsWith("to ", StringComparison.Ordinal);
+            if (IsPrompt(sentence) || IsPrompt(bare) || Verbs.Contains(bare) || remnant)
+            {
+                dropped = true;
+                continue;
+            }
+            dropped = false;
+            kept.Add(sentence);
+        }
+        return string.Join(' ', kept);
+    }
+
     private static readonly HashSet<string> Connectors = new(StringComparer.OrdinalIgnoreCase) { "and", "or" };
 
     /// <summary>Büyük harfle yazılmış kısa İngilizce sözcükler tuş kalıntısı sayılmaz ("HOLD ON TO IT").</summary>

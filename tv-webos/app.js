@@ -6,7 +6,7 @@
   'use strict';
 
   // TV uygulamasının sürümü: appinfo.json, tv-tizen/config.xml ve tv-android/app/build.gradle ile aynı tutulur.
-  var APP_VERSION = '0.9.29';
+  var APP_VERSION = '0.9.30';
   var t = window.t;
   var config = window.COUCHSUBS_CONFIG || {};
   var platform = window.COUCHSUBS_PLATFORM;
@@ -565,6 +565,47 @@
     return null;
   }
 
+  // Fork: konuşan adı her zaman cümleden ayrı renkte. Oyunda okunan rengi varsa o; yoksa yazı sarıysa açık mavi,
+  // değilse yumuşak sarı (ad ile konuşma ayırt edilsin).
+  var SPEAKER_DEFAULT = '#F2C35B';
+  var SPEAKER_ON_YELLOW = '#8EC9FF';
+  var NEWLINE = String.fromCharCode(10);
+  function nameColor(name) {
+    var game = speakerColor(name);
+    if (game) return game;
+    var text = (look.textColor || styleTextColor || '').toUpperCase();
+    return text === TEXT_COLORS.yellow ? SPEAKER_ON_YELLOW : SPEAKER_DEFAULT;
+  }
+
+  // Bölünmüş satırlarda "Ad:" ile başlayan satırın adını kendi renginde yazar (normal görünüm).
+  function colorSpeakers(el, text) {
+    var lines = text.split(NEWLINE);
+    var any = false;
+    var splits = [];
+    for (var i = 0; i < lines.length; i++) {
+      var split = splitSpeaker(lines[i]);
+      // Yalnız iki noktalı ad: sarılmış satırın devamı bilinen bir adla başlasa da ad sayılmaz.
+      if (split && lines[i].slice(0, split.speaker.length + 1) !== split.speaker + ':') split = null;
+      splits.push(split);
+      if (split) any = true;
+    }
+    if (!any) return;
+    while (el.firstChild) el.removeChild(el.firstChild);
+    for (var j = 0; j < lines.length; j++) {
+      if (j > 0) el.appendChild(document.createTextNode(NEWLINE));
+      if (splits[j]) {
+        var name = document.createElement('span');
+        name.className = 'speaker';
+        name.textContent = splits[j].speaker + ': ';
+        name.style.color = nameColor(splits[j].speaker);
+        el.appendChild(name);
+        el.appendChild(document.createTextNode(splits[j].line));
+      } else {
+        el.appendChild(document.createTextNode(lines[j]));
+      }
+    }
+  }
+
   // Yazı boyu oyunun altyazısının satır yüksekliğinden (OCR kutusu harflerin üstünden altına; boy bunun ~%92'si).
   function gameFontSize(baseSize) {
     if (!look.matchSize || !currentBox) return baseSize;
@@ -589,8 +630,7 @@
         name.className = 'speaker';
         name.textContent = split.speaker + ': ';
         name.style.fontSize = Math.round(size * 0.85) + 'px';
-        var color = speakerColor(split.speaker);
-        if (color) name.style.color = color;
+        name.style.color = nameColor(split.speaker);
         el.appendChild(name);
         el.appendChild(document.createTextNode(split.line));
       } else {
@@ -615,6 +655,7 @@
     el.style.maxWidth = '';
     var wrapped = paragraphs ? { text: text, scale: 1 } : wrapSubtitle(text, el, baseSize);
     el.textContent = wrapped.text;
+    if (!paragraphs) colorSpeakers(el, wrapped.text);
     el.style.whiteSpace = 'pre-line';
     var size = Math.round(baseSize * wrapped.scale);
     el.style.fontSize = size + 'px';

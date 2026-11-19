@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+﻿// SPDX-License-Identifier: AGPL-3.0-only
 
 using CouchSubs.Core;
 
@@ -53,6 +53,21 @@ public class GameTextColorTests
         // Parlak gökyüzü: parlak ama yanında koyu piksel yok; yazı sayılmaz.
         Assert.Null(GameTextColor.Sample(Fill(250, 250, 255), Width, Height, Bottom));
         Assert.Null(GameTextColor.Sample(Fill(20, 20, 20), Width, Height, Bottom));
+    }
+
+    [Fact]
+    public void BrightScatteredBackgroundIsNotText()
+    {
+        // Fork: güneşli yapraklar gibi her yerde koyu benekli parlak zemin: "yazı" pikselleri alanın çoğu, renk okunmaz.
+        var frame = Fill(240, 200, 120);
+        for (var y = 0; y < Height; y++)
+            for (var x = 0; x < Width; x++)
+            {
+                if (((x / 2) + (y / 2)) % 2 == 0) continue;
+                var i = ((y * Width) + x) * 4;
+                (frame[i], frame[i + 1], frame[i + 2]) = (0, 0, 0);
+            }
+        Assert.Null(GameTextColor.SampleColors(frame, Width, Height, Bottom));
     }
 
     [Fact]

@@ -1569,7 +1569,14 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     private readonly Lock colorGate = new();
     private string? shownText;
     private TextBox? shownBox;
+    private long shownAt;
     private long nextColorSample;
+
+    /// <summary>
+    /// Fork: renk yalnız yeni satır geldikten sonra bu süre içinde okunur. Çeviri ekranda kalırken oyunun İngilizce
+    /// altyazısı çoktan kalkmış olabiliyor; o zaman satırın yerinde oyunun arka planı okunup yazı rengi sanılıyordu.
+    /// </summary>
+    private const long ColorSampleWindowMs = 2000;
     private readonly HashSet<string> knownSpeakers = new(StringComparer.OrdinalIgnoreCase);
 
     private void NoteShownForColors(SubtitleEvent e)
@@ -1579,7 +1586,9 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (e.Kind == SubtitleEventKind.Subtitle)
             {
                 shownText = e.Text;
-                if (e.Box is { } box) shownBox = box;
+                // Yeri bilinmeyen satırda önceki satırın yeri okunmaz (orada artık başka bir şey olabilir).
+                shownBox = e.Box;
+                shownAt = Environment.TickCount64;
             }
             else if (e.Kind == SubtitleEventKind.Clear) shownText = null;
         }
@@ -1594,15 +1603,14 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         var now = Environment.TickCount64;
         lock (colorGate)
         {
-            if (now < nextColorSample || shownText is null) return;
+            if (now < nextColorSample || shownText is null || shownBox is null || now - shownAt > ColorSampleWindowMs) return;
             nextColorSample = now + 500;
             text = shownText;
             box = shownBox;
         }
-        // İngilizce satırın yeri biliniyorsa yalnız orası (biraz paylı) okunur; bilinmiyorsa altyazı bölgesinin tamamı.
-        var region = box is { } b
-            ? new CropRegion(Math.Max(0, b.Top - 0.01), Math.Min(1, b.Bottom + 0.01), Math.Max(0, b.Left - 0.01), Math.Min(1, b.Right + 0.01))
-            : settings.Region;
+        // Yalnız İngilizce satırın yeri (biraz paylı) okunur; bölgenin tamamı okununca arka plan yazı sanılıyordu.
+        var b = box!.Value;
+        var region = new CropRegion(Math.Max(0, b.Top - 0.01), Math.Min(1, b.Bottom + 0.01), Math.Max(0, b.Left - 0.01), Math.Min(1, b.Right + 0.01));
         var sample = GameTextColor.SampleColors(frame.Pixels, frame.Width, frame.Height, region);
         // Okunan ad rengi soldaki (ilk satırdaki) konuşanındır; iki konuşanlı satırda kime ait olduğu belli değil.
         string? speaker = null;

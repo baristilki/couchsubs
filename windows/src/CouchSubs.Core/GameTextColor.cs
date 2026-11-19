@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+﻿// SPDX-License-Identifier: AGPL-3.0-only
 
 namespace CouchSubs.Core;
 
@@ -17,6 +17,9 @@ public static class GameTextColor
 
     /// <summary>Bu kadar yazı pikseli bulunmazsa (bölgede altyazı yok) renk okunmaz.</summary>
     internal const int MinTextPixels = 40;
+
+    /// <summary>Yazı piksellerinin okunan alana en büyük oranı; fazlası arka plandır.</summary>
+    internal const double MaxTextCoverage = 0.45;
 
     /// <summary>
     /// BGRA karede (satır başına en x 4 bayt) <paramref name="region"/> içindeki yazının rengi; yazı bulunamazsa null.
@@ -46,10 +49,12 @@ public static class GameTextColor
         var counts = new int[64];
         var xs = new long[64];
         var total = 0;
+        var visited = 0;
         for (var y = top + reach; y < bottom - reach; y += stepY)
         {
             for (var x = left + reach; x < right - reach; x += stepX)
             {
+                visited++;
                 var i = ((y * width) + x) * 4;
                 int b = bgra[i], g = bgra[i + 1], r = bgra[i + 2];
                 if (!Bright(r, g, b)) continue;
@@ -64,6 +69,9 @@ public static class GameTextColor
             }
         }
         if (total < MinTextPixels) return null;
+        // Fork: yazı satırının kutusunda harfler alanın küçük bir kısmıdır; "yazı" pikselleri alanın %45'ini aşıyorsa
+        // okunan şey parlak ve gölgeli bir arka plandır (güneşli yapraklar, bulutlar), renk okunmaz.
+        if (total > visited * MaxTextCoverage) return null;
         var first = 0;
         for (var k = 1; k < counts.Length; k++)
             if (counts[k] > counts[first]) first = k;

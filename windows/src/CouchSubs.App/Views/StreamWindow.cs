@@ -295,9 +295,9 @@ public sealed partial class StreamWindow : Window
     /// renk uyumu kapalıysa sönük gri. Renkler çeviri hattında okunur (AppController.GameColors); TV de aynısını kullanır.</summary>
     private Color SpeakerBrushColor(SubtitleStyle style, string speaker)
     {
-        if (!controller.StreamMatchGameColor) return SpeakerColor;
-        if (controller.GameColors.Speaker(speaker) is { } c) return Color.FromRgb(c.R, c.G, c.B);
-        return GameTextBrushColor(style);
+        if (controller.StreamMatchGameColor && controller.GameColors.Speaker(speaker) is { } c) return Color.FromRgb(c.R, c.G, c.B);
+        // Fork: ad her zaman cümleden ayrı renkte (TV ile aynı): yazı sarıysa açık mavi, değilse yumuşak sarı.
+        return style.TextColor == SubtitleTextColor.Yellow ? Color.FromRgb(0x8E, 0xC9, 0xFF) : Color.FromRgb(0xF2, 0xC3, 0x5B);
     }
 
     /// <summary>Çevirinin yazı rengi: kullanıcı sarı seçtiyse sarı, değilse (açıksa) oyunun rengi, yoksa kırık beyaz.</summary>

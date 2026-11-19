@@ -101,6 +101,29 @@ public class SubtitleBlockTests
     [InlineData("Press on, we're almost there.", false)]
     public void PromptWithUnreadIconIsAPrompt(string line, bool prompt) => Assert.Equal(prompt, ButtonPrompts.IsPrompt(line));
 
+    /// <summary>Fork: ek alanda parçaya toplanmış ipuçları (günlükteki gerçek satırlar) atılır, mesaj kalır.</summary>
+    [Theory]
+    [InlineData("Hold to interact with Andrew", "")]
+    [InlineData("Hold 2 to interact with Andrew", "")]
+    [InlineData("Press to fight. Hold to block. to dodge. Press", "")]
+    [InlineData("Press to browse the shop menu", "")]
+    [InlineData("Lucia: Where are you? Press to reply", "Lucia: Where are you? Press to reply")]
+    [InlineData("Meet me at the docks. Press to reply.", "Meet me at the docks.")]
+    [InlineData("Strength Workout Workout window open!", "Strength Workout Workout window open!")]
+    [InlineData("Hold on to something.", "Hold on to something.")]
+    public void PromptSentencesAreDropped(string text, string kept) => Assert.Equal(kept, ButtonPrompts.WithoutPromptSentences(text));
+
+    /// <summary>Fork: yazı tanıma ipucunu tuş simgesinden ikiye bölünce birleşen satır da ipucu sayılır.</summary>
+    [Fact]
+    public void PromptSplitAtTheIconIsDroppedAfterJoining()
+    {
+        var reading = new Reading([
+            new TextLine("Hold", new TextBox(0.40, 0.80, 0.44, 0.84)),
+            new TextLine("to interact with Andrew", new TextBox(0.47, 0.80, 0.62, 0.84)),
+        ]);
+        Assert.Empty(reading.WithoutButtonPrompts().JoiningRows().WithoutButtonPrompts().Lines);
+    }
+
     [Theory]
     [InlineData("9? We'll lose these tracks.", "We'll lose these tracks.")]
     [InlineData("100. Mac and John...", "Mac and John...")]

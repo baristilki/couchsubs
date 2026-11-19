@@ -212,9 +212,6 @@ public sealed partial class StreamWindow
 
     // --- Görünüm ---
 
-    /// <summary>Konuşan adı sönük ve küçük: oyunlar (ör. Spider-Man) hemen her satırı adla başlatır; parlak renk göze batıyordu.</summary>
-    private static readonly Color SpeakerColor = Color.FromRgb(0xB9, 0xBC, 0xC4);
-
     /// <summary>Bu oturumda iki noktayla görülmüş konuşan adları: OCR iki noktayı kaçırınca ("Peter İki kelime…") ad
     /// yine tanınsın.</summary>
     private readonly HashSet<string> seenSpeakers = new(StringComparer.OrdinalIgnoreCase);

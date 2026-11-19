@@ -178,9 +178,15 @@ public sealed class RegionWatcher
     {
         var lines = reading.WithoutButtonPrompts().WithoutOcrNoise().Lines
             .Where(line => ScreenTranslation.IsWords(line.Text))
+            // Fork: telefon/menü etiketleri ("PHONE SLEEP", "ALARM") çevrilmez; ek alanda yalnız mesaj ve cümleler kalır.
+            .Where(line => !ButtonPrompts.IsActionLabel(line.Text))
             .OrderBy(line => line.Box?.Top ?? 0)
             .ToList();
-        var paragraphs = ScreenTranslation.Paragraphs(lines);
+        // Fork: parçalara toplanınca birleşen ipuçları ("Hold" + "to interact with Andrew") da atılır.
+        var paragraphs = ScreenTranslation.Paragraphs(lines)
+            .Select(ButtonPrompts.WithoutPromptSentences)
+            .Where(ScreenTranslation.IsWords)
+            .ToList();
         var place = new TextBox(region.Left, region.Top, region.Right, region.Bottom);
         var boxes = lines.Where(line => line.Box is not null).Select(line => line.Box!.Value).ToList();
         TextBox? box = boxes.Count == 0 ? null : boxes.Skip(1).Aggregate(boxes[0], (a, b) => a.Union(b)).PlacedIn(place);

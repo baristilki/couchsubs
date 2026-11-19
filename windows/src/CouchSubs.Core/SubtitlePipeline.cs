@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+﻿// SPDX-License-Identifier: AGPL-3.0-only
 
 using CouchSubs.Core.Dubbing;
 
@@ -237,7 +237,8 @@ public sealed class SubtitlePipeline(ITextReader reader, ITextTranslator transla
         // Alandaki menü ve köşe göstergeleri de altyazı değildir; yalnız altyazı bloğu çevrilir ve kutusu ona göre olur.
         var area = new TextBox(region.Left, region.Top, region.Right, region.Bottom);
         // Konuşma değişirken sabit duran görev/HUD satırı ("Get in the sea plane", GTA 6) altyazı bloğuna katılmaz.
-        var rows = raw.WithoutButtonPrompts().WithoutOcrNoise().JoiningRows();
+        // Fork: yazı tanıma ipucunu tuş simgesinden bölebiliyor ("Hold" + "to interact with Andrew"); birleşen satır da denetlenir.
+        var rows = raw.WithoutButtonPrompts().WithoutOcrNoise().JoiningRows().WithoutButtonPrompts();
         lock (gate)
         {
             rows = stickyRows.Filter(rows, now());

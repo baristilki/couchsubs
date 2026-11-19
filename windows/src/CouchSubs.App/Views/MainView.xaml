@@ -40,8 +40,9 @@
             </Grid.ColumnDefinitions>
 
             <!-- Sol: denetimler ve durum -->
-            <ScrollViewer Width="{DynamicResource size.mainColumn}" VerticalScrollBarVisibility="Auto" Focusable="False" Margin="0,0,12,0">
-                <StackPanel Margin="0,0,0,8">
+            <!-- Kaydırma çubuğu içeriğin üstüne biniyordu: sağda kendi şeridi var (StackPanel sağ payı). -->
+            <ScrollViewer Width="{DynamicResource size.mainColumn}" VerticalScrollBarVisibility="Auto" Focusable="False" Margin="0,0,0,0">
+                <StackPanel Margin="0,0,14,8">
                     <!-- Yeni sürüm -->
                     <c:Card x:Name="UpdateCard" Margin="0,0,0,12" Visibility="Collapsed">
                         <StackPanel>
@@ -54,15 +55,22 @@
                     </c:Card>
 
                     <!-- Başlat / Durdur -->
-                    <Button x:Name="Toggle" HorizontalAlignment="Stretch" MinHeight="{DynamicResource size.primaryActionHeight}" Click="OnToggle">
+                    <Button x:Name="Toggle" HorizontalAlignment="Stretch" MinHeight="46" Click="OnToggle">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock x:Name="ToggleGlyph" Style="{StaticResource GlyphText}" FontSize="18" Margin="0,0,10,0" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
-                            <TextBlock x:Name="ToggleText" FontSize="{DynamicResource headlineFontSize}" FontWeight="SemiBold" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            <TextBlock x:Name="ToggleGlyph" Style="{StaticResource GlyphText}" FontSize="16" Margin="0,0,10,0" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            <TextBlock x:Name="ToggleText" FontSize="16" FontWeight="SemiBold" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
                         </StackPanel>
                     </Button>
 
                     <!-- Deneme altyazısı: altyazı TV'ye gidiyorsa "TV'de dene", yalnız bilgisayardaysa "Ekranda dene" -->
-                    <Button HorizontalAlignment="Stretch" Margin="0,8,0,0" Click="OnTest">
+                    <!-- İkincil düğmeler yan yana: sütun kısalır, ana düğme öne çıkar. -->
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                    <Button HorizontalAlignment="Stretch" Padding="8,0" Click="OnTest">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
                                 <Setter Property="Content" Value="{t:T 'Test on screen'}" />
@@ -76,8 +84,10 @@
                     </Button>
 
                     <!-- Yayın penceresi (Discord/OBS için oyun + altyazı); ayarları Ayarlar › OBS katmanı'nda. -->
-                    <Button Content="{t:T 'Open the stream window'}" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Stretch"
-                            Margin="0,8,0,0" Click="OnStreamWindow" />
+                    <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Stretch" Padding="8,0" Click="OnStreamWindow">
+                        <TextBlock Text="{t:T 'Open the stream window'}" TextTrimming="CharacterEllipsis" />
+                    </Button>
+                    </Grid>
                     <!-- Yayına (Discord/OBS) giden oyun sesinin düzeyi; yayın penceresinde M sessiz, +/- düzey. -->
                     <!-- Kendi kartında: hoparlör düğmesi sesi kapatır/açar, kaydırıcı düzey, sağda yüzde. -->
                     <c:Card Margin="0,12,0,0">

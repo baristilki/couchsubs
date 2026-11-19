@@ -26,9 +26,12 @@ public static class DiscordPresence
 
     /// <summary>Gösterilecek durum; kimlik geçersizse null (durum gösterilmez).</summary>
     public static DiscordActivity? For(string appId, string image, string? playedGame, bool translating, bool streaming,
-                                       DateTimeOffset since, Localizer text, bool xbox = false)
+                                       DateTimeOffset since, Localizer text, bool xbox = false, bool likeGame = false)
     {
         if (CleanAppId(appId) is not { Length: > 0 } id) return null;
+        // Gerçek oyun gibi: yalnız uygulamanın adı ("Grand Theft Auto VI"), ikonu ve süre; CouchSubs, altyazı ya da
+        // konsol izi yok (bilgisayarda oynanıyormuş gibi).
+        if (likeGame) return new DiscordActivity(id, null, null, string.IsNullOrWhiteSpace(image) ? null : image.Trim(), null, since);
         var details = translating ? text["With Turkish subtitles"] : text["With CouchSubs"];
         var state = streaming ? text["Streaming"] : null;
         // Köşede konsolun ikonu: Developer Portal › Rich Presence › Art Assets'e "ps5" (ya da "xbox") adıyla yüklenir.

@@ -191,7 +191,7 @@ static void test_fixture_decodes(const char *path)
 	CHECK(count == 6);
 
 	cs_decoder decoder;
-	CHECK(cs_decoder_init(&decoder) == 0);
+	CHECK(cs_decoder_init(&decoder, false) == 0);
 	int frames = 0;
 	for(size_t i = 0; i < count; i++)
 	{
@@ -210,7 +210,7 @@ static void test_fixture_decodes(const char *path)
 	cs_decoder_fini(&decoder);
 
 	/* Yeni bir çözücü yalnız ilk anahtar kareyle de 1080p görüntü üretmeli. */
-	CHECK(cs_decoder_init(&decoder) == 0);
+	CHECK(cs_decoder_init(&decoder, false) == 0);
 	CHECK(cs_decoder_decode(&decoder, units[0].data, units[0].size) >= 0);
 	CHECK(flush(&decoder) == 1);
 	cs_decoder_fini(&decoder);
@@ -223,7 +223,7 @@ static void test_fixture_decodes(const char *path)
 static void test_garbage_does_not_crash(void)
 {
 	cs_decoder decoder;
-	CHECK(cs_decoder_init(&decoder) == 0);
+	CHECK(cs_decoder_init(&decoder, false) == 0);
 	uint8_t garbage[8 + AV_INPUT_BUFFER_PADDING_SIZE] = { 0, 0, 0, 1, 0x65, 0xff, 0x00, 0x12 };
 	CHECK(cs_decoder_decode(&decoder, garbage, 8) <= 0);
 	CHECK(cs_decoder_decode(&decoder, NULL, 0) == 0);

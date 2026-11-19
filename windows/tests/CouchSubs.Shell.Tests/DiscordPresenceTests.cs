@@ -63,6 +63,7 @@ public class DiscordPresenceTests
         Assert.All(discord.Updates, update => Assert.Null(update));
 
         controller.DiscordAppId = Id;
+        controller.DiscordLikeGame = false;
         controller.DiscordPresenceEnabled = true;
         var shown = discord.Updates[^1];
         Assert.NotNull(shown);
@@ -78,6 +79,23 @@ public class DiscordPresenceTests
         controller.DiscordPresenceEnabled = false;
         Assert.Null(discord.Updates[^1]);
         Assert.Null(controller.DiscordAppName);
+        controller.Dispose();
+    }
+
+    /// <summary>Gerçek oyun gibi (varsayılan): yalnız oyunun adı; CouchSubs, altyazı, "Yayında" ve konsol ikonu yok.</summary>
+    [Fact]
+    public void LikeGameShowsOnlyTheGame()
+    {
+        var discord = new FakeDiscord();
+        var controller = AppControllerTests.Make(new FakeServices { Discord = discord });
+        controller.DiscordAppId = Id;
+        controller.DiscordPresenceEnabled = true;
+        controller.GameVideoWanted = true;
+        var shown = discord.Updates[^1]!;
+        Assert.Null(shown.Details);
+        Assert.Null(shown.State);
+        Assert.Null(shown.SmallImage);
+        Assert.Null(shown.LargeText);
         controller.Dispose();
     }
 }

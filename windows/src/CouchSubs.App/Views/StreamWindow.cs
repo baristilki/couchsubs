@@ -68,12 +68,37 @@ public sealed partial class StreamWindow : Window
     /// <summary>Yayın programının pencere listesinde görünen ad; altyazıya göre değişmez (Türkçede "CouchSubs Yayın").</summary>
     public static string WindowTitle => Localizer.Current["CouchSubs Stream"];
 
+    /// <summary>
+    /// Discord durumu açıkken pencerenin ikonu Discord uygulamasının ikonudur (oyunun logosu): Discord'un pencere
+    /// seçiminde, görev çubuğunda ve Alt+Tab'da CouchSubs logosu görünmez. Yoksa uygulamanın kendi ikonu.
+    /// </summary>
+    private void ApplyGameIcon()
+    {
+        if (controller.DiscordAppIcon is not { Length: > 0 } png)
+        {
+            ClearValue(IconProperty);
+            return;
+        }
+        try
+        {
+            using var stream = new System.IO.MemoryStream(png);
+            var image = BitmapFrame.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+            image.Freeze();
+            Icon = image;
+        }
+        catch (Exception error) when (error is NotSupportedException or System.IO.IOException or ArgumentException)
+        {
+            ClearValue(IconProperty);
+        }
+    }
+
     private StreamWindow(AppController controller)
     {
         this.controller = controller;
         // Discord durumu açıkken başlık Discord uygulamasının adıdır: Discord pencere yayınını başlıkla gösterir
         // ("Yayında: Grand Theft Auto VI"). Kapalıysa sabit ad; yayın programı pencereyi bu adla bulur.
         Title = controller.DiscordAppName ?? WindowTitle;
+        ApplyGameIcon();
         // 1280x720 içerik: 16:9, yayın programında kaynak oranı bozulmaz.
         SizeToContent = SizeToContent.Manual;
         Width = 1296;
@@ -333,6 +358,7 @@ public sealed partial class StreamWindow : Window
             Refresh();
         }
         if (e.PropertyName == nameof(AppController.DiscordAppName)) Title = controller.DiscordAppName ?? WindowTitle;
+        if (e.PropertyName == nameof(AppController.DiscordAppIcon)) ApplyGameIcon();
         if (e.PropertyName is nameof(AppController.StreamCover) or nameof(AppController.StreamMatchGameColor)
             or nameof(AppController.StreamPlacement) or nameof(AppController.StreamMatchGameSize) or nameof(AppController.StreamFont)
             or nameof(AppController.StreamFreePosition))

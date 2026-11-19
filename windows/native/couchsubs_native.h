@@ -98,6 +98,23 @@ CS_API cs_session *cs_session_start_ex(const char *host, const uint8_t regist_ke
                                        cs_frame_cb frame, cs_audio_cb audio, cs_event_cb event, cs_log_cb log,
                                        void *user);
 
+#define CS_QUALITY_STANDARD 0
+#define CS_QUALITY_HIGH 1
+/* Yüksek kalitede istenen bit hızı (kbps); standart 1080p 15000'dir. */
+#define CS_HIGH_BITRATE_KBPS 30000
+
+/* cs_session_start_ex gibi; quality CS_QUALITY_HIGH ise HEVC ve CS_HIGH_BITRATE_KBPS istenir (HEVC çözücü yoksa
+ * H.264, yüksek bit hızıyla). */
+CS_API cs_session *cs_session_start_ex2(const char *host, const uint8_t regist_key[0x10], const uint8_t morning[0x10],
+                                        const uint8_t account_id[8], int max_fps, int video_fps, int quality,
+                                        cs_frame_cb frame, cs_audio_cb audio, cs_event_cb event, cs_log_cb log,
+                                        void *user);
+
+/* Sol çubuğu yatayda left_x konumuna getirir (0: ortada), diğer tuşlar boşta. PS5 Remote Play bağlantısında hiç kol
+ * girdisi olmayınca bağlantı 20 dakikada bir kapanıyordu; ara sıra oyunun ölü bölgesinde kalan küçük bir dürtme
+ * gönderilir. Olay geri çağrısı içinden çağrılmamalı. */
+CS_API int cs_session_nudge(cs_session *session, int left_x);
+
 /* PS5'in istediği giriş şifresini (ASCII rakamlar) gönderir. Olay geri çağrısı içinden çağrılmamalı (libchiaki olayı
  * kilit tutarken verir). Dönüş: 0 başarı. */
 CS_API int cs_session_set_login_pin(cs_session *session, const uint8_t *pin, size_t pin_size);

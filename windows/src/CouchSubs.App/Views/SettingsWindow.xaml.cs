@@ -74,9 +74,11 @@ public partial class SettingsWindow : Window
         var streamFps = controller.StreamVideoFps.ToString(System.Globalization.CultureInfo.InvariantCulture);
         StreamFpsChoice.SelectedItem = StreamFpsChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == streamFps);
         StreamGameAudio.IsChecked = controller.StreamGameAudio;
+        StreamHighQuality.IsChecked = controller.StreamHighQuality;
         StreamMatchGameColor.IsChecked = controller.StreamMatchGameColor;
         StreamMatchGameSize.IsChecked = controller.StreamMatchGameSize;
         DiscordPresenceOn.IsChecked = controller.DiscordPresenceEnabled;
+        DiscordLikeGameOn.IsChecked = controller.DiscordLikeGame;
         DiscordAppIdBox.Text = controller.DiscordAppId;
         DiscordImageBox.Text = controller.DiscordImage;
         var streamCover = controller.StreamCover.ToString();
@@ -1181,11 +1183,15 @@ public partial class SettingsWindow : Window
 
     private void OnStreamGameAudio(object sender, RoutedEventArgs e) => controller.StreamGameAudio = StreamGameAudio.IsChecked == true;
 
+    private void OnStreamHighQuality(object sender, RoutedEventArgs e) => controller.StreamHighQuality = StreamHighQuality.IsChecked == true;
+
     private void OnStreamMatchGameColor(object sender, RoutedEventArgs e) => controller.StreamMatchGameColor = StreamMatchGameColor.IsChecked == true;
 
     private void OnStreamMatchGameSize(object sender, RoutedEventArgs e) => controller.StreamMatchGameSize = StreamMatchGameSize.IsChecked == true;
 
     private void OnDiscordPresence(object sender, RoutedEventArgs e) => controller.DiscordPresenceEnabled = DiscordPresenceOn.IsChecked == true;
+
+    private void OnDiscordLikeGame(object sender, RoutedEventArgs e) => controller.DiscordLikeGame = DiscordLikeGameOn.IsChecked == true;
 
     private void OnDiscordAppId(object sender, RoutedEventArgs e)
     {

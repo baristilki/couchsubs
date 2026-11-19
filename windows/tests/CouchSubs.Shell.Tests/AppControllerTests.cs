@@ -48,6 +48,7 @@ internal sealed class FakeStream : IStreamSession, IGameVideoSource
     }
     public int GameVideoFps { get; set; } = GameVideoRate.Standard;
     public IGameAudioOutput? GameAudio { get; set; }
+    public bool HighQuality { get; set; }
     public event Action<Frame>? FrameReceived;
     public event Action<SessionState>? StateChanged;
     public event Action<RegisteredConsole>? ConsoleMoved;

@@ -1684,6 +1684,20 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         }
     }
 
+    /// <summary>Discord durumu gerçek oyun gibi görünsün: yalnız oyunun adı ve ikonu (CouchSubs ve altyazı yazmaz).
+    /// Varsayılan açık.</summary>
+    public bool DiscordLikeGame
+    {
+        get => store.Load<bool?>(StoreKeys.DiscordLikeGame) ?? true;
+        set
+        {
+            if (value == DiscordLikeGame) return;
+            store.Save(StoreKeys.DiscordLikeGame, value);
+            Changed(nameof(DiscordLikeGame));
+            ApplyDiscord();
+        }
+    }
+
     /// <summary>Discord uygulama kimliği (yalnız rakam); geçersizse boş.</summary>
     public string DiscordAppId
     {
@@ -1718,7 +1732,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     {
         if (services.DiscordPresence is not { } discord) return;
         var activity = DiscordPresenceEnabled
-            ? DiscordPresence.For(DiscordAppId, DiscordImage, PlayedGame, IsRunning, gameVideoWanted, discordSince, text, IsXbox)
+            ? DiscordPresence.For(DiscordAppId, DiscordImage, PlayedGame, IsRunning, gameVideoWanted, discordSince, text, IsXbox, DiscordLikeGame)
             : null;
         _ = RefreshDiscordAppNameAsync(activity?.AppId);
         if (activity == lastDiscord) return;
@@ -1736,6 +1750,12 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     /// </summary>
     public string? DiscordAppName { get => discordAppName; private set => Set(ref discordAppName, value); }
 
+    private byte[]? discordAppIcon;
+
+    /// <summary>Discord uygulamasının ikonu (PNG): yayın penceresinin ikonu olur, Discord'un pencere seçiminde ve görev
+    /// çubuğunda CouchSubs yerine oyunun ikonu görünür. Durum kapalıysa null.</summary>
+    public byte[]? DiscordAppIcon { get => discordAppIcon; private set => Set(ref discordAppIcon, value); }
+
     private async Task RefreshDiscordAppNameAsync(string? appId)
     {
         if (appId == discordAppNameFor) return;
@@ -1743,14 +1763,20 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         if (appId is null || services.DiscordPresence is not { } discord)
         {
             DiscordAppName = null;
+            DiscordAppIcon = null;
             return;
         }
         string? name;
         try { name = await discord.AppNameAsync(appId); }
         catch { name = null; }
+        byte[]? icon;
+        try { icon = await discord.AppIconAsync(appId); }
+        catch { icon = null; }
         post(() =>
         {
-            if (discordAppNameFor == appId) DiscordAppName = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+            if (discordAppNameFor != appId) return;
+            DiscordAppName = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+            DiscordAppIcon = icon is { Length: > 0 } ? icon : null;
         });
     }
 
@@ -1863,6 +1889,20 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         }
     }
 
+    /// <summary>Oyun görüntüsü yüksek kalitede (HEVC, yüksek bit hızı) istensin mi. Varsayılan açık; PS5 kabul etmezse
+    /// bağlantı kendiliğinden standarda döner.</summary>
+    public bool StreamHighQuality
+    {
+        get => store.Load<bool?>(StoreKeys.StreamHighQuality) ?? true;
+        set
+        {
+            if (value == StreamHighQuality) return;
+            store.Save(StoreKeys.StreamHighQuality, value);
+            Changed(nameof(StreamHighQuality));
+            ApplyGameVideo();
+        }
+    }
+
     /// <summary>Oyun sesi çıkışı; ilk gerektiğinde açılır, uygulama kapanırken bırakılır.</summary>
     private IGameAudioOutput? gameAudio;
 
@@ -1875,6 +1915,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             // değil, yalnız bir kez yeniden bağlanır.
             if (!on) source.GameVideo = null;
             source.GameVideoFps = StreamVideoFps;
+            source.HighQuality = StreamHighQuality;
             source.GameAudio = on && StreamGameAudio ? gameAudio ??= services.MakeGameAudioOutput() : null;
             ApplyGameVolume();
             if (on) source.GameVideo = GameVideo;

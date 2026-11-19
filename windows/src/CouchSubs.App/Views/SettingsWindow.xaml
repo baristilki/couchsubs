@@ -546,6 +546,8 @@
                             </DockPanel>
                             <CheckBox x:Name="StreamGameAudio" Content="{t:T 'Play the game sound on this computer'}" Margin="0,0,0,4"
                                       Checked="OnStreamGameAudio" Unchecked="OnStreamGameAudio" />
+                            <CheckBox x:Name="StreamHighQuality" Content="{t:T 'High picture quality (HEVC, sharper in the stream)'}" Margin="0,0,0,4"
+                                      Checked="OnStreamHighQuality" Unchecked="OnStreamHighQuality" />
                             <CheckBox x:Name="StreamMatchGameColor" Content="{t:T 'Use the game\'s subtitle colour'}" Margin="0,0,0,4"
                                       Checked="OnStreamMatchGameColor" Unchecked="OnStreamMatchGameColor" />
                             <CheckBox x:Name="StreamMatchGameSize" Content="{t:T 'Match the game\'s subtitle size'}" Margin="0,0,0,12"
@@ -587,6 +589,8 @@
                                        Text="{t:T 'Shows Playing in Discord while CouchSubs is open. Create an application named after the game at discord.com/developers, set the game logo as its App Icon and paste its Application ID here.'}" />
                             <CheckBox x:Name="DiscordPresenceOn" Content="{t:T 'Show in Discord'}" Margin="0,0,0,8"
                                       Checked="OnDiscordPresence" Unchecked="OnDiscordPresence" />
+                            <CheckBox x:Name="DiscordLikeGameOn" Content="{t:T 'Look like the real game (only the game name and icon, no CouchSubs)'}" Margin="0,0,0,8"
+                                      Checked="OnDiscordLikeGame" Unchecked="OnDiscordLikeGame" />
                             <DockPanel Margin="0,0,0,8">
                                 <TextBlock Text="{t:T 'Application ID'}" Width="150" VerticalAlignment="Center" />
                                 <TextBox x:Name="DiscordAppIdBox" Width="240" HorizontalAlignment="Left" FontFamily="Consolas"

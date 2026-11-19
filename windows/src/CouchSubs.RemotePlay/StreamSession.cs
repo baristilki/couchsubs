@@ -225,6 +225,38 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
         }
     }
 
+    private volatile bool highQuality;
+
+    /// <inheritdoc />
+    public bool HighQuality
+    {
+        get => highQuality;
+        set
+        {
+            if (highQuality == value) return;
+            highQuality = value;
+            highQualityRejected = false;
+            RemotePlayLog.Note($"oyun görüntüsü kalitesi: {(value ? "yüksek (HEVC)" : "standart")}");
+            if (GameVideo is not null) Reopen();
+        }
+    }
+
+    /// <summary>PS5 yüksek kalitede açılan bağlantıyı görüntü vermeden kapattı: bu oturum boyunca standarda dönülür.</summary>
+    private volatile bool highQualityRejected;
+
+    /// <summary>Bu bağlantıda istenecek kalite: yüksek kalite yalnız oyun görüntüsü açıkken (yazı okuma için gerekmez).</summary>
+    private int RequestedQuality =>
+        GameVideo is not null && highQuality && !highQualityRejected ? NativeMethods.QualityHigh : NativeMethods.QualityStandard;
+
+    /// <summary>
+    /// Bağlantıyı açık tutan dürtmenin aralığı. Kol PS5'e doğrudan bağlıyken Remote Play bağlantısından hiç girdi
+    /// gitmiyor, PS5 de bağlantıyı tam 20 dakikada bir "Server shutting down" diye kapatıyordu (yayın 20-90 sn donuyordu).
+    /// </summary>
+    internal static readonly TimeSpan NudgeEvery = TimeSpan.FromMinutes(4);
+    /// <summary>Sol çubuğun en çok %2'si: oyunların ölü bölgesinde kalır, karakter kıpırdamaz.</summary>
+    internal const int NudgeAmount = 600;
+    private long lastNudge;
+
     /// <summary>Bu bağlantıda ses istenecek mi: yalnız oyun görüntüsü açıkken.</summary>
     private bool WantsAudio => GameVideo is not null && GameAudio is not null;
 
@@ -448,6 +480,8 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
                 {
                     if (box?.Generation != eventGeneration || !IsCurrent(eventGeneration)) return;
                     policy.Reset();
+                    box!.Connected = true;
+                    lastNudge = Environment.TickCount64;
                     watchdog.Connected(Environment.TickCount64);
                     Emit(SessionState.Streaming);
                     ScheduleWatch(eventGeneration);
@@ -478,6 +512,7 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
                 {
                     // Eski bir oturumun (ör. ReconnectNow ile kapatılanın) kapanma olayı yeni oturumu etkilemez.
                     if (box?.Generation != eventGeneration || !IsCurrent(eventGeneration)) return;
+                    NoteHighQualityFailure(box);
                     CloseBox();
                     if (reason.Kind == DisconnectKind.RegistrationInvalid)
                     {
@@ -503,13 +538,37 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
             if (box?.Generation != boxGeneration || !IsCurrent(boxGeneration)) return;
             if (watchdog.Stalled(Environment.TickCount64) is not { } gap)
             {
+                KeepAlive(box!);
                 ScheduleWatch(boxGeneration);
                 return;
             }
+            NoteHighQualityFailure(box, stalled: true);
             RemotePlayLog.Note($"PS5'ten {(int)gap.TotalSeconds} sn'dir görüntü gelmiyor (bağlantı açık); oturum yeniden kuruluyor");
             CloseBox();
             ScheduleReconnect(boxGeneration, new DisconnectReason(DisconnectKind.Other, PictureWatchdog.Reason));
         });
+    }
+
+    /// <summary>Ara sıra çubuğu çok az itip bırakır; PS5 bağlantıyı boşta sayıp kapatmasın (bkz. <see cref="NudgeEvery"/>).</summary>
+    private void KeepAlive(SessionBox current)
+    {
+        var now = Environment.TickCount64;
+        if (now - lastNudge < (long)NudgeEvery.TotalMilliseconds) return;
+        lastNudge = now;
+        current.Nudge(NudgeAmount);
+        queue.PostAfter(TimeSpan.FromMilliseconds(150), () => current.Nudge(0));
+    }
+
+    /// <summary>
+    /// Yüksek kalitede (HEVC, yüksek bit hızı) açılan bağlantı görüntü vermeden kapandıysa ya da görüntü hiç gelmediyse
+    /// PS5 bu ayarı kabul etmiyor sayılır: bu oturum boyunca standart kaliteyle bağlanılır, altyazı da kesilmez.
+    /// </summary>
+    private void NoteHighQualityFailure(SessionBox? current, bool stalled = false)
+    {
+        if (current is not { High: true } || highQualityRejected) return;
+        if (current.Connected && !stalled && current.GotPicture) return;
+        highQualityRejected = true;
+        RemotePlayLog.Note("PS5 yüksek görüntü kalitesini (HEVC) vermedi; standart kaliteyle bağlanılıyor");
     }
 
     private void ScheduleReconnect(int current, DisconnectReason reason)
@@ -542,6 +601,23 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
         private string? lastError;
         /// <summary>Oturum isteğinin günlükten anlaşılan düşme nedeni (yerel iş parçacığında yazılır, okunur).</summary>
         private volatile DisconnectReason? sessionRequestHint;
+        /// <summary>Yüksek kalitede (HEVC) açıldı.</summary>
+        public bool High { get; private set; }
+        /// <summary>PS5 akışı başlattı (kuyrukta yazılır).</summary>
+        public bool Connected { get; set; }
+        private volatile bool gotPicture;
+        /// <summary>En az bir kare çözüldü.</summary>
+        public bool GotPicture => gotPicture;
+
+        /// <summary>Sol çubuk (bkz. <see cref="NudgeAmount"/>); oturum kapandıysa bir şey yapmaz.</summary>
+        public void Nudge(int leftX)
+        {
+            lock (tearLock)
+            {
+                if (native == 0) return;
+                NativeMethods.Nudge(native, leftX);
+            }
+        }
 
         private SessionBox(StreamSession owner, int generation)
         {
@@ -566,9 +642,13 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
                 fixed (byte* key = registKey)
                 fixed (byte* morningPointer = morning)
                 fixed (byte* account = accountId)
+                {
+                    var quality = owner.RequestedQuality;
+                    box.High = quality == NativeMethods.QualityHigh;
                     box.native = NativeMethods.SessionStart(console.Host, key, morningPointer, account, NativeFps(owner.GameVideo is not null),
                                                             owner.RequestedFps, (nint)frame, owner.WantsAudio ? (nint)audio : 0,
-                                                            (nint)eventCallback, (nint)log, GCHandle.ToIntPtr(box.handle));
+                                                            (nint)eventCallback, (nint)log, GCHandle.ToIntPtr(box.handle), quality);
+                }
             }
             catch (Exception error)
             {
@@ -612,6 +692,7 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
             {
                 if (From(user) is { } box && bgra != null && width > 0 && height > 0)
                 {
+                    box.gotPicture = true;
                     box.owner.watchdog.Picture(Environment.TickCount64);
                     box.owner.GameVideo?.Write((nint)bgra, width, height, stride);
                     box.owner.delivery.Offer((nint)bgra, width, height, stride);

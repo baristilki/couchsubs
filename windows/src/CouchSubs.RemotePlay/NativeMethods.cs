@@ -69,12 +69,60 @@ internal static unsafe partial class NativeMethods
     private static partial nint cs_session_start_ex(string host, byte* registKey, byte* morning, byte* accountId, int maxFps,
                                                     int videoFps, nint frame, nint audio, nint eventCallback, nint log, nint user);
 
+    /// <summary>cs_session_start_ex + görüntü kalitesi (<see cref="QualityHigh"/>: HEVC ve yüksek bit hızı).</summary>
+    [LibraryImport(Library, EntryPoint = "cs_session_start_ex2", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial nint cs_session_start_ex2(string host, byte* registKey, byte* morning, byte* accountId, int maxFps,
+                                                     int videoFps, int quality, nint frame, nint audio, nint eventCallback,
+                                                     nint log, nint user);
+
+    internal const int QualityStandard = 0;
+    internal const int QualityHigh = 1;
+
+    /// <summary>Sol çubuğu yatayda verilen konuma getirir (0: ortada); bkz. couchsubs_native.h cs_session_nudge.</summary>
+    [LibraryImport(Library, EntryPoint = "cs_session_nudge")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial int cs_session_nudge(nint session, int leftX);
+
+    private static bool? hasNudge;
+
+    /// <summary>Eski DLL'de cs_session_nudge yoktur; o zaman hiçbir şey gönderilmez.</summary>
+    internal static void Nudge(nint session, int leftX)
+    {
+        if (hasNudge == false) return;
+        try
+        {
+            cs_session_nudge(session, leftX);
+            hasNudge = true;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            hasNudge = false;
+            RemotePlayLog.Note("yerel kitaplık eski: bağlantıyı açık tutan kol dürtmesi yok");
+        }
+    }
+
     /// <summary>Eski DLL'de (ses ve 60 kare öncesi) cs_session_start_ex yoktur; o zaman ses ve 60 kare olmadan açılır.</summary>
     private static bool? hasStartEx;
+    private static bool? hasStartEx2;
 
     internal static nint SessionStart(string host, byte* registKey, byte* morning, byte* accountId, int maxFps, int videoFps,
-                                      nint frame, nint audio, nint eventCallback, nint log, nint user)
+                                      nint frame, nint audio, nint eventCallback, nint log, nint user, int quality = QualityStandard)
     {
+        if (hasStartEx2 != false && quality != QualityStandard)
+        {
+            try
+            {
+                var session = cs_session_start_ex2(host, registKey, morning, accountId, maxFps, videoFps, quality, frame, audio, eventCallback, log, user);
+                hasStartEx2 = true;
+                return session;
+            }
+            catch (EntryPointNotFoundException)
+            {
+                hasStartEx2 = false;
+                RemotePlayLog.Note("yerel kitaplık eski: yüksek görüntü kalitesi yok, standart açılıyor");
+            }
+        }
         if (hasStartEx != false && (videoFps != 30 || audio != 0))
         {
             try

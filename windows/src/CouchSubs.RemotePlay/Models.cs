@@ -155,4 +155,10 @@ public interface IGameVideoSource
     /// istenebildiğinden değişirse bağlantı yeniden kurulur.
     /// </summary>
     IGameAudioOutput? GameAudio { get; set; }
+
+    /// <summary>
+    /// Oyun görüntüsü açıkken yüksek kalite istenir: HEVC ve yüksek bit hızı (yayında daha az bloklanma). PS5 kabul
+    /// etmezse kendiliğinden standart kaliteye dönülür. Değişirse bağlantı yeniden kurulur.
+    /// </summary>
+    bool HighQuality { get; set; }
 }

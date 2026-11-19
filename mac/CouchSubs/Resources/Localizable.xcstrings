@@ -11714,6 +11714,38 @@
         }
       }
     },
+    "High picture quality (HEVC, sharper in the stream)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "High picture quality (HEVC, sharper in the stream)"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yüksek görüntü kalitesi (HEVC, yayında daha net)"
+          }
+        }
+      }
+    },
+    "Look like the real game (only the game name and icon, no CouchSubs)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Look like the real game (only the game name and icon, no CouchSubs)"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gerçek oyun gibi görün (yalnız oyunun adı ve ikonu, CouchSubs yazmaz)"
+          }
+        }
+      }
+    },
     "Play the game sound on this computer": {
       "localizations": {
         "en": {

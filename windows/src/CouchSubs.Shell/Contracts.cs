@@ -42,6 +42,8 @@ public static class StoreKeys
     public const string StreamGameAudio = "streamGameAudio";
     /// <summary>Yayın penceresinde oyun görüntüsünün kare hızı: 30 ya da 60.</summary>
     public const string StreamVideoFps = "streamVideoFps";
+    /// <summary>Yayın penceresinde oyun görüntüsü yüksek kalitede (HEVC, yüksek bit hızı) istensin mi (vars. açık).</summary>
+    public const string StreamHighQuality = "streamHighQuality";
     /// <summary>Oyun görüntüsü zemininde çeviri, oyunun kendi altyazısının renginde gösterilsin mi (vars. açık).</summary>
     public const string StreamMatchGameColor = "streamMatchGameColor";
     /// <summary>Oyun görüntüsü zemininde oyunun İngilizce altyazısının nasıl örtüleceği (<see cref="StreamCover"/>).</summary>
@@ -62,6 +64,8 @@ public static class StoreKeys
     public const string DiscordPresence = "discordPresence";
     /// <summary>Kullanıcının Discord Developer Portal'da açtığı uygulamanın kimliği (adı Discord'da "oynuyor" diye görünür).</summary>
     public const string DiscordAppId = "discordAppId";
+    /// <summary>Discord durumu gerçek oyun gibi: yalnız oyunun adı ve ikonu, "CouchSubs"/"altyazı" yazmaz (vars. açık).</summary>
+    public const string DiscordLikeGame = "discordLikeGame";
     /// <summary>O uygulamanın Rich Presence görsellerinden büyük görselin anahtarı (ör. "gta6") ya da https adresi.</summary>
     public const string DiscordImage = "discordImage";
 }
@@ -95,6 +99,9 @@ public interface IDiscordPresence : IDisposable
 
     /// <summary>Discord uygulamasının adı (Developer Portal'daki; herkese açık bilgi); alınamazsa null.</summary>
     Task<string?> AppNameAsync(string appId) => Task.FromResult<string?>(null);
+
+    /// <summary>Discord uygulamasının ikonu (PNG); yayın penceresinin ikonu olur. Alınamazsa null.</summary>
+    Task<byte[]?> AppIconAsync(string appId) => Task.FromResult<byte[]?>(null);
 }
 
 /// <summary>Oyun görüntüsü zemininde, çeviri görünürken oyunun İngilizce altyazısı nasıl örtülür.</summary>

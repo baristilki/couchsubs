@@ -432,11 +432,11 @@ typedef struct {
 	int source_range;
 } cs_decoder;
 
-static int cs_decoder_init(cs_decoder *decoder)
+static int cs_decoder_init(cs_decoder *decoder, bool hevc)
 {
 	memset(decoder, 0, sizeof(*decoder));
 	decoder->source_format = -1;
-	const AVCodec *codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+	const AVCodec *codec = avcodec_find_decoder(hevc ? AV_CODEC_ID_HEVC : AV_CODEC_ID_H264);
 	if(!codec)
 		return -1;
 	decoder->codec = avcodec_alloc_context3(codec);
@@ -705,6 +705,14 @@ CS_API cs_session *cs_session_start_ex(const char *host, const uint8_t regist_ke
 		const uint8_t account_id[8], int max_fps, int video_fps,
 		cs_frame_cb frame, cs_audio_cb audio, cs_event_cb event, cs_log_cb log, void *user)
 {
+	return cs_session_start_ex2(host, regist_key, morning, account_id, max_fps, video_fps, CS_QUALITY_STANDARD,
+			frame, audio, event, log, user);
+}
+
+CS_API cs_session *cs_session_start_ex2(const char *host, const uint8_t regist_key[0x10], const uint8_t morning[0x10],
+		const uint8_t account_id[8], int max_fps, int video_fps, int quality,
+		cs_frame_cb frame, cs_audio_cb audio, cs_event_cb event, cs_log_cb log, void *user)
+{
 	if(!host || !regist_key || !morning || !account_id)
 		return NULL;
 
@@ -720,7 +728,15 @@ CS_API cs_session *cs_session_start_ex(const char *host, const uint8_t regist_ke
 	chiaki_log_init(&session->log, CS_LOG_MASK, cs_log_forward, &session->log_target);
 	cs_throttle_init(&session->throttle, max_fps);
 
-	if(cs_decoder_init(&session->decoder) != 0)
+	/* Yüksek kalite: HEVC (aynı bit hızında H.264'ten belirgin temiz) ve daha yüksek bit hızı. Çözücü bu DLL'de
+	 * yoksa H.264'e dönülür. */
+	bool hevc = quality == CS_QUALITY_HIGH;
+	if(hevc && cs_decoder_init(&session->decoder, true) != 0)
+	{
+		cs_logf(log, user, 1, "%s", "HEVC decoder not available, using H.264");
+		hevc = false;
+	}
+	if(!hevc && cs_decoder_init(&session->decoder, false) != 0)
 	{
 		cs_logf(log, user, 0, "%s", "H.264 decoder could not be opened");
 		free(session);
@@ -736,7 +752,16 @@ CS_API cs_session *cs_session_start_ex(const char *host, const uint8_t regist_ke
 	memcpy(info.morning, morning, sizeof(info.morning));
 	chiaki_connect_video_profile_preset(&info.video_profile, CHIAKI_VIDEO_RESOLUTION_PRESET_1080p,
 			video_fps == 60 ? CHIAKI_VIDEO_FPS_PRESET_60 : CHIAKI_VIDEO_FPS_PRESET_30);
-	info.video_profile.codec = CHIAKI_CODEC_H264;
+	info.video_profile.codec = hevc ? CHIAKI_CODEC_H265 : CHIAKI_CODEC_H264;
+	if(quality == CS_QUALITY_HIGH)
+		info.video_profile.bitrate = CS_HIGH_BITRATE_KBPS;
+	if(log)
+	{
+		char line[96];
+		snprintf(line, sizeof(line), "Video: 1080p/%d %s %u kbps", video_fps == 60 ? 60 : 30, hevc ? "HEVC" : "H.264",
+				(unsigned)info.video_profile.bitrate);
+		log(2, line, user);
+	}
 	info.video_profile_auto_downgrade = true;
 	info.enable_keyboard = false;
 	info.enable_dualsense = false;
@@ -777,6 +802,16 @@ CS_API cs_session *cs_session_start_ex(const char *host, const uint8_t regist_ke
 		return NULL;
 	}
 	return session;
+}
+
+CS_API int cs_session_nudge(cs_session *session, int left_x)
+{
+	if(!session)
+		return CHIAKI_ERR_INVALID_DATA;
+	ChiakiControllerState state;
+	chiaki_controller_state_set_idle(&state);
+	state.left_x = (int16_t)(left_x < -32768 ? -32768 : left_x > 32767 ? 32767 : left_x);
+	return chiaki_session_set_controller_state(&session->session, &state);
 }
 
 CS_API int cs_session_set_login_pin(cs_session *session, const uint8_t *pin, size_t pin_size)

@@ -50,6 +50,24 @@ internal sealed class DiscordIpcPresence : IDiscordPresence
         }
     }
 
+    public async Task<byte[]?> AppIconAsync(string appId)
+    {
+        try
+        {
+            using var response = await Http.GetAsync($"https://discord.com/api/v10/applications/{Uri.EscapeDataString(appId)}/rpc").ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode) return null;
+            using var json = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+            if (!json.RootElement.TryGetProperty("icon", out var hash) || hash.GetString() is not { Length: > 0 } icon) return null;
+            if (!icon.All(char.IsAsciiLetterOrDigit)) return null;
+            return await Http.GetByteArrayAsync($"https://cdn.discordapp.com/app-icons/{Uri.EscapeDataString(appId)}/{icon}.png?size=256").ConfigureAwait(false);
+        }
+        catch (Exception error) when (error is System.Net.Http.HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            RemotePlayLog.Note($"Discord uygulama ikonu alınamadı: {error.Message}");
+            return null;
+        }
+    }
+
     public void Update(DiscordActivity? activity)
     {
         lock (gate)

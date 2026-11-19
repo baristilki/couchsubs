@@ -65,9 +65,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ffmpeg-prefix
-          key: ffmpeg-${{ env.FFMPEG_VERSION }}-mingw64-h264-swscale-v1
+          key: ffmpeg-${{ env.FFMPEG_VERSION }}-mingw64-h264-hevc-swscale-v1
 
-      # LGPL, yalnız h264 çözücü + ayrıştırıcı ve swscale; statik.
+      # LGPL, yalnız h264 ve hevc çözücü + ayrıştırıcı ve swscale; statik (hevc: yayın penceresinin yüksek kalitesi).
       - name: FFmpeg (kaynaktan, en küçük yapılandırma)
         if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
         run: |
@@ -87,7 +87,7 @@ jobs:
             --disable-programs --disable-doc --disable-network \
             --disable-avdevice --disable-avformat --disable-avfilter --disable-swresample \
             --enable-avcodec --enable-avutil --enable-swscale \
-            --enable-decoder=h264 --enable-parser=h264
+            --enable-decoder=h264,hevc --enable-parser=h264,hevc
           make -j"$(nproc)"
           make install
 

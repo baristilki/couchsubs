@@ -6,6 +6,24 @@
 
 Site, kurulum rehberi ve SSS: **[couchsubs.enmeraapps.com](https://couchsubs.enmeraapps.com)**
 
+> ### Bu depo: baristilki sürümü (resmî olmayan)
+> Bu, [CouchSubs](https://github.com/yorulmazsinan/couchsubs)'ın üzerine yapılmış bir **fork**'tur. Ana projenin tüm
+> özelliklerini içerir; üstüne **Discord/OBS'te altyazılı yayın** ve **oyuna uyan altyazı** ekler. Ana projenin yeni
+> sürümleri buraya düzenli olarak birleştirilir; bu sürüm kendi güncellemelerini bu depodan alır.
+>
+> **İndir (Windows):** [CouchSubs-windows-Setup.exe](https://github.com/baristilki/couchsubs/releases/latest/download/CouchSubs-windows-Setup.exe)
+> · [Tüm dosyalar ve sürüm notları](https://github.com/baristilki/couchsubs/releases/latest)
+>
+> **Eklenenler**
+> - **TV'de oynarken Discord/OBS'te yayın, capture card olmadan:** Yayın penceresinde PS5 oyun görüntüsü + Türkçe
+>   altyazı + oyun sesi; 30/60 kare/sn, tam ekran (F11), sağ tık menüsü, ses düzeyi ve sessiz (M, +, -).
+> - **Oyuna uyan altyazı:** Çeviri oyunun altyazısının renginde ve boyunda; konuşan adı oyundaki kendi renginde.
+>   Oyunun İngilizce altyazısı bulanıklaştırılır ya da örtülür; istenirse çeviri sürüklenip başka yere konur.
+> - **TV ile senkron:** TV uygulaması (0.9.26) bilgisayardaki görünümün aynısını kullanır.
+> - **Discord "Oynuyor" durumu** (isteğe bağlı) ve yerel modelin çeviride bıraktığı `"] ["` işaretlerinin temizlenmesi.
+>
+> Sorunlar: [baristilki/couchsubs/issues](https://github.com/baristilki/couchsubs/issues). Lisans: AGPL-3.0.
+
 CouchSubs, oyundaki İngilizce altyazıyı anlık okur, Türkçeye çevirir ve TV'de oyun görüntüsünün üstünde
 gösterir. Oyunu her zamanki gibi TV'de, kendi kolunuzla oynarsınız. Yazı tanıma ve varsayılan çeviri bilgisayarınızda
 yapılır; oyun görüntüsü internete gönderilmez. Hazır paketlerde bulunmayan İngilizce altyazı satırları varsayılan olarak

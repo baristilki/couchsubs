@@ -136,6 +136,12 @@ html, body {
   text-shadow: 0 0 3px #000, 0 0 3px #000, 0 2px 4px #000;
 }
 
+/* Uzun çeviri ekranın iki yanına (GTA'da sol alttaki haritaya) kadar uzamasın: genişlik sınırında alt satıra geçer. */
+#subtitle-text, #subtitle-prev-text, #subtitle-prev2-text {
+  max-width: 62vw;
+  box-sizing: border-box;
+}
+
 /* Bilgisayarın yayın penceresindeki "Bulanık" ya da "Dokunma" seçimi (app.js look.cover): çeviri kutusuz, oyun
    altyazısı gibi yumuşak gölgeli yazı; önceki satırların kutusu da kalkar. */
 body.game-look #subtitle-text, body.game-look #subtitle-prev-text, body.game-look #subtitle-prev2-text {
@@ -154,6 +160,7 @@ body.thin-bg #subtitle-text, body.thin-bg #subtitle-prev-text, body.thin-bg #sub
 body.band #subtitle { left: 0 !important; right: 0 !important; }
 body.band #subtitle-text, body.band #subtitle-prev-text, body.band #subtitle-prev2-text {
   display: block;
+  max-width: none;
   box-sizing: border-box;
   border-radius: 0;
 }

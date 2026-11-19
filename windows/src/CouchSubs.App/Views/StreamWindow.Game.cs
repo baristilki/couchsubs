@@ -27,7 +27,7 @@ public sealed partial class StreamWindow
     private const double CoverPad = 0.012;
     /// <summary>Çevirinin en çok kaplayacağı genişlik (görüntüye oranla): cümle yan yana uzar, ama çok uzunsa ekranı
     /// boydan boya kaplamasın diye (oyun altyazıları gibi) alt satıra geçer.</summary>
-    private const double MaxLineWidth = 0.72;
+    private const double MaxLineWidth = 0.6;
 
     private readonly Border cover = new()
     {

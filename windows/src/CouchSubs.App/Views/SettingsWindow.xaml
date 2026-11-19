@@ -521,29 +521,40 @@
                     </c:Card>
                     <!-- Şeffaflık tanımayan yayın programları için düz zeminli altyazı penceresi (StreamWindow.cs). -->
                     <c:Card Title="{t:T 'Stream window'}" Margin="0,12,0,0">
-                        <StackPanel>
+                        <!-- Seçim satırları tek hizada: etiketler aynı genişlikte (StreamLabel), listeler aynı genişlikte (260). -->
+                        <StackPanel Grid.IsSharedSizeScope="True">
                             <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,12"
                                        Text="{t:T 'For streaming apps without a transparent browser source (TikTok LIVE Studio, Streamlabs and others): open the stream window, add it with Window capture (the window is called CouchSubs Stream) and remove its background with a Chroma key filter.'}" />
-                            <DockPanel Margin="0,0,0,12">
-                                <TextBlock Text="{t:T 'Background'}" VerticalAlignment="Center" Margin="0,0,12,0" />
-                                <ComboBox x:Name="StreamBackgroundChoice" Width="180" HorizontalAlignment="Left" SelectionChanged="OnStreamBackground">
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="StreamLabel" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{t:T 'Background'}" VerticalAlignment="Center" Margin="0,0,16,0" />
+                                <ComboBox x:Name="StreamBackgroundChoice" Grid.Column="1" Width="260" SelectionChanged="OnStreamBackground">
                                     <ComboBoxItem Content="{t:T 'Green'}" Tag="Green" />
                                     <ComboBoxItem Content="{t:T 'Black'}" Tag="Black" />
                                     <ComboBoxItem Content="{t:T 'Magenta'}" Tag="Magenta" />
                                     <ComboBoxItem Content="{t:T 'Game picture (PS5)'}" Tag="Game" />
                                 </ComboBox>
-                            </DockPanel>
+                            </Grid>
                             <!-- Oyun görüntüsü: PS5 bağlantısından (ikinci hesap) gelen görüntü altyazının arkasına çizilir (StreamWindow.cs). -->
                             <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,12"
                                        Text="{t:T 'Game picture: the window shows the PS5 game with the subtitles on top, so you can share it in Discord or OBS while you keep playing on the TV. Only with the PS5 connection (second account).'}" />
                             <!-- Oyun görüntüsü seçenekleri: kare hızı (30/60) ve oyun sesinin bu bilgisayarda çalınması. -->
-                            <DockPanel Margin="0,0,0,12">
-                                <TextBlock Text="{t:T 'Game picture frame rate'}" VerticalAlignment="Center" Margin="0,0,12,0" />
-                                <ComboBox x:Name="StreamFpsChoice" Width="180" HorizontalAlignment="Left" SelectionChanged="OnStreamFps">
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="StreamLabel" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{t:T 'Game picture frame rate'}" VerticalAlignment="Center" Margin="0,0,16,0" />
+                                <ComboBox x:Name="StreamFpsChoice" Grid.Column="1" Width="260" SelectionChanged="OnStreamFps">
                                     <ComboBoxItem Content="{t:T '30 fps'}" Tag="30" />
                                     <ComboBoxItem Content="{t:T '60 fps'}" Tag="60" />
                                 </ComboBox>
-                            </DockPanel>
+                            </Grid>
                             <CheckBox x:Name="StreamGameAudio" Content="{t:T 'Play the game sound on this computer'}" Margin="0,0,0,4"
                                       Checked="OnStreamGameAudio" Unchecked="OnStreamGameAudio" />
                             <CheckBox x:Name="StreamHighQuality" Content="{t:T 'High picture quality (HEVC, sharper in the stream)'}" Margin="0,0,0,4"
@@ -553,26 +564,42 @@
                             <CheckBox x:Name="StreamMatchGameSize" Content="{t:T 'Match the game\'s subtitle size'}" Margin="0,0,0,12"
                                       Checked="OnStreamMatchGameSize" Unchecked="OnStreamMatchGameSize" />
                             <!-- Oyunun İngilizce altyazısı nasıl örtülür; çeviri nerede durur; yazı tipi (StreamWindow.Game.cs). -->
-                            <DockPanel Margin="0,0,0,8">
-                                <TextBlock Text="{t:T 'Game subtitle'}" VerticalAlignment="Center" Margin="0,0,12,0" />
-                                <ComboBox x:Name="StreamCoverChoice" Width="240" HorizontalAlignment="Left" SelectionChanged="OnStreamCover">
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="StreamLabel" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{t:T 'Game subtitle'}" VerticalAlignment="Center" Margin="0,0,16,0" />
+                                <ComboBox x:Name="StreamCoverChoice" Grid.Column="1" Width="260" SelectionChanged="OnStreamCover">
                                     <ComboBoxItem Content="{t:T 'Cover with a dark box'}" Tag="Dark" />
                                     <ComboBoxItem Content="{t:T 'Blur it (no background)'}" Tag="Blur" />
                                     <ComboBoxItem Content="{t:T 'Leave it (translation above)'}" Tag="None" />
                                 </ComboBox>
-                            </DockPanel>
-                            <DockPanel Margin="0,0,0,8">
-                                <TextBlock Text="{t:T 'Translation position'}" VerticalAlignment="Center" Margin="0,0,12,0" />
-                                <ComboBox x:Name="StreamPlacementChoice" Width="240" HorizontalAlignment="Left" SelectionChanged="OnStreamPlacement">
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="StreamLabel" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{t:T 'Translation position'}" VerticalAlignment="Center" Margin="0,0,16,0" />
+                                <ComboBox x:Name="StreamPlacementChoice" Grid.Column="1" Width="260" SelectionChanged="OnStreamPlacement">
                                     <ComboBoxItem Content="{t:T 'On the game subtitle'}" Tag="OnGameSubtitle" />
                                     <ComboBoxItem Content="{t:T 'Where I drag it'}" Tag="Free" />
                                 </ComboBox>
-                                <Button Content="{t:T 'Reset position'}" Margin="8,0,0,0" Padding="12,0" HorizontalAlignment="Left" Click="OnStreamResetPosition" />
-                            </DockPanel>
-                            <DockPanel Margin="0,0,0,4">
-                                <TextBlock Text="{t:T 'Font'}" VerticalAlignment="Center" Margin="0,0,12,0" />
-                                <ComboBox x:Name="StreamFontChoice" Width="240" HorizontalAlignment="Left" SelectionChanged="OnStreamFont" />
-                            </DockPanel>
+                                <Button Grid.Column="2" Content="{t:T 'Reset position'}" Margin="8,0,0,0" Padding="12,0" HorizontalAlignment="Left"
+                                        VerticalAlignment="Stretch" Click="OnStreamResetPosition" />
+                            </Grid>
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="StreamLabel" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{t:T 'Font'}" VerticalAlignment="Center" Margin="0,0,16,0" />
+                                <ComboBox x:Name="StreamFontChoice" Grid.Column="1" Width="260" SelectionChanged="OnStreamFont" />
+                            </Grid>
                             <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,12"
                                        Text="{t:T 'Drag the translation with the mouse in the stream window to move it; the game subtitle then stays visible too. F11 or double-click: full screen. In the stream window M mutes the game sound, + and - change it.'}" />
                             <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,12"

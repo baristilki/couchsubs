@@ -11,6 +11,8 @@
     <string name="overlay_fallback_needs_permission">The PS5 picture is not coming through inside CouchSubs. On some TVs it stays black here; overlay mode fixes this, but it needs the \"Display over other apps\" permission.</string>
     <string name="overlay_unavailable">Overlay is selected, but this TV app from Google Play has no overlay mode, so subtitles are shown inside CouchSubs. Overlay is in the version that CouchSubs on your computer installs directly on the TV: uninstall this copy, turn on USB debugging on the TV and start the translation on your computer.</string>
     <string name="overlay_permission_how">CouchSubs on your computer grants it when it installs the TV app: start the translation there with USB debugging on. Or on the TV open Settings › Apps › Special app access › Display over other apps and turn on CouchSubs.</string>
+    <string name="overlay_choose_console_input">CouchSubs could not tell which HDMI input your console is on. Switch the TV to it with the remote; subtitles will appear on top.</string>
+    <string name="console_not_found">CouchSubs could not tell which HDMI input your console is on.</string>
     <string name="no_picture">No picture from HDMI %1$d.</string>
     <string name="no_picture_empty">No device on HDMI %1$d.</string>
     <string name="no_picture_choose">Choose the HDMI input your PS5 is connected to (arrow keys and OK, or number keys 1–4):</string>

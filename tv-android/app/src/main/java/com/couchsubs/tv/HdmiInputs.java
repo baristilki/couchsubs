@@ -2,6 +2,7 @@
 package com.couchsubs.tv;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.media.tv.TvInputInfo;
 import android.media.tv.TvInputManager;
 
@@ -13,6 +14,10 @@ import java.util.Locale;
 
 /** TV'nin HDMI girişleri; uygulama içi mod ve katman modu ortak kullanır. */
 final class HdmiInputs {
+    private static final String PREFS = "couchsubs";
+    /** En son görüntü gelen ya da kullanıcının seçtiği girişin kimliği. */
+    private static final String KEY_LAST_INPUT = "lastHdmiInput";
+
     private HdmiInputs() {}
 
     /**
@@ -40,18 +45,23 @@ final class HdmiInputs {
         return port >= 1 && port <= inputs.size() ? inputs.get(port - 1).getId() : null;
     }
 
-    /** Giriş seçicide bir satır: numara, kimlik, CEC'in bildirdiği cihaz adı (ör. "PS5"; yoksa null), cihaz bağlı mı. */
+    /**
+     * Giriş seçicide bir satır: numara, kimlik, CEC'in bildirdiği cihaz adı (ör. "PS5"; yoksa null), cihaz bağlı mı,
+     * TV girişin boş olduğunu açıkça bildiriyor mu.
+     */
     static final class Choice {
         final int port;
         final String id;
         final String device;
         final boolean connected;
+        final boolean disconnected;
 
-        Choice(int port, String id, String device, boolean connected) {
+        Choice(int port, String id, String device, boolean connected, boolean disconnected) {
             this.port = port;
             this.id = id;
             this.device = device;
             this.connected = connected;
+            this.disconnected = disconnected;
         }
     }
 
@@ -63,35 +73,94 @@ final class HdmiInputs {
         List<TvInputInfo> inputs = list(context);
         for (int i = 0; i < inputs.size(); i++) {
             String id = inputs.get(i).getId();
-            boolean connected;
+            int state;
             try {
-                connected = manager.getInputState(id) == TvInputManager.INPUT_STATE_CONNECTED;
+                state = manager.getInputState(id);
             } catch (RuntimeException e) {
-                connected = false;
+                state = -1;
             }
-            choices.add(new Choice(i + 1, id, deviceName(context, manager, id), connected));
+            choices.add(new Choice(i + 1, id, deviceName(context, manager, id),
+                    state == TvInputManager.INPUT_STATE_CONNECTED, state == TvInputManager.INPUT_STATE_DISCONNECTED));
         }
         return choices;
     }
 
+    /** Açılışta açılacak giriş ve neden seçildiği; port 0 ise bilinmiyor, kullanıcıya giriş seçici gösterilir. */
+    static final class Pick {
+        static final String CONSOLE = "console";
+        static final String SAVED = "saved";
+        static final String LAST = "last";
+        static final String ACTIVE = "active";
+
+        final int port;
+        final String reason;
+
+        Pick(int port, String reason) {
+            this.port = port;
+            this.reason = reason;
+        }
+    }
+
+    private static final Pick NONE = new Pick(0, null);
+
     /**
-     * PS5'in girişinin numarası, bulunamazsa 0. Önce HDMI-CEC'in bildirdiği cihaz adına bakılır ("PS5", "PlayStation 5"):
-     * birden çok giriş "bağlı" görünen TV'lerde de doğru girişi verir. Ad yoksa tek bağlı HDMI girişi alınır.
+     * Konsolun girişini seçer (#367, #360). Eskiden bulunamayınca sessizce HDMI 1 açılıyordu: PS5 HDMI 3'teyken ve
+     * HDMI-CEC kapalıyken TV HDMI 1'e geçiyordu. Sıra:
+     * 1. HDMI-CEC'in bildirdiği cihaz adı PS5 ya da Xbox olan giriş (en kesin bilgi),
+     * 2. kullanıcının seçtiği giriş (sayı tuşu ya da giriş seçici),
+     * 3. en son görüntü gelen ya da seçilen giriş (TV o girişin boş olduğunu açıkça bildirmiyorsa),
+     * 4. tek bağlı (sinyal veren) HDMI girişi.
+     * Hiçbiri yoksa 0: hiçbir giriş açılmaz, kullanıcı seçer. Listede olmayan numara yok sayılır.
      */
+    static Pick pick(List<Choice> inputs, int saved, int last) {
+        for (Choice input : inputs) {
+            if (looksLikeConsole(input.device)) return new Pick(input.port, Pick.CONSOLE);
+        }
+        Choice chosen = find(inputs, saved);
+        if (chosen != null) return new Pick(chosen.port, Pick.SAVED);
+        Choice previous = find(inputs, last);
+        if (previous != null && !previous.disconnected) return new Pick(previous.port, Pick.LAST);
+        Choice active = null;
+        for (Choice input : inputs) {
+            if (!input.connected) continue;
+            if (active != null) return NONE;
+            active = input;
+        }
+        return active != null ? new Pick(active.port, Pick.ACTIVE) : NONE;
+    }
+
+    private static Choice find(List<Choice> inputs, int port) {
+        if (port <= 0) return null;
+        for (Choice input : inputs) {
+            if (input.port == port) return input;
+        }
+        return null;
+    }
+
+    /** {@link #pick} bu TV'nin girişleriyle; saved sayfanın kaydettiği numara (yoksa 0), son giriş uygulamanın kaydı. */
+    static Pick pick(Context context, int saved) {
+        List<Choice> inputs = choices(context);
+        String lastId = prefs(context).getString(KEY_LAST_INPUT, null);
+        int last = 0;
+        for (Choice input : inputs) {
+            if (input.id.equals(lastId)) last = input.port;
+        }
+        return pick(inputs, saved, last);
+    }
+
+    /** Görüntü gelen ya da kullanıcının seçtiği giriş; sonraki açılışlarda da bu açılır. */
+    static void remember(Context context, String id) {
+        if (id != null) prefs(context).edit().putString(KEY_LAST_INPUT, id).apply();
+    }
+
+    /** Kullanıcı "0" ile seçimi bıraktı: kayıtlı giriş unutulur, konsol yeniden aranır. */
+    static void forget(Context context) {
+        prefs(context).edit().remove(KEY_LAST_INPUT).apply();
+    }
+
+    /** PS5'in ya da Xbox'ın girişi (CEC adı ya da tek bağlı giriş), bulunamazsa 0. */
     static int consolePort(Context context) {
-        TvInputManager manager = manager(context);
-        if (manager == null) return 0;
-        List<TvInputInfo> inputs = list(context);
-        for (int i = 0; i < inputs.size(); i++) {
-            if (looksLikeConsole(deviceName(context, manager, inputs.get(i).getId()))) return i + 1;
-        }
-        int found = 0;
-        for (int i = 0; i < inputs.size(); i++) {
-            if (manager.getInputState(inputs.get(i).getId()) != TvInputManager.INPUT_STATE_CONNECTED) continue;
-            if (found != 0) return 0;
-            found = i + 1;
-        }
-        return found;
+        return pick(choices(context), 0, 0).port;
     }
 
     /** Girişte bir cihaz var mı; TV bunu bildirmiyorsa var sayılır. */
@@ -118,11 +187,15 @@ final class HdmiInputs {
         return null;
     }
 
-    /** CEC cihaz adı bir PlayStation mı ("PS5", "PlayStation 5", "SONY PS5"). */
+    /** CEC cihaz adı bir PlayStation ya da Xbox mı ("PS5", "PlayStation 5", "SONY PS5", "Xbox Series X"). */
     static boolean looksLikeConsole(String name) {
         if (name == null) return false;
         String plain = name.toLowerCase(Locale.ROOT).replace(" ", "");
-        return plain.contains("ps5") || plain.contains("playstation");
+        return plain.contains("ps5") || plain.contains("playstation") || plain.contains("xbox");
+    }
+
+    private static SharedPreferences prefs(Context context) {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
     private static TvInputManager manager(Context context) {

@@ -123,10 +123,23 @@
       bridge.showHdmi(port);
     },
 
+    // Yalnız "0" tuşundan sonra çağrılır (elle seçim bırakıldı): uygulamanın kaydettiği giriş de unutulur.
     findConsolePort: function (callback) {
+      if (bridge.forgetInput) bridge.forgetInput();
       var port = bridge.consolePort();
       callback(port > 0 ? port : null, port > 0 ? 'HDMI ' + port : null);
     },
+
+    // Açılışta açılacak giriş (#367): CEC'te PS5/Xbox adı, kayıtlı seçim, son görüntü gelen giriş, tek bağlı giriş.
+    // Bulunamazsa port null: HDMI 1 açılmaz, chooseInput() giriş seçiciyi gösterir. auto: kendiliğinden bulundu.
+    pickPort: !bridge.pickPort ? null : function (saved, callback) {
+      var parts = String(bridge.pickPort(saved || 0)).split(':');
+      var port = Number(parts[0]) || null;
+      var reason = parts[1] || '';
+      callback(port, reason === 'console' || reason === 'active');
+    },
+
+    chooseInput: function () { bridge.chooseInput(); },
 
     localAddress: function (callback) { callback(bridge.localAddress() || null); },
 

@@ -179,6 +179,16 @@ public class OverlayService extends Service implements TvPage.Host {
     @Override
     public void exit() { stopSelf(); }
 
+    /**
+     * Konsolun girişi bulunamadı: TV HDMI 1'e geçirilmez (#367), olduğu girişte kalır. Katmanda kumanda yok, seçici
+     * gösterilemez; kullanıcı girişi TV'nin kumandasıyla seçer, altyazı yine üstte çıkar.
+     */
+    @Override
+    public void chooseInput() {
+        if (page == null) return;
+        Toast.makeText(this, R.string.overlay_choose_console_input, Toast.LENGTH_LONG).show();
+    }
+
     /** Bilgisayarda "Uygulama içinde" seçildi: katman kapanır, CouchSubs öne gelir. */
     @Override
     public void displayModeChanged(String mode) {

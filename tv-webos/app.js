@@ -147,6 +147,8 @@
   var noPictureClosed = false;
   var noPictureFocus = 0;
   var noPictureActions = [];
+  // Kutu görüntü yokken değil, konsolun girişini sormak için açık (#360): görüntü gelince kendiliğinden kapanmaz.
+  var choosingInput = false;
 
   function watchPicture(port) {
     clearTimeout(pictureTimer);
@@ -166,7 +168,7 @@
     if (kind === 'ready' || kind === 'playing') {
       pictureOk = true;
       clearTimeout(pictureTimer);
-      hideNoPicture();
+      if (!choosingInput) hideNoPicture();
     } else if (kind === 'inputError' || kind === 'sourceError') {
       clearTimeout(pictureTimer);
       if (platform.noPictureHelp) showNoPicture(port, true);
@@ -179,8 +181,25 @@
     if (noPictureClosed || pictureOk || demoRunning()) return;
     // Neden ve ne yapılacağı düğmelerin üstünde; uzun "hâlâ siyah mı" açıklaması (index.html, #no-picture-help)
     // düğmelerin altında, küçük ve ikincil renkte durur.
-    $('no-picture-text').textContent = t(failed ? 'noPictureError' : 'noPicture').replace('%1', port) + ' ' +
-      t('noPictureChoose');
+    choosingInput = false;
+    showChoices(port, t('noPictureTitle'),
+      t(failed ? 'noPictureError' : 'noPicture').replace('%1', port) + ' ' + t('noPictureChoose'), true);
+  }
+
+  // TV'ye birden çok HDMI cihazı bağlı ve konsolun girişi tahmin edildi (Samsung girişteki cihazın adını vermez).
+  // Görüntü gelse de kullanıcıya sorulur: bilgisayar da TV'ye bağlıyken uygulama Xbox yerine bilgisayarın ekranını
+  // açıyor, kullanıcı test altyazısını bilgisayarın görüntüsünün üstünde görüp oyunda çeviri çıkmıyor sanıyordu (#360).
+  // Seçilen giriş kaydedilir; sonraki açılışlarda sorulmaz.
+  function askConsoleInput(port) {
+    if (noPictureClosed || demoRunning()) return;
+    choosingInput = true;
+    showChoices(port, t('pickInputTitle'), t('pickInput').replace('%1', port), false);
+  }
+
+  function showChoices(port, title, text, stillBlackHelp) {
+    $('no-picture-title').textContent = title;
+    $('no-picture-text').textContent = text;
+    $('no-picture-help').style.display = stillBlackHelp ? '' : 'none';
     var box = $('no-picture-choices');
     box.innerHTML = '';
     var actions = [];
@@ -276,18 +295,46 @@
   function hideNoPicture() {
     var el = $('no-picture');
     if (!el || el.className === 'hidden') return;
+    choosingInput = false;
     el.className = 'hidden';
     if (!server && !demoRunning()) $('waiting').className = '';
   }
 
+  // Açılışta girişi açar. Platform girişi kendisi seçebiliyorsa (Android TV: CEC'teki konsol adı, kayıtlı seçim, son
+  // görüntü gelen giriş, tek bağlı giriş) o kullanılır; bulunamazsa HDMI 1 açılmaz, kullanıcıya giriş seçici gösterilir
+  // (#367: PS5 HDMI 3'teyken TV HDMI 1'e geçiyordu). Diğer TV'lerde kayıtlı giriş ya da HDMI 1 açılır, PS5 aranır.
+  function startHdmi() {
+    if (!platform.pickPort) {
+      showHdmi(hdmiPort);
+      if (!savedPort) autoSelectConsole();
+      return;
+    }
+    platform.pickPort(savedPort, function (port, auto) {
+      if (!port) {
+        setStatus('st-hdmi', t('consoleNotFound'), 'bad');
+        platform.chooseInput();
+        return;
+      }
+      hdmiPort = port;
+      showHdmi(port);
+      if (auto) setStatus('st-hdmi', port + ' (' + t('auto') + ')');
+    });
+  }
+
+  // connected: bağlı HDMI sayısı (yalnız Samsung bildirir). Birden çoksa seçim tahmindir, giriş kullanıcıya sorulur.
   function autoSelectConsole(onNotFound) {
-    platform.findConsolePort(function (port, label) {
-      if (!port) return onNotFound && onNotFound();
+    platform.findConsolePort(function (port, label, connected) {
+      var guessed = connected > 1;
+      if (!port) {
+        if (guessed) askConsoleInput(hdmiPort);
+        return onNotFound && onNotFound();
+      }
       if (port !== hdmiPort) {
         hdmiPort = port;
         showHdmi(port);
       }
       setStatus('st-hdmi', port + ' — ' + label + ' (' + t('auto') + ')');
+      if (guessed) askConsoleInput(port);
     });
   }
 
@@ -1634,8 +1681,7 @@
   formatKeys();
   var savedBottom = load('bottom') || load('appBottom');
   if (savedBottom) setBottom(Number(savedBottom));
-  showHdmi(hdmiPort);
-  if (!savedPort) autoSelectConsole();
+  startHdmi();
 
   $('app-version').textContent = APP_VERSION;
   renderDiag();

@@ -129,6 +129,8 @@ public class MainActivity extends Activity implements TvPage.Host {
                 @Override public void onVideoAvailable(String inputId) {
                     retuneAttempts = 0;
                     watch.videoAvailable();
+                    // Görüntü gelen giriş kaydedilir: sonraki açılışta konsol yeniden aranmadan bu açılır (#367).
+                    HdmiInputs.remember(MainActivity.this, inputId);
                     hideHelp();
                     keepScreenOn(true);
                     status("playing");
@@ -331,6 +333,9 @@ public class MainActivity extends Activity implements TvPage.Host {
             int port = tunedPort(inputs);
             if (port > 0) {
                 text.append(getString(sourceConnected ? R.string.no_picture : R.string.no_picture_empty, port)).append(' ');
+            } else if (tunedInput == null) {
+                // Konsolun girişi bulunamadı, hiçbir giriş açılmadı (bkz. chooseInput).
+                text.append(getString(R.string.console_not_found)).append(' ');
             }
             text.append(getString(R.string.no_picture_choose));
             text.append("\n\n").append(getString(R.string.no_picture_still_black));
@@ -452,6 +457,8 @@ public class MainActivity extends Activity implements TvPage.Host {
         hidePicker();
         pickerClosed = false;
         watch.pause();
+        // Seçim kalıcı: 4'ten büyük numaralar sayfada kaydedilmez, uygulama da kaydeder (#367).
+        HdmiInputs.remember(this, HdmiInputs.idForPort(this, port));
         if (port >= 1 && port <= 4 && page != null) page.key(48 + port);
         else showHdmi(port);
     }
@@ -493,6 +500,15 @@ public class MainActivity extends Activity implements TvPage.Host {
         }
         retuneAttempts = 0;
         tune(id);
+    }
+
+    /**
+     * Konsolun girişi bulunamadı (CEC kapalı, birden çok giriş bağlı görünüyor, kayıtlı seçim yok): eskiden HDMI 1
+     * açılıyordu (#367). Artık hiçbir giriş açılmaz, giriş seçici hemen gösterilir; seçilen giriş kaydedilir.
+     */
+    @Override
+    public void chooseInput() {
+        if (!pickerShown && !pickerClosed) showPicker(true);
     }
 
     @Override

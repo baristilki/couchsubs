@@ -11,6 +11,8 @@ internal sealed class FakeDiscord : IDiscordPresence
     public void Update(DiscordActivity? activity) => Updates.Add(activity);
     public string? Name { get; set; } = "Grand Theft Auto VI";
     public Task<string?> AppNameAsync(string appId) => Task.FromResult(Name);
+    public IReadOnlyList<string>? Assets { get; set; }
+    public Task<IReadOnlyList<string>?> AppAssetsAsync(string appId) => Task.FromResult(Assets);
     public void Dispose() { }
 }
 
@@ -80,6 +82,30 @@ public class DiscordPresenceTests
         Assert.Null(discord.Updates[^1]);
         Assert.Null(controller.DiscordAppName);
         controller.Dispose();
+    }
+
+    /// <summary>Uygulamada "banner" ve "logo" görselleri varsa: büyük görsel kapak, köşede logo, üstlerinde oyunun adı.</summary>
+    [Fact]
+    public void LikeGameUsesTheAppsBannerAndLogo()
+    {
+        var discord = new FakeDiscord { Assets = ["logo", "banner"] };
+        var controller = AppControllerTests.Make(new FakeServices { Discord = discord });
+        controller.DiscordAppId = Id;
+        controller.DiscordPresenceEnabled = true;
+        var shown = discord.Updates[^1]!;
+        Assert.Equal("banner", shown.LargeImage);
+        Assert.Equal("logo", shown.SmallImage);
+        Assert.Equal("Grand Theft Auto VI", shown.LargeText);
+        Assert.Null(shown.Details);
+        controller.Dispose();
+    }
+
+    [Fact]
+    public void LikeGameWithOnlyALogoShowsItLarge()
+    {
+        var activity = DiscordPresence.For(Id, "", null, true, true, DateTimeOffset.UnixEpoch, Tr, likeGame: true, assets: ["logo"], appName: "GTA")!;
+        Assert.Equal("logo", activity.LargeImage);
+        Assert.Null(activity.SmallImage);
     }
 
     /// <summary>Gerçek oyun gibi (varsayılan): yalnız oyunun adı; CouchSubs, altyazı, "Yayında" ve konsol ikonu yok.</summary>

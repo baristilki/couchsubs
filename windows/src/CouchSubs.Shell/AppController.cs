@@ -1732,12 +1732,17 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     {
         if (services.DiscordPresence is not { } discord) return;
         var activity = DiscordPresenceEnabled
-            ? DiscordPresence.For(DiscordAppId, DiscordImage, PlayedGame, IsRunning, gameVideoWanted, discordSince, text, IsXbox, DiscordLikeGame)
+            ? DiscordPresence.For(DiscordAppId, DiscordImage, PlayedGame, IsRunning, gameVideoWanted, discordSince, text, IsXbox, DiscordLikeGame,
+                                  discordAssets, DiscordAppName)
             : null;
+        if (activity != lastDiscord)
+        {
+            lastDiscord = activity;
+            discord.Update(activity);
+        }
+        // Ad ve görseller gelince (bkz. RefreshDiscordAppNameAsync) bu yöntem yeniden çağrılır; en son gönderilen
+        // durum eskisinin üstüne yazılmasın diye gönderimden sonra.
         _ = RefreshDiscordAppNameAsync(activity?.AppId);
-        if (activity == lastDiscord) return;
-        lastDiscord = activity;
-        discord.Update(activity);
     }
 
     private string? discordAppName;
@@ -1749,6 +1754,9 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     /// Discord'da "Yayında: Grand Theft Auto VI" görünür.
     /// </summary>
     public string? DiscordAppName { get => discordAppName; private set => Set(ref discordAppName, value); }
+
+    /// <summary>Discord uygulamasının Art Assets adları ("banner", "logo"…); durum bunlarla gerçek oyun gibi görünür.</summary>
+    private IReadOnlyList<string> discordAssets = [];
 
     private byte[]? discordAppIcon;
 
@@ -1764,6 +1772,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         {
             DiscordAppName = null;
             DiscordAppIcon = null;
+            discordAssets = [];
             return;
         }
         string? name;
@@ -1772,11 +1781,17 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         byte[]? icon;
         try { icon = await discord.AppIconAsync(appId); }
         catch { icon = null; }
+        IReadOnlyList<string>? assets;
+        try { assets = await discord.AppAssetsAsync(appId); }
+        catch { assets = null; }
         post(() =>
         {
             if (discordAppNameFor != appId) return;
             DiscordAppName = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
             DiscordAppIcon = icon is { Length: > 0 } ? icon : null;
+            discordAssets = assets ?? [];
+            // Ad ve görseller gelince durum onlarla yeniden gönderilir.
+            ApplyDiscord();
         });
     }
 

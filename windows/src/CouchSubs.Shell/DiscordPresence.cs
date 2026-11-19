@@ -26,12 +26,13 @@ public static class DiscordPresence
 
     /// <summary>Gösterilecek durum; kimlik geçersizse null (durum gösterilmez).</summary>
     public static DiscordActivity? For(string appId, string image, string? playedGame, bool translating, bool streaming,
-                                       DateTimeOffset since, Localizer text, bool xbox = false, bool likeGame = false)
+                                       DateTimeOffset since, Localizer text, bool xbox = false, bool likeGame = false,
+                                       IReadOnlyCollection<string>? assets = null, string? appName = null)
     {
         if (CleanAppId(appId) is not { Length: > 0 } id) return null;
-        // Gerçek oyun gibi: yalnız uygulamanın adı ("Grand Theft Auto VI"), ikonu ve süre; CouchSubs, altyazı ya da
-        // konsol izi yok (bilgisayarda oynanıyormuş gibi).
-        if (likeGame) return new DiscordActivity(id, null, null, string.IsNullOrWhiteSpace(image) ? null : image.Trim(), null, since);
+        // Gerçek oyun gibi: yalnız uygulamanın adı ("Grand Theft Auto VI"), görselleri ve süre; CouchSubs, altyazı ya
+        // da konsol izi yok (bilgisayarda oynanıyormuş gibi).
+        if (likeGame) return LikeGame(id, image, since, assets ?? [], appName);
         var details = translating ? text["With Turkish subtitles"] : text["With CouchSubs"];
         var state = streaming ? text["Streaming"] : null;
         // Köşede konsolun ikonu: Developer Portal › Rich Presence › Art Assets'e "ps5" (ya da "xbox") adıyla yüklenir.
@@ -39,6 +40,30 @@ public static class DiscordPresence
         {
             SmallImage = xbox ? "xbox" : "ps5",
             SmallText = xbox ? "Xbox" : "PlayStation 5",
+        };
+    }
+
+    /// <summary>Büyük görsel için aranan Art Assets adları (sırayla): oyunun kapak/afiş görseli.</summary>
+    public static readonly string[] CoverAssets = ["banner", "cover", "background", "poster"];
+    /// <summary>Köşedeki küçük görsel için aranan Art Assets adları: oyunun logosu.</summary>
+    public static readonly string[] LogoAssets = ["logo", "icon"];
+
+    /// <summary>
+    /// Discord uygulamasının Art Assets'inde kapak ("banner") varsa büyük görsel, logo ("logo") varsa köşedeki küçük
+    /// görseldir; üstüne gelince oyunun adı. Ayarlardaki görsel yazıldıysa kapak yerine o kullanılır. Hiçbiri yoksa
+    /// Discord uygulamanın ikonunu gösterir.
+    /// </summary>
+    private static DiscordActivity LikeGame(string id, string image, DateTimeOffset since, IReadOnlyCollection<string> assets, string? appName)
+    {
+        string? Find(string[] names) => names.FirstOrDefault(name => assets.Contains(name, StringComparer.OrdinalIgnoreCase));
+        var cover = string.IsNullOrWhiteSpace(image) ? Find(CoverAssets) : image.Trim();
+        var logo = Find(LogoAssets);
+        // Kapak yoksa logo büyük görsel olur (köşede ikinci kez gösterilmez).
+        if (cover is null && logo is not null) (cover, logo) = (logo, null);
+        return new DiscordActivity(id, null, null, cover, cover is null ? null : appName, since)
+        {
+            SmallImage = logo,
+            SmallText = logo is null ? null : appName,
         };
     }
 

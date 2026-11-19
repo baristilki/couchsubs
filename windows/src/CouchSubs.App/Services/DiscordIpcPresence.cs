@@ -68,6 +68,25 @@ internal sealed class DiscordIpcPresence : IDiscordPresence
         }
     }
 
+    public async Task<IReadOnlyList<string>?> AppAssetsAsync(string appId)
+    {
+        try
+        {
+            using var response = await Http.GetAsync($"https://discord.com/api/v10/oauth2/applications/{Uri.EscapeDataString(appId)}/assets").ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode) return null;
+            using var json = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+            if (json.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array) return null;
+            return [.. json.RootElement.EnumerateArray()
+                .Select(asset => asset.TryGetProperty("name", out var name) ? name.GetString() : null)
+                .OfType<string>()];
+        }
+        catch (Exception error) when (error is System.Net.Http.HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            RemotePlayLog.Note($"Discord uygulama görselleri alınamadı: {error.Message}");
+            return null;
+        }
+    }
+
     public void Update(DiscordActivity? activity)
     {
         lock (gate)

@@ -512,7 +512,7 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
                 {
                     // Eski bir oturumun (ör. ReconnectNow ile kapatılanın) kapanma olayı yeni oturumu etkilemez.
                     if (box?.Generation != eventGeneration || !IsCurrent(eventGeneration)) return;
-                    NoteHighQualityFailure(box);
+                    NoteHighQualityFailure(box, reason.Kind);
                     CloseBox();
                     if (reason.Kind == DisconnectKind.RegistrationInvalid)
                     {
@@ -542,7 +542,7 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
                 ScheduleWatch(boxGeneration);
                 return;
             }
-            NoteHighQualityFailure(box, stalled: true);
+            NoteHighQualityFailure(box, DisconnectKind.Other, stalled: true);
             RemotePlayLog.Note($"PS5'ten {(int)gap.TotalSeconds} sn'dir görüntü gelmiyor (bağlantı açık); oturum yeniden kuruluyor");
             CloseBox();
             ScheduleReconnect(boxGeneration, new DisconnectReason(DisconnectKind.Other, PictureWatchdog.Reason));
@@ -563,9 +563,12 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
     /// Yüksek kalitede (HEVC, yüksek bit hızı) açılan bağlantı görüntü vermeden kapandıysa ya da görüntü hiç gelmediyse
     /// PS5 bu ayarı kabul etmiyor sayılır: bu oturum boyunca standart kaliteyle bağlanılır, altyazı da kesilmez.
     /// </summary>
-    private void NoteHighQualityFailure(SessionBox? current, bool stalled = false)
+    private void NoteHighQualityFailure(SessionBox? current, DisconnectKind why, bool stalled = false)
     {
         if (current is not { High: true } || highQualityRejected) return;
+        // Kalitenin suçu olmayan kapanmalar: PS5 başka bağlantıyla meşgul ("Remote is already in use", uygulama yeniden
+        // açılınca eski oturum birkaç saniye kalıyor), reddetti, şifre istedi ya da kullanıcı durdurdu.
+        if (why is not (DisconnectKind.Network or DisconnectKind.Other)) return;
         if (current.Connected && !stalled && current.GotPicture) return;
         highQualityRejected = true;
         RemotePlayLog.Note("PS5 yüksek görüntü kalitesini (HEVC) vermedi; standart kaliteyle bağlanılıyor");

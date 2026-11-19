@@ -102,6 +102,9 @@ public interface IDiscordPresence : IDisposable
 
     /// <summary>Discord uygulamasının ikonu (PNG); yayın penceresinin ikonu olur. Alınamazsa null.</summary>
     Task<byte[]?> AppIconAsync(string appId) => Task.FromResult<byte[]?>(null);
+
+    /// <summary>Discord uygulamasının Art Assets adları (ör. "banner", "logo"; herkese açık bilgi). Alınamazsa null.</summary>
+    Task<IReadOnlyList<string>?> AppAssetsAsync(string appId) => Task.FromResult<IReadOnlyList<string>?>(null);
 }
 
 /// <summary>Oyun görüntüsü zemininde, çeviri görünürken oyunun İngilizce altyazısı nasıl örtülür.</summary>

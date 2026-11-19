@@ -91,4 +91,8 @@ public static class Glyphs
     public const string Package = "\uE7B8";
     /// <summary>Segoe Fluent Icons "History" (U+E81C); altyaz\u0131 ge\u00E7mi\u015Fi.</summary>
     public const string History = "\uE81C";
+    /// <summary>Segoe Fluent Icons "Volume" (U+E767); yay\u0131n sesi.</summary>
+    public const string Volume = "\uE767";
+    /// <summary>Segoe Fluent Icons "Mute" (U+E74F); yay\u0131n sesi kapal\u0131.</summary>
+    public const string Mute = "\uE74F";
 }

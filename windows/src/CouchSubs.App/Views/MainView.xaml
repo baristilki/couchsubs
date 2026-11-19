@@ -79,19 +79,58 @@
                     <Button Content="{t:T 'Open the stream window'}" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Stretch"
                             Margin="0,8,0,0" Click="OnStreamWindow" />
                     <!-- Yayına (Discord/OBS) giden oyun sesinin düzeyi; yayın penceresinde M sessiz, +/- düzey. -->
-                    <!-- Grid: kaydırıcı kalan genişliği alır, "Sessiz" sağda kaydırma çubuğunun altına taşmaz. -->
-                    <Grid Margin="4,10,4,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="{t:T 'Stream sound'}" VerticalAlignment="Center" Margin="0,0,12,0" />
-                        <Slider Grid.Column="1" MinWidth="60" Minimum="0" Maximum="100" Value="{Binding StreamGameVolume, Mode=TwoWay}"
-                                IsSnapToTickEnabled="True" TickFrequency="5" VerticalAlignment="Center" />
-                        <CheckBox Grid.Column="2" Content="{t:T 'Mute'}" IsChecked="{Binding StreamGameMuted, Mode=TwoWay}"
-                                  VerticalAlignment="Center" Margin="12,0,0,0" />
-                    </Grid>
+                    <!-- Kendi kartında: hoparlör düğmesi sesi kapatır/açar, kaydırıcı düzey, sağda yüzde. -->
+                    <c:Card Margin="0,12,0,0">
+                      <StackPanel>
+                        <TextBlock Text="{t:T 'Stream sound'}" Style="{StaticResource CaptionText}" Margin="0,0,0,8" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="44" />
+                            </Grid.ColumnDefinitions>
+                            <Button Width="40" Height="40" MinHeight="0" Padding="0" Click="OnToggleStreamMute" VerticalAlignment="Center">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+                                        <Setter Property="ToolTip" Value="{t:T 'Mute'}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding StreamGameMuted}" Value="True">
+                                                <Setter Property="ToolTip" Value="{t:T 'Unmute'}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <TextBlock FontSize="16">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource GlyphText}">
+                                            <Setter Property="Text" Value="{x:Static c:Glyphs.Volume}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding StreamGameMuted}" Value="True">
+                                                    <Setter Property="Text" Value="{x:Static c:Glyphs.Mute}" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource accentTextBrush}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Button>
+                            <Slider Grid.Column="1" MinWidth="60" Margin="12,0" Minimum="0" Maximum="100" Value="{Binding StreamGameVolume, Mode=TwoWay}"
+                                    IsSnapToTickEnabled="True" TickFrequency="5" VerticalAlignment="Center">
+                                <Slider.Style>
+                                    <Style TargetType="Slider" BasedOn="{StaticResource {x:Type Slider}}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding StreamGameMuted}" Value="True">
+                                                <Setter Property="Opacity" Value="0.4" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Slider.Style>
+                            </Slider>
+                            <TextBlock Grid.Column="2" Text="{Binding StreamGameVolume, StringFormat={}{0}%}" HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" Foreground="{DynamicResource textSecondaryBrush}" Typography.NumeralAlignment="Tabular" />
+                        </Grid>
+                      </StackPanel>
+                    </c:Card>
 
                     <!-- Durum karoları -->
                     <Grid Margin="0,12,0,0">

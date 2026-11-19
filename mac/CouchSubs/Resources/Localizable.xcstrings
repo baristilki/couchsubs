@@ -11746,6 +11746,22 @@
         }
       }
     },
+    "Unmute": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unmute"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesi aç"
+          }
+        }
+      }
+    },
     "Play the game sound on this computer": {
       "localizations": {
         "en": {

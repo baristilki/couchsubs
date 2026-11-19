@@ -210,6 +210,9 @@ public partial class MainView : UserControl
 
     private void OnStreamWindow(object sender, RoutedEventArgs e) => StreamWindow.Open(controller);
 
+    /// <summary>Hoparlör düğmesi: yayına giden oyun sesini kapatır ya da açar (yayın penceresinde M ile aynı).</summary>
+    private void OnToggleStreamMute(object sender, RoutedEventArgs e) => controller.StreamGameMuted = !controller.StreamGameMuted;
+
     /// <summary>Deneme altyazısı (çeviri başlamadıysa altyazı sunucusu da açılır).</summary>
     private async void OnTest(object sender, RoutedEventArgs e)
     {

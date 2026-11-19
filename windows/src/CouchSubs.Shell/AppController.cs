@@ -1473,7 +1473,9 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     {
         NoteShownForColors(e);
         post(() => StreamEvent?.Invoke(e));
-        if (!ShowsOnComputer) return;
+        // Yayın penceresi oyun görüntüsüyle açıkken çeviri zaten orada: üstte duran bilgisayar altyazı penceresi aynı
+        // çeviriyi tam ekran yayın penceresinin üstüne ikinci kez basıyordu.
+        if (!ShowsOnComputer || GameVideoActive) return;
         post(() => OverlayEvent?.Invoke(e));
     }
 

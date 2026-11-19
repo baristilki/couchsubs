@@ -42,7 +42,7 @@
             <!-- Sol: denetimler ve durum -->
             <!-- Kaydırma çubuğu içeriğin üstüne biniyordu: sağda kendi şeridi var (StackPanel sağ payı). -->
             <ScrollViewer Width="{DynamicResource size.mainColumn}" VerticalScrollBarVisibility="Auto" Focusable="False" Margin="0,0,0,0">
-                <StackPanel Margin="0,0,14,8">
+                <StackPanel Margin="0,0,12,8">
                     <!-- Yeni sürüm -->
                     <c:Card x:Name="UpdateCard" Margin="0,0,0,12" Visibility="Collapsed">
                         <StackPanel>
@@ -54,172 +54,216 @@
                         </StackPanel>
                     </c:Card>
 
-                    <!-- Başlat / Durdur -->
-                    <Button x:Name="Toggle" HorizontalAlignment="Stretch" MinHeight="46" Click="OnToggle">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock x:Name="ToggleGlyph" Style="{StaticResource GlyphText}" FontSize="16" Margin="0,0,10,0" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
-                            <TextBlock x:Name="ToggleText" FontSize="16" FontWeight="SemiBold" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                    <!-- Kontrol kartı: ana eylem, ikincil eylemler (ikonlu, yan yana) ve ince yayın sesi satırı tek kartta. -->
+                    <c:Card Padding="14">
+                        <StackPanel>
+                            <!-- Başlat / Durdur -->
+                            <Button x:Name="Toggle" HorizontalAlignment="Stretch" MinHeight="44" Click="OnToggle">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="ToggleGlyph" Style="{StaticResource GlyphText}" FontSize="15" Margin="0,0,10,0" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                    <TextBlock x:Name="ToggleText" FontSize="16" FontWeight="SemiBold" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Deneme altyazısı (altyazı TV'ye gidiyorsa "TV'de dene") ve yayın penceresi (Discord/OBS) -->
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button Style="{StaticResource CompactButton}" Click="OnTest">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{x:Static c:Glyphs.Captions}" Style="{StaticResource GlyphText}" FontSize="14" Margin="0,0,8,0"
+                                                   VerticalAlignment="Center" />
+                                        <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="{t:T 'Test on screen'}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding ShowsOnTv}" Value="True">
+                                                            <Setter Property="Text" Value="{t:T 'Test on TV'}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="2" Style="{StaticResource CompactButton}" Click="OnStreamWindow" ToolTip="{t:T 'Open the stream window'}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{x:Static c:Glyphs.Stream}" Style="{StaticResource GlyphText}" FontSize="14" Margin="0,0,8,0"
+                                                   VerticalAlignment="Center" />
+                                        <TextBlock Text="{t:T 'Stream window'}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+
+                            <!-- Yayına (Discord/OBS) giden oyun sesi: hoparlör sesi kapatır/açar (yayın penceresinde M), kaydırıcı, yüzde. -->
+                            <Border BorderBrush="{DynamicResource borderBrush}" BorderThickness="0,1,0,0" Margin="0,12,0,0" Padding="0,10,0,0">
+                                <Grid ToolTip="{t:T 'Stream sound'}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="40" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button Width="32" Height="32" MinHeight="0" Padding="0" Click="OnToggleStreamMute" VerticalAlignment="Center">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource CompactButton}">
+                                                <Setter Property="ToolTip" Value="{t:T 'Mute'}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding StreamGameMuted}" Value="True">
+                                                        <Setter Property="ToolTip" Value="{t:T 'Unmute'}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <TextBlock FontSize="14">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource GlyphText}">
+                                                    <Setter Property="Text" Value="{x:Static c:Glyphs.Volume}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding StreamGameMuted}" Value="True">
+                                                            <Setter Property="Text" Value="{x:Static c:Glyphs.Mute}" />
+                                                            <Setter Property="Foreground" Value="{DynamicResource accentTextBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Button>
+                                    <TextBlock Grid.Column="1" Text="{t:T 'Stream sound'}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="10,0,0,0" />
+                                    <Slider Grid.Column="2" MinWidth="60" Margin="12,0,8,0" Minimum="0" Maximum="100" Value="{Binding StreamGameVolume, Mode=TwoWay}"
+                                            IsSnapToTickEnabled="True" TickFrequency="5" VerticalAlignment="Center">
+                                        <Slider.Style>
+                                            <Style TargetType="Slider" BasedOn="{StaticResource {x:Type Slider}}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding StreamGameMuted}" Value="True">
+                                                        <Setter Property="Opacity" Value="0.4" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Slider.Style>
+                                    </Slider>
+                                    <TextBlock Grid.Column="3" Text="{Binding StreamGameVolume, StringFormat={}{0}%}" HorizontalAlignment="Right"
+                                               VerticalAlignment="Center" Style="{StaticResource CaptionText}" Typography.NumeralAlignment="Tabular" />
+                                </Grid>
+                            </Border>
                         </StackPanel>
-                    </Button>
+                    </c:Card>
 
-                    <!-- Deneme altyazısı: altyazı TV'ye gidiyorsa "TV'de dene", yalnız bilgisayardaysa "Ekranda dene" -->
-                    <!-- İkincil düğmeler yan yana: sütun kısalır, ana düğme öne çıkar. -->
-                    <Grid Margin="0,8,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="8" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                    <Button HorizontalAlignment="Stretch" Padding="8,0" Click="OnTest">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
-                                <Setter Property="Content" Value="{t:T 'Test on screen'}" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding ShowsOnTv}" Value="True">
-                                        <Setter Property="Content" Value="{t:T 'Test on TV'}" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
-
-                    <!-- Yayın penceresi (Discord/OBS için oyun + altyazı); ayarları Ayarlar › OBS katmanı'nda. -->
-                    <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Stretch" Padding="8,0" Click="OnStreamWindow">
-                        <TextBlock Text="{t:T 'Open the stream window'}" TextTrimming="CharacterEllipsis" />
-                    </Button>
-                    </Grid>
-                    <!-- Yayına (Discord/OBS) giden oyun sesinin düzeyi; yayın penceresinde M sessiz, +/- düzey. -->
-                    <!-- Kendi kartında: hoparlör düğmesi sesi kapatır/açar, kaydırıcı düzey, sağda yüzde. -->
-                    <c:Card Margin="0,12,0,0">
-                      <StackPanel>
-                        <TextBlock Text="{t:T 'Stream sound'}" Style="{StaticResource CaptionText}" Margin="0,0,0,8" />
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="44" />
-                            </Grid.ColumnDefinitions>
-                            <Button Width="40" Height="40" MinHeight="0" Padding="0" Click="OnToggleStreamMute" VerticalAlignment="Center">
-                                <Button.Style>
-                                    <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
-                                        <Setter Property="ToolTip" Value="{t:T 'Mute'}" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding StreamGameMuted}" Value="True">
-                                                <Setter Property="ToolTip" Value="{t:T 'Unmute'}" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Button.Style>
-                                <TextBlock FontSize="16">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock" BasedOn="{StaticResource GlyphText}">
-                                            <Setter Property="Text" Value="{x:Static c:Glyphs.Volume}" />
+                    <!-- Bağlantılar: PS5 ve TV tek kartta iki satır (ikon, ad, durum, nokta). TV satırı altyazı TV'ye gitmiyorsa yok. -->
+                    <c:Card Margin="0,12,0,0" Padding="14,10">
+                        <StackPanel>
+                            <DockPanel Margin="0,4">
+                                <Ellipse DockPanel.Dock="Right" Width="8" Height="8" VerticalAlignment="Top" Margin="8,7,2,0">
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse">
+                                            <Setter Property="Fill" Value="{DynamicResource textSecondaryBrush}" />
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding StreamGameMuted}" Value="True">
-                                                    <Setter Property="Text" Value="{x:Static c:Glyphs.Mute}" />
-                                                    <Setter Property="Foreground" Value="{DynamicResource accentTextBrush}" />
+                                                <DataTrigger Binding="{Binding Ps5Tone}" Value="Good">
+                                                    <Setter Property="Fill" Value="{DynamicResource successBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Ps5Tone}" Value="Warning">
+                                                    <Setter Property="Fill" Value="{DynamicResource warningBrush}" />
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </Button>
-                            <Slider Grid.Column="1" MinWidth="60" Margin="12,0" Minimum="0" Maximum="100" Value="{Binding StreamGameVolume, Mode=TwoWay}"
-                                    IsSnapToTickEnabled="True" TickFrequency="5" VerticalAlignment="Center">
-                                <Slider.Style>
-                                    <Style TargetType="Slider" BasedOn="{StaticResource {x:Type Slider}}">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding StreamGameMuted}" Value="True">
-                                                <Setter Property="Opacity" Value="0.4" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Slider.Style>
-                            </Slider>
-                            <TextBlock Grid.Column="2" Text="{Binding StreamGameVolume, StringFormat={}{0}%}" HorizontalAlignment="Right"
-                                       VerticalAlignment="Center" Foreground="{DynamicResource textSecondaryBrush}" Typography.NumeralAlignment="Tabular" />
-                        </Grid>
-                      </StackPanel>
-                    </c:Card>
+                                    </Ellipse.Style>
+                                </Ellipse>
+                                <Border Style="{StaticResource StatusIcon}">
+                                    <TextBlock Text="{x:Static c:Glyphs.Controller}" Style="{StaticResource GlyphText}" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding ConsoleTitle}" Style="{StaticResource CaptionText}" />
+                                    <TextBlock Text="{Binding Ps5StatusText}" TextWrapping="Wrap" Margin="0,2,0,0">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
+                                                <Setter Property="Foreground" Value="{DynamicResource textSecondaryBrush}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Ps5Tone}" Value="Good">
+                                                        <Setter Property="Foreground" Value="{DynamicResource textPrimaryBrush}" />
+                                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </DockPanel>
 
-                    <!-- Durum karoları -->
-                    <Grid Margin="0,12,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="12" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="12" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="12" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-
-                        <c:Card>
-                            <c:Card.Style>
-                                <!-- Altyazı yalnız bilgisayar ekranındaysa TV karosu yoktur; PS5 karosu iki sütunu kaplar. -->
-                                <Style TargetType="c:Card" BasedOn="{StaticResource {x:Type c:Card}}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding ShowsOnTv}" Value="False">
-                                            <Setter Property="Grid.ColumnSpan" Value="3" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </c:Card.Style>
-                            <c:StatusRow Title="{Binding ConsoleTitle}" Glyph="{x:Static c:Glyphs.Controller}" Value="{Binding Ps5StatusText}" Tone="{Binding Ps5Tone}" />
-                        </c:Card>
-
-                        <!-- Altyazı yalnız bilgisayar ekranındaysa TV durumu gösterilmez. -->
-                        <c:Card Grid.Column="2" Visibility="{Binding ShowsOnTv, Converter={StaticResource VisibleIf}}">
-                            <c:Card.Style>
-                                <Style TargetType="c:Card" BasedOn="{StaticResource {x:Type c:Card}}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding TvTone}" Value="Good">
-                                            <Setter Property="Kind" Value="Active" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </c:Card.Style>
-                            <StackPanel>
-                                <c:StatusRow Title="TV" Glyph="{x:Static c:Glyphs.Tv}" Value="{Binding TvStatusText}" Tone="{Binding TvTone}" />
-                                <Button HorizontalAlignment="Stretch" Margin="0,12,0,0" Padding="10,6" Click="OnConnectTv"
-                                        Visibility="{Binding NeedsTv, Converter={StaticResource VisibleIf}}">
-                                    <TextBlock Text="{t:T 'Connect a TV'}" TextWrapping="Wrap" TextAlignment="Center" />
-                                </Button>
-                                <!-- TV uygulaması bağlanmıyor (ör. TV'den kaldırıldı): TV adımı açılır, uygulama yeniden kurulur ya da açılır. -->
-                                <!-- Kart dar: düğme kartın genişliğinde, yazı ortalı en çok iki satır (eskiden dar kutuda üç satıra bölünüyordu). -->
-                                <Button HorizontalAlignment="Stretch" Margin="0,12,0,0" Padding="10,6" Click="OnReinstallTvApp"
-                                        Visibility="{Binding CanReinstallTvApp, Converter={StaticResource VisibleIf}}">
-                                    <TextBlock Text="{t:T 'Reinstall the TV app'}" TextWrapping="Wrap" TextAlignment="Center" />
-                                </Button>
-                            </StackPanel>
-                        </c:Card>
-
-                        <!-- Altyazının yeri: TV, bilgisayar ekranı ya da ikisi -->
-                        <local:SubtitleOutputCard x:Name="OutputCard" Grid.Row="2" Grid.ColumnSpan="3" />
-
-                        <!-- Bilgi karosu: çeviri motoru (Ayarlar › Çeviri'yi açar) ve ekranı çevirme kısayolu. Canlı durum değil, ayar
-                             bilgisi olduğu için durum karoları gibi simgeli ve büyük değil (docs/TASARIM.md › InfoCard). -->
-                        <c:Card Grid.Row="4" Grid.ColumnSpan="3" Padding="16,4">
-                            <StackPanel>
-                                <Button Style="{StaticResource InfoRowButton}" Click="OnTranslationSettings"
-                                        AutomationProperties.Name="{t:T 'Translation'}">
-                                    <DockPanel>
-                                        <TextBlock Text="{t:T 'Translation'}" Style="{StaticResource InfoRowLabel}" />
-                                        <TextBlock x:Name="EngineText" Style="{StaticResource InfoRowValue}" HorizontalAlignment="Right" Margin="12,0,0,0" />
-                                    </DockPanel>
-                                </Button>
-                                <Border Style="{StaticResource InfoDivider}" />
-                                <DockPanel Style="{StaticResource InfoRow}">
-                                    <TextBlock Text="{t:T 'Translate screen'}" Style="{StaticResource InfoRowLabel}" />
-                                    <!-- Ayarlar › Kısayollar'da seçili tuşlar, her biri bir tuş; kısayol yoksa "kısayol yok" (ShowScreenKeys). -->
-                                    <StackPanel x:Name="ScreenKeys" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" />
+                            <StackPanel Visibility="{Binding ShowsOnTv, Converter={StaticResource VisibleIf}}">
+                                <Border Style="{StaticResource InfoDivider}" Margin="0,6" />
+                                <DockPanel Margin="0,4">
+                                    <Ellipse DockPanel.Dock="Right" Width="8" Height="8" VerticalAlignment="Top" Margin="8,7,2,0">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Fill" Value="{DynamicResource textSecondaryBrush}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding TvTone}" Value="Good">
+                                                        <Setter Property="Fill" Value="{DynamicResource successBrush}" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding TvTone}" Value="Warning">
+                                                        <Setter Property="Fill" Value="{DynamicResource warningBrush}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
+                                    <Border Style="{StaticResource StatusIcon}">
+                                        <TextBlock Text="{x:Static c:Glyphs.Tv}" Style="{StaticResource GlyphText}" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                                        <TextBlock Text="TV" Style="{StaticResource CaptionText}" />
+                                        <TextBlock Text="{Binding TvStatusText}" TextWrapping="Wrap" Margin="0,2,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
+                                                    <Setter Property="Foreground" Value="{DynamicResource textSecondaryBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding TvTone}" Value="Good">
+                                                            <Setter Property="Foreground" Value="{DynamicResource textPrimaryBrush}" />
+                                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <!-- TV yok: TV adımı; TV uygulaması bağlanmıyor (ör. TV'den kaldırıldı): yeniden kur. -->
+                                        <WrapPanel Margin="0,6,0,0">
+                                            <Button Content="{t:T 'Connect a TV'}" Style="{StaticResource CompactButton}" Padding="12,0" Margin="0,0,8,0" Click="OnConnectTv"
+                                                    Visibility="{Binding NeedsTv, Converter={StaticResource VisibleIf}}" />
+                                            <Button Content="{t:T 'Reinstall the TV app'}" Style="{StaticResource CompactButton}" Padding="12,0" Click="OnReinstallTvApp"
+                                                    Visibility="{Binding CanReinstallTvApp, Converter={StaticResource VisibleIf}}" />
+                                        </WrapPanel>
+                                    </StackPanel>
                                 </DockPanel>
                             </StackPanel>
-                        </c:Card>
-                    </Grid>
+                        </StackPanel>
+                    </c:Card>
+
+                    <!-- Altyazının yeri: TV, bilgisayar ekranı ya da ikisi -->
+                    <local:SubtitleOutputCard x:Name="OutputCard" Margin="0,12,0,0" />
+
+                    <!-- Bilgi karosu: çeviri motoru (Ayarlar › Çeviri'yi açar) ve ekranı çevirme kısayolu. Canlı durum değil, ayar
+                         bilgisi olduğu için durum karoları gibi simgeli ve büyük değil (docs/TASARIM.md › InfoCard). -->
+                    <c:Card Margin="0,12,0,0" Padding="16,4">
+                        <StackPanel>
+                            <Button Style="{StaticResource InfoRowButton}" Click="OnTranslationSettings"
+                                    AutomationProperties.Name="{t:T 'Translation'}">
+                                <DockPanel>
+                                    <TextBlock Text="{t:T 'Translation'}" Style="{StaticResource InfoRowLabel}" />
+                                    <TextBlock x:Name="EngineText" Style="{StaticResource InfoRowValue}" HorizontalAlignment="Right" Margin="12,0,0,0" />
+                                </DockPanel>
+                            </Button>
+                            <Border Style="{StaticResource InfoDivider}" />
+                            <DockPanel Style="{StaticResource InfoRow}">
+                                <TextBlock Text="{t:T 'Translate screen'}" Style="{StaticResource InfoRowLabel}" />
+                                <!-- Ayarlar › Kısayollar'da seçili tuşlar, her biri bir tuş; kısayol yoksa "kısayol yok" (ShowScreenKeys). -->
+                                <StackPanel x:Name="ScreenKeys" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" />
+                            </DockPanel>
+                        </StackPanel>
+                    </c:Card>
 
                     <!-- Oynanan oyun ("Oynanan oyun: X · Değiştir") ve iki dakika sonra çıkan "Hangi oyunu oynuyorsunuz?" kartı -->
                     <c:Card x:Name="GameCard" Margin="0,12,0,0" Visibility="Collapsed">

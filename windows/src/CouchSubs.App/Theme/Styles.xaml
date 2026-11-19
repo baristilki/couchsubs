@@ -251,6 +251,22 @@
             </Trigger>
         </Style.Triggers>
     </Style>
+    <!-- Kompakt ikincil düğme (ana ekran kontrol kartı): 36 yükseklik, biraz küçük yazı, ikonla birlikte. -->
+    <Style x:Key="CompactButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <!-- Durum satırının ikon rozeti: 32×32, ikinci yüzey, iç köşe. -->
+    <Style x:Key="StatusIcon" TargetType="Border">
+        <Setter Property="Width" Value="32" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="CornerRadius" Value="{DynamicResource radius.inner}" />
+        <Setter Property="Background" Value="{DynamicResource surface2Brush}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource textSecondaryBrush}" />
+    </Style>
     <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
         <Setter Property="Background" Value="{DynamicResource dangerSoftBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource dangerBrush}" />

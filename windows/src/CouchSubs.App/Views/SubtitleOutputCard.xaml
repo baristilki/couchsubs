@@ -10,11 +10,17 @@
         <StackPanel>
             <TextBlock Text="{t:T 'Show subtitles on'}" Style="{StaticResource CaptionText}" Margin="0,0,0,8" />
             <Border Style="{StaticResource SegmentGroup}" HorizontalAlignment="Stretch">
-                <UniformGrid Rows="1">
-                    <RadioButton x:Name="OutputTv" Content="TV" GroupName="subtitleOutput" Style="{StaticResource SegmentButton}" Checked="OnOutput" Tag="Tv" />
-                    <RadioButton x:Name="OutputComputer" Content="{t:T 'Computer screen'}" GroupName="subtitleOutput" Style="{StaticResource SegmentButton}" Checked="OnOutput" Tag="Computer" />
-                    <RadioButton x:Name="OutputBoth" Content="{t:T 'Both'}" GroupName="subtitleOutput" Style="{StaticResource SegmentButton}" Checked="OnOutput" Tag="Both" />
-                </UniformGrid>
+                <!-- "Bilgisayar ekranı" eşit üçte birde iki satıra bölünüyordu: orta seçenek daha geniş, yazı bir kademe küçük. -->
+                <Grid TextElement.FontSize="14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="0.8*" />
+                        <ColumnDefinition Width="1.6*" />
+                        <ColumnDefinition Width="1*" />
+                    </Grid.ColumnDefinitions>
+                    <RadioButton x:Name="OutputTv" Content="TV" GroupName="subtitleOutput" Style="{StaticResource SegmentButton}" Checked="OnOutput" Tag="Tv" FontSize="14" />
+                    <RadioButton x:Name="OutputComputer" Grid.Column="1" Content="{t:T 'Computer screen'}" GroupName="subtitleOutput" Style="{StaticResource SegmentButton}" Checked="OnOutput" Tag="Computer" FontSize="14" />
+                    <RadioButton x:Name="OutputBoth" Grid.Column="2" Content="{t:T 'Both'}" GroupName="subtitleOutput" Style="{StaticResource SegmentButton}" Checked="OnOutput" Tag="Both" FontSize="14" />
+                </Grid>
             </Border>
             <StackPanel x:Name="ComputerPanel" Margin="0,12,0,0">
                 <TextBlock x:Name="WindowHint" Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,12"

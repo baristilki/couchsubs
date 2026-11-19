@@ -95,4 +95,6 @@ public static class Glyphs
     public const string Volume = "\uE767";
     /// <summary>Segoe Fluent Icons "Mute" (U+E74F); yay\u0131n sesi kapal\u0131.</summary>
     public const string Mute = "\uE74F";
+    /// <summary>Segoe Fluent Icons "Video" (U+E714); yay\u0131n penceresi.</summary>
+    public const string Stream = "\uE714";
 }

@@ -80,6 +80,12 @@ public sealed partial class StreamWindow
         foreach (var (step, label) in new[] { (0, "Off"), (1, "Slight"), (2, "Medium"), (3, "Strong") })
             sharp.Items.Add(Item(text[label], () => controller.StreamSharpness = step, isChecked: controller.StreamSharpness == step));
         menu.Items.Add(sharp);
+        // Fork: DirectX görüntü motoru ve NVIDIA RTX büyütmesi (deneysel).
+        menu.Items.Add(Item(text["DirectX picture engine (experimental)"], () => controller.StreamDirectX = !controller.StreamDirectX,
+            isChecked: controller.StreamDirectX));
+        if (controller.StreamDirectX)
+            menu.Items.Add(Item(text["NVIDIA RTX upscaling"], () => controller.StreamSuperResolution = !controller.StreamSuperResolution,
+                isChecked: controller.StreamSuperResolution));
         menu.Items.Add(new Separator());
         var cover = Styled(new MenuItem { Header = text["Game subtitle"] });
         foreach (var (choice, label) in new[]

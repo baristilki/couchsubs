@@ -23,6 +23,8 @@
     <PackageReference Include="Velopack" Version="1.2.161" />
     <!-- Gelişmiş yazı tanıma (PP-OCRv6): DirectML ile her ekran kartında, yoksa işlemcide (MIT). -->
     <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.24.4" />
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+    <PackageReference Include="Vortice.Direct3D9" Version="3.8.3" />
   </ItemGroup>
 
   <!-- Paket sunucusu (server/packs): `dotnet publish -p:CouchSubsPacksUrl=https://…` ile verilir; boşsa paket indirme kapalı (PackUpdater). -->
@@ -45,12 +47,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\..\xbox-bridge\dist\bridge.cjs;..\..\xbox-bridge\dist\player.html;..\..\xbox-bridge\dist\player.js"
-             Link="xbox-bridge\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\..\xbox-bridge\dist\node.exe" Condition="Exists('..\..\xbox-bridge\dist\node.exe')"
-             Link="xbox-bridge\node.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\..\xbox-bridge\dist\licenses\*" Link="xbox-bridge\licenses\%(Filename)%(Extension)"
-             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\xbox-bridge\dist\bridge.cjs;..\..\xbox-bridge\dist\player.html;..\..\xbox-bridge\dist\player.js" Link="xbox-bridge\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\xbox-bridge\dist\node.exe" Condition="Exists('..\..\xbox-bridge\dist\node.exe')" Link="xbox-bridge\node.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\xbox-bridge\dist\licenses\*" Link="xbox-bridge\licenses\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

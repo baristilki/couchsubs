@@ -167,6 +167,7 @@ public sealed partial class StreamWindow : Window
             controller.PropertyChanged -= OnChanged;
             controller.GameVideoWanted = false;
             StopGameRendering();
+            DropDirectX(null);
             timer.Stop();
             open = null;
         };
@@ -359,21 +360,86 @@ public sealed partial class StreamWindow : Window
             gameVersion = -1;
             return;
         }
+        var renderer = DirectXRenderer();
         var newer = controller.GameVideo.ReadPaced(refreshMs, (pixels, width, height) =>
         {
             if (gameBitmap is null || gameBitmap.PixelWidth != width || gameBitmap.PixelHeight != height)
             {
                 gameBitmap = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgr32, null);
-                game.Source = gameBitmap;
+                if (renderer is null) game.Source = gameBitmap;
                 sharpen?.Set(width, height, SharpenEffect.Strength(controller.StreamSharpness));
                 if (blurred.Visibility == Visibility.Visible) blurred.Source = gameBitmap;
             }
+            // Fork: DirectX motorunda kare ekran kartında büyütülür; WriteableBitmap yalnız bulanık örtü için yazılır.
+            if (renderer is not null && TryRenderDirectX(renderer, pixels, width, height))
+            {
+                if (blurred.Visibility == Visibility.Visible) gameBitmap.WritePixels(new Int32Rect(0, 0, width, height), pixels, width * 4, 0);
+                return;
+            }
+            if (game.Source != gameBitmap) game.Source = gameBitmap;
             gameBitmap.WritePixels(new Int32Rect(0, 0, width, height), pixels, width * 4, 0);
         });
         if (newer is not { } version) return;
         gameVersion = version;
         if (game.Visibility != Visibility.Visible) game.Visibility = Visibility.Visible;
         CountShownFrame();
+    }
+
+    private D3DVideoRenderer? directX;
+    /// <summary>DirectX motoru bu pencerede kurulamadı ya da çökmüştü: eski yol kullanılır.</summary>
+    private bool directXFailed;
+
+    /// <summary>Fork: DirectX motoru açıksa (yayın penceresi menüsü) çizici; kapalıysa ya da kurulamadıysa null.</summary>
+    private D3DVideoRenderer? DirectXRenderer()
+    {
+        if (!controller.StreamDirectX || directXFailed)
+        {
+            if (directX is not null) DropDirectX(null);
+            return null;
+        }
+        if (directX is not null) return directX;
+        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        directX = D3DVideoRenderer.Create(handle, line => CouchSubs.RemotePlay.RemotePlayLog.Note($"yayın penceresi: {line}"));
+        if (directX is null) directXFailed = true;
+        else CouchSubs.RemotePlay.RemotePlayLog.Note("yayın penceresi: DirectX görüntü motoru açıldı");
+        return directX;
+    }
+
+    private bool TryRenderDirectX(D3DVideoRenderer renderer, byte[] pixels, int width, int height)
+    {
+        try
+        {
+            var picture = PictureRect();
+            var dpi = VisualTreeHelper.GetDpi(this);
+            var targetWidth = (int)Math.Round(picture.Width * dpi.DpiScaleX);
+            var targetHeight = (int)Math.Round(picture.Height * dpi.DpiScaleY);
+            // Ekrandan büyük ya da kaynaktan küçük hedef gerekmez.
+            if (targetWidth < width || targetHeight < height) (targetWidth, targetHeight) = (width, height);
+            renderer.Render(pixels, width, height, targetWidth, targetHeight, controller.StreamSuperResolution);
+            if (game.Source != renderer.Image)
+            {
+                game.Source = renderer.Image;
+                sharpen?.Set(targetWidth, targetHeight, SharpenEffect.Strength(controller.StreamSharpness));
+            }
+            return true;
+        }
+        catch (Exception error)
+        {
+            DropDirectX(error);
+            return false;
+        }
+    }
+
+    private void DropDirectX(Exception? error)
+    {
+        if (error is not null)
+        {
+            directXFailed = true;
+            CouchSubs.RemotePlay.RemotePlayLog.Note($"yayın penceresi: DirectX motoru kapandı, eski yola dönüldü: {error.GetBaseException().Message}");
+        }
+        if (directX is not null && game.Source == directX.Image) game.Source = gameBitmap;
+        directX?.Dispose();
+        directX = null;
     }
 
     private int shownFrames;
@@ -392,7 +458,8 @@ public sealed partial class StreamWindow : Window
         if (elapsed < 10_000) return;
         var received = (gameVersion - versionSince) * 1000.0 / elapsed;
         CouchSubs.RemotePlay.RemotePlayLog.Note($"yayın penceresi: {received:0.0} kare/sn geldi, {shownFrames * 1000.0 / elapsed:0.0} gösterildi, " +
-                                                $"ekran {renderTicks * 1000.0 / elapsed:0} Hz (eşit aralıklı)");
+                                                $"ekran {renderTicks * 1000.0 / elapsed:0} Hz (eşit aralıklı)" +
+                                                (directX is { } d ? $", DirectX{(d.SuperResolutionActive ? " + RTX büyütme" : "")}" : ""));
         shownFrames = 0;
         renderTicks = 0;
         shownSince = Environment.TickCount64;
@@ -403,6 +470,7 @@ public sealed partial class StreamWindow : Window
     {
         if (e.PropertyName == nameof(AppController.GameVideoActive)) UpdateGameRendering();
         if (e.PropertyName == nameof(AppController.StreamSharpness)) ApplySharpness();
+        if (e.PropertyName == nameof(AppController.StreamDirectX)) directXFailed = false;
         if (e.PropertyName == nameof(AppController.GameColors))
         {
             boxes.Clear();

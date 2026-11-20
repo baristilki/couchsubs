@@ -2040,6 +2040,33 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         }
     }
 
+    /// <summary>
+    /// Fork: yayın penceresi görüntüyü DirectX ile (ekran kartında büyüterek) çizsin mi (deneysel). Kurulamazsa pencere
+    /// kendiliğinden eski yola döner. Varsayılan kapalı.
+    /// </summary>
+    public bool StreamDirectX
+    {
+        get => store.Load<bool?>(StoreKeys.StreamDirectX) ?? false;
+        set
+        {
+            if (value == StreamDirectX) return;
+            store.Save(StoreKeys.StreamDirectX, value);
+            Changed(nameof(StreamDirectX));
+        }
+    }
+
+    /// <summary>Fork: DirectX motorunda NVIDIA RTX Video Super Resolution istensin mi. Varsayılan açık.</summary>
+    public bool StreamSuperResolution
+    {
+        get => store.Load<bool?>(StoreKeys.StreamSuperResolution) ?? true;
+        set
+        {
+            if (value == StreamSuperResolution) return;
+            store.Save(StoreKeys.StreamSuperResolution, value);
+            Changed(nameof(StreamSuperResolution));
+        }
+    }
+
     /// <summary>Fork: oyun görüntüsü 1440p istensin mi (deneysel; yüksek kaliteyle). Varsayılan kapalı.</summary>
     public bool StreamUltra
     {

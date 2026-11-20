@@ -45,6 +45,8 @@ public static class StoreKeys
     /// <summary>Yayın penceresinde oyun görüntüsü yüksek kalitede (HEVC, yüksek bit hızı) istensin mi (vars. açık).</summary>
     public const string StreamHighQuality = "streamHighQuality";
     public const string StreamUltra = "streamUltra";
+    public const string StreamDirectX = "streamDirectX";
+    public const string StreamSuperResolution = "streamSuperResolution";
     /// <summary>Oyun görüntüsü zemininde çeviri, oyunun kendi altyazısının renginde gösterilsin mi (vars. açık).</summary>
     public const string StreamMatchGameColor = "streamMatchGameColor";
     /// <summary>Oyun görüntüsü zemininde oyunun İngilizce altyazısının nasıl örtüleceği (<see cref="StreamCover"/>).</summary>

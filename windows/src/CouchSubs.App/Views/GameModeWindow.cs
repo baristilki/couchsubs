@@ -53,7 +53,21 @@ public sealed class GameModeWindow : IDisposable
         return mode;
     }
 
-    private void OnFrame() => frameReady.Set();
+    private long lastArrivalTicks;
+
+    private void OnFrame()
+    {
+        Volatile.Write(ref lastArrivalTicks, System.Diagnostics.Stopwatch.GetTimestamp());
+        frameReady.Set();
+    }
+
+    /// <summary>Verilen ana kadar bekler: 1 ms'lik uykular, son milisaniye dönerek (kare zamanı hassas olsun).</summary>
+    private static void WaitUntil(double dueMs)
+    {
+        static double Now() => System.Diagnostics.Stopwatch.GetTimestamp() * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        while (dueMs - Now() > 1.5) Thread.Sleep(1);
+        while (Now() < dueMs) Thread.SpinWait(50);
+    }
 
     /// <summary>Fork: arkası bulanık gösterilecek kutu (oyun penceresinin pikselleri; köşe yarıçapı, karartma 0..1).</summary>
     public readonly record struct BlurArea(RawRect Rect, float Corner, float Darken);
@@ -79,11 +93,25 @@ public sealed class GameModeWindow : IDisposable
             var version = -1L;
             var clock = System.Diagnostics.Stopwatch.StartNew();
             long since = 0, shown = 0;
-            double work = 0;
+            double work = 0, waited = 0;
+            // Fork: düzensiz gelen kareler küçük bir payla eşit aralıkla gösterilir (hareket halinde takılma olmasın).
+            var smoother = new ArrivalSmoother();
+            timeBeginPeriod(1);
             while (!stopping)
             {
-                frameReady.WaitOne(50);
+                var signaled = frameReady.WaitOne(50);
                 if (!PumpMessages()) break;
+                if (signaled)
+                {
+                    var arrived = Volatile.Read(ref lastArrivalTicks) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                    var due = smoother.Due(arrived);
+                    var now = System.Diagnostics.Stopwatch.GetTimestamp() * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                    if (due > now)
+                    {
+                        waited += due - now;
+                        WaitUntil(due);
+                    }
+                }
                 var started = clock.Elapsed.TotalMilliseconds;
                 var newer = frames.ReadIfNewer(version, (pixels, width, height) => scaler.Draw(pixels, width, height, superResolution()));
                 if (newer is { } read)
@@ -97,10 +125,12 @@ public sealed class GameModeWindow : IDisposable
                 if (clock.ElapsedMilliseconds - since >= 10_000)
                 {
                     var seconds = (clock.ElapsedMilliseconds - since) / 1000.0;
-                    log($"oyun modu: {shown / seconds:0.0} kare/sn, kare başına {(shown > 0 ? work / shown : 0):0.0} ms (yükleme + büyütme + gösterme)");
+                    log($"oyun modu: {shown / seconds:0.0} kare/sn, kare başına {(shown > 0 ? work / shown : 0):0.0} ms (yükleme + büyütme + gösterme)" +
+                        $", akıcılık payı {smoother.MarginMs:0.0} ms (ortalama bekleme {(shown > 0 ? waited / shown : 0):0.0} ms)");
                     since = clock.ElapsedMilliseconds;
                     shown = 0;
                     work = 0;
+                    waited = 0;
                 }
             }
         }
@@ -110,6 +140,7 @@ public sealed class GameModeWindow : IDisposable
         }
         finally
         {
+            timeEndPeriod(1);
             frames.FrameWritten -= OnFrame;
             scaler?.Dispose();
             if (window != 0) DestroyWindow(window);
@@ -434,5 +465,7 @@ public sealed class GameModeWindow : IDisposable
     [DllImport("user32.dll")] private static extern nint SetCursor(nint cursor);
     [DllImport("user32.dll")] private static extern nint LoadCursorW(nint instance, nint name);
     [DllImport("gdi32.dll")] private static extern nint GetStockObject(int index);
+    [DllImport("winmm.dll")] private static extern uint timeBeginPeriod(uint period);
+    [DllImport("winmm.dll")] private static extern uint timeEndPeriod(uint period);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] private static extern nint GetModuleHandleW(string? name);
 }

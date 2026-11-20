@@ -394,7 +394,7 @@ public sealed partial class StreamWindow : Window
             // Fork: DirectX motorunda kare ekran kartında büyütülür; WriteableBitmap yalnız bulanık örtü için yazılır.
             if (renderer is not null && TryRenderDirectX(renderer, pixels, width, height))
             {
-                if (blurred.Visibility == Visibility.Visible) gameBitmap.WritePixels(new Int32Rect(0, 0, width, height), pixels, width * 4, 0);
+                if (NeedsBitmapForBlur) gameBitmap.WritePixels(new Int32Rect(0, 0, width, height), pixels, width * 4, 0);
                 return;
             }
             if (game.Source != gameBitmap) game.Source = gameBitmap;
@@ -616,6 +616,8 @@ public sealed partial class StreamWindow : Window
             }
             linesPanel.Children.Add(box);
         }
+        // Fork: ek alan kutularının arkası bulanık (yerleştikten sonra).
+        QueueBlurAreas();
         // Yerleştirme kutuların ölçüsünü bilmeli: yerleşimden sonra yapılır.
         if (positioned) Dispatcher.BeginInvoke(DispatcherPriority.Loaded, PositionGameSubtitle);
         else HideCover();

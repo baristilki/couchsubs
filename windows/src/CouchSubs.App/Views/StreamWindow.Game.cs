@@ -82,6 +82,7 @@ public sealed partial class StreamWindow
         RenderOptions.SetBitmapScalingMode(blurred, BitmapScalingMode.Linear);
         root.Children.Insert(root.Children.IndexOf(game) + 1, blurred);
         root.Children.Insert(root.Children.IndexOf(linesHost), regionLayer);
+        InitRegionBlur();
         linesPanel.MouseLeftButtonDown += OnDragStart;
         linesPanel.MouseMove += OnDragMove;
         linesPanel.MouseLeftButtonUp += OnDragEnd;
@@ -188,12 +189,22 @@ public sealed partial class StreamWindow
         cover.Background = new SolidColorBrush(Color.FromArgb((byte)Math.Round(opacity * 255), 0x0B, 0x0B, 0x0D));
         cover.CornerRadius = new CornerRadius(style.BackgroundShape == SubtitleBackgroundShape.Band ? 0 : 6 * Scale);
         blurred.Visibility = Visibility.Collapsed;
+        if (blurCoverArea is not null)
+        {
+            blurCoverArea = null;
+            QueueBlurAreas();
+        }
     }
 
     private void HideCover()
     {
         cover.Visibility = Visibility.Collapsed;
         blurred.Visibility = Visibility.Collapsed;
+        if (blurCoverArea is not null)
+        {
+            blurCoverArea = null;
+            QueueBlurAreas();
+        }
     }
 
     /// <summary>
@@ -203,6 +214,15 @@ public sealed partial class StreamWindow
     private void ApplyBlurCover(Rect area)
     {
         var radius = 8 * Scale;
+        if (overlay)
+        {
+            // Oyun modu katmanı arkasını göremez: bulanıklığı oyun penceresi ekran kartında çizer.
+            blurCoverArea = area;
+            QueueBlurAreas();
+            cover.Background = new SolidColorBrush(Color.FromArgb(0x30, 0, 0, 0));
+            cover.CornerRadius = new CornerRadius(radius);
+            return;
+        }
         blurred.Source = gameBitmap;
         blurred.Clip = new RectangleGeometry(area, radius, radius);
         blurred.Effect = new BlurEffect { Radius = Math.Max(12, area.Height * 0.45), KernelType = KernelType.Gaussian };
@@ -375,7 +395,8 @@ public sealed partial class StreamWindow
         var boxWidth = rect.Width;
         var border = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(block ? (byte)0xF7 : (byte)0xE6, 0, 0, 0)),
+            // Fork: oyun görüntüsü üstünde yarı saydam koyu, arkası bulanık (StreamWindow.Blur.cs); TV'deki tam siyah değil.
+            Background = BlurRegions ? RegionGlass : new SolidColorBrush(Color.FromArgb(block ? (byte)0xF7 : (byte)0xE6, 0, 0, 0)),
             CornerRadius = new CornerRadius(6 * k),
             Padding = block ? new Thickness(6 * k, 2 * k, 6 * k, 2 * k) : new Thickness(10 * k, 4 * k, 10 * k, 4 * k),
             Child = textBlock,

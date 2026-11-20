@@ -60,12 +60,15 @@ public sealed partial class StreamWindow
             () => Dispatcher.BeginInvoke(StopGameMode));
         // Katman, oyun penceresiyle aynı ekranı kaplar (WPF birimine çevrilmiş).
         var dpi = VisualTreeHelper.GetDpi(this);
+        var mode = gameMode;
         gameOverlay = new StreamWindow(controller, overlay: true)
         {
             Left = screen.Left / dpi.DpiScaleX,
             Top = screen.Top / dpi.DpiScaleY,
             Width = (screen.Right - screen.Left) / dpi.DpiScaleX,
             Height = (screen.Bottom - screen.Top) / dpi.DpiScaleY,
+            // Katman ekranın sol üstünden başlar; kutu yerleri oyun penceresinin pikselleriyle aynıdır.
+            blurSink = areas => mode.SetBlurAreas(areas),
         };
         gameOverlay.Show();
     }

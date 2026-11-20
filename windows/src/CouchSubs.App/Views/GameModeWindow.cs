@@ -26,6 +26,8 @@ public sealed class GameModeWindow : IDisposable
     private readonly AutoResetEvent frameReady = new(false);
     private readonly Thread thread;
     private volatile bool stopping;
+    /// <summary>Arkası bulanıklaşacak kutular (piksel; altyazı ve ek alan kutuları), katman penceresinden.</summary>
+    private volatile BlurArea[] blurAreas = [];
     private nint window;
     private WndProc? procedure;
 
@@ -52,6 +54,12 @@ public sealed class GameModeWindow : IDisposable
     }
 
     private void OnFrame() => frameReady.Set();
+
+    /// <summary>Fork: arkası bulanık gösterilecek kutu (oyun penceresinin pikselleri; köşe yarıçapı, karartma 0..1).</summary>
+    public readonly record struct BlurArea(RawRect Rect, float Corner, float Darken);
+
+    /// <summary>Altyazı katmanındaki kutuların yerleri (arayüz iş parçacığından); sonraki karede uygulanır.</summary>
+    public void SetBlurAreas(IReadOnlyList<BlurArea> areas) => blurAreas = [.. areas];
 
     public void Dispose()
     {
@@ -81,7 +89,7 @@ public sealed class GameModeWindow : IDisposable
                 if (newer is { } read)
                 {
                     version = read;
-                    scaler.Present();
+                    scaler.Present(blurAreas);
                     shown++;
                     work += clock.Elapsed.TotalMilliseconds - started;
                 }
@@ -190,6 +198,21 @@ public sealed class GameModeWindow : IDisposable
         private ID3D11VideoProcessorOutputView? outputView;
         private int inputWidth, inputHeight;
         private bool? superResolution;
+        private readonly ID3D11ShaderResourceView targetView;
+        private readonly ID3D11VertexShader blurVertex;
+        private readonly ID3D11PixelShader blurPixel;
+        private readonly ID3D11Buffer blurConstants;
+        private readonly ID3D11SamplerState sampler;
+        private readonly ID3D11RasterizerState scissor;
+        private readonly ID3D11BlendState blend;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct BlurConstants
+        {
+            public System.Numerics.Vector4 Rect;
+            public System.Numerics.Vector4 Shape;
+            public System.Numerics.Vector4 Texel;
+        }
 
         public Scaler(nint window, int width, int height)
         {
@@ -219,8 +242,17 @@ public sealed class GameModeWindow : IDisposable
                 Flags = tearing ? SwapChainFlags.AllowTearing : SwapChainFlags.None,
             }, null, null);
             factory.MakeWindowAssociation(window, WindowAssociationFlags.IgnoreAltEnter);
-            target = device.CreateTexture2D(new Texture2DDescription(Format.B8G8R8A8_UNorm, (uint)width, (uint)height, 1, 1,
-                BindFlags.RenderTarget | BindFlags.ShaderResource));
+            // Mip zinciri: bulanık kutular küçültülmüş seviyelerden ucuzca okunur.
+            target = device.CreateTexture2D(new Texture2DDescription(Format.B8G8R8A8_UNorm, (uint)width, (uint)height, 1, 0,
+                BindFlags.RenderTarget | BindFlags.ShaderResource, ResourceUsage.Default, CpuAccessFlags.None, 1, 0, ResourceOptionFlags.GenerateMips));
+            targetView = device.CreateShaderResourceView(target, null);
+            blurVertex = device.CreateVertexShader(GameModeShaders.BlurVertex, null);
+            blurPixel = device.CreatePixelShader(GameModeShaders.BlurPixel, null);
+            blurConstants = device.CreateBuffer((uint)Marshal.SizeOf<BlurConstants>(), BindFlags.ConstantBuffer, ResourceUsage.Default,
+                CpuAccessFlags.None, ResourceOptionFlags.None, 0);
+            sampler = device.CreateSamplerState(SamplerDescription.LinearClamp);
+            scissor = device.CreateRasterizerState(new RasterizerDescription(CullMode.None, FillMode.Solid) { ScissorEnable = true });
+            blend = device.CreateBlendState(BlendDescription.NonPremultiplied);
         }
 
         public unsafe void Draw(byte[] bgra, int frameWidth, int frameHeight, bool wantSuperResolution)
@@ -238,11 +270,50 @@ public sealed class GameModeWindow : IDisposable
             videoContext.VideoProcessorBlt(processor!, outputView!, 0, 1, [new VideoProcessorStream { Enable = true, InputSurface = inputView! }]);
         }
 
-        public void Present()
+        public void Present(BlurArea[] areas)
         {
-            using (var back = swapChain.GetBuffer<ID3D11Texture2D>(0)) context.CopyResource(back, target);
+            using (var back = swapChain.GetBuffer<ID3D11Texture2D>(0))
+            {
+                context.CopySubresourceRegion(back, 0, 0, 0, 0, target, 0, null);
+                if (areas.Length > 0) DrawBlur(back, areas);
+            }
             // Dikey eşitleme beklenmez: kare hemen ekrana (G-SYNC açıksa yırtılmasız).
             swapChain.Present(0, tearing ? PresentFlags.AllowTearing : PresentFlags.None);
+        }
+
+        /// <summary>Kutuların arkasını küçültülmüş kareden bulanık çizer (yuvarlak köşe, hafif karartma).</summary>
+        private void DrawBlur(ID3D11Texture2D back, BlurArea[] areas)
+        {
+            context.GenerateMips(targetView);
+            using var output = device.CreateRenderTargetView(back, null);
+            context.OMSetRenderTargets(output, null);
+            context.RSSetViewport(0, 0, width, height, 0, 1);
+            context.RSSetState(scissor);
+            context.OMSetBlendState(blend);
+            context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+            context.VSSetShader(blurVertex);
+            context.PSSetShader(blurPixel);
+            context.PSSetShaderResource(0, targetView);
+            context.PSSetSampler(0, sampler);
+            context.PSSetConstantBuffer(0, blurConstants);
+            foreach (var area in areas)
+            {
+                var rect = area.Rect;
+                if (rect.Right <= rect.Left || rect.Bottom <= rect.Top) continue;
+                var constants = new BlurConstants
+                {
+                    Rect = new(rect.Left, rect.Top, rect.Right, rect.Bottom),
+                    Shape = new(Math.Max(12, (rect.Bottom - rect.Top) * 0.45f), area.Corner, area.Darken, 0),
+                    Texel = new(1f / width, 1f / height, 0, 0),
+                };
+                context.UpdateSubresource(ref constants, blurConstants);
+                context.RSSetScissorRect(Math.Max(0, rect.Left), Math.Max(0, rect.Top),
+                    Math.Max(0, rect.Right - rect.Left), Math.Max(0, rect.Bottom - rect.Top));
+                context.Draw(3, 0);
+            }
+            // Gölgelendirici kaynağı bırakılır: sonraki karede doku video işlemcisine yazılacak.
+            context.PSSetShaderResource(0, null!);
+            context.OMSetRenderTargets((ID3D11RenderTargetView)null!, null);
         }
 
         private void EnsureProcessor(int frameWidth, int frameHeight)
@@ -297,6 +368,13 @@ public sealed class GameModeWindow : IDisposable
             processor?.Dispose();
             enumerator?.Dispose();
             input?.Dispose();
+            blend.Dispose();
+            scissor.Dispose();
+            sampler.Dispose();
+            blurConstants.Dispose();
+            blurPixel.Dispose();
+            blurVertex.Dispose();
+            targetView.Dispose();
             target.Dispose();
             swapChain.Dispose();
             videoContext.Dispose();

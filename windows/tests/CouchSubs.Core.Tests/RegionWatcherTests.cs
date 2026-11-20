@@ -426,7 +426,7 @@ public class RegionWatcherTests
     /// GTA 6'da menünün her satırı kendi yerine çevrilir: tek kutuda satır aralığı tutmuyor, "SAÇ" HAIR ile GREET arasına
     /// düşüyor, HAIR açıkta kalıyordu. Her blok kendi satırının üstünde, sağdaki simgesinin yanında durur.
     /// </summary>
-    [Fact(Skip = "Fork: ek alanda etkileşim menüsü (tuşla seçilen satırlar) çevrilmiyor (bkz. Gta6MenuIsNotTranslated)")]
+    [Fact]
     public async Task Gta6MenuRowsAreSentAsOneBlockPerRow()
     {
         var reader = new Reader { Lines = Gta6Menu() };
@@ -444,7 +444,7 @@ public class RegionWatcherTests
     }
 
     /// <summary>Menü satırlarını bölme yalnız GTA 6'da: başka oyunda (ya da oyun bilinmiyorsa) yerleşim değişmez.</summary>
-    [Theory(Skip = "Fork: ek alanda etkileşim menüsü (tuşla seçilen satırlar) çevrilmiyor (bkz. Gta6MenuIsNotTranslated)")]
+    [Theory(Skip = "Fork: GTA 6 dışında ek alanda etiketler çevrilmez (bkz. MenuIsNotTranslatedOutsideGta6)")]
     [InlineData("Red Dead Redemption 2")]
     [InlineData(null)]
     public async Task MenuRowsStayInOneBoxOutsideGta6(string? game)
@@ -457,11 +457,11 @@ public class RegionWatcherTests
         Assert.Equal([null], server.Blocks);
     }
 
-    /// <summary>Fork: ek alanda etkileşim menüsü ("HAIR", "GREET") tuşla seçilir, çevrilmez; İngilizcesi ekranda kalır.</summary>
+    /// <summary>Fork: menü satırları yalnız GTA 6'da çevrilir; başka oyunda ek alanda etiketler çevrilmez.</summary>
     [Theory]
-    [InlineData("Grand Theft Auto VI")]
+    [InlineData("Red Dead Redemption 2")]
     [InlineData(null)]
-    public async Task Gta6MenuIsNotTranslated(string? game)
+    public async Task MenuIsNotTranslatedOutsideGta6(string? game)
     {
         var reader = new Reader { Lines = Gta6Menu() };
         var translator = new Translator();

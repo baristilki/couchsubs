@@ -6,7 +6,7 @@
   'use strict';
 
   // TV uygulamasının sürümü: appinfo.json, tv-tizen/config.xml ve tv-android/app/build.gradle ile aynı tutulur.
-  var APP_VERSION = '0.9.32';
+  var APP_VERSION = '0.9.33';
   var t = window.t;
   var config = window.COUCHSUBS_CONFIG || {};
   var platform = window.COUCHSUBS_PLATFORM;
@@ -604,7 +604,14 @@
       }
       if (capital && name.indexOf('\n') < 0 && /^[^0-9:!?,;"()\[\]{}<>@#$%^&*_=+|\\\/]+$/.test(name)) {
         knownSpeakers[name.toLowerCase()] = name;
-        return { speaker: name, line: text.slice(colon + 1).replace(/^\s+/, '') };
+        return { speaker: name, line: text.slice(colon + 1).replace(/^\s+/, ''), colon: true };
+      }
+      // Fork: çevrilmiş rol adları ("Mağaza görevlisi:", "Polis 2:") yalnız ilk harfi büyük de olsa addır; en çok 4
+      // sözcük, cümle işareti yok. Bilinen adlara eklenmez (iki noktasız eşleşme yalnız gerçek adlarla yapılır).
+      var head = name.charAt(0);
+      if (words.length >= 1 && words.length <= 4 && head !== head.toLowerCase() && name.indexOf('\n') < 0 &&
+          /^[^:!?,;"()\[\]{}<>@#$%^&*_=+|\\\/]+$/.test(name)) {
+        return { speaker: name, line: text.slice(colon + 1).replace(/^\s+/, ''), colon: true };
       }
     }
     var names = Object.keys(knownSpeakers).sort(function (a, b) { return b.length - a.length; });
@@ -658,7 +665,7 @@
     for (var i = 0; i < lines.length; i++) {
       var split = splitSpeaker(lines[i]);
       // Yalnız iki noktalı ad: sarılmış satırın devamı bilinen bir adla başlasa da ad sayılmaz.
-      if (split && lines[i].slice(0, split.speaker.length + 1) !== split.speaker + ':') split = null;
+      if (split && !split.colon) split = null;
       splits.push(split);
       if (split) any = true;
     }
@@ -680,14 +687,32 @@
   }
 
   // Yazı boyu oyunun altyazısının satır yüksekliğinden (OCR kutusu harflerin üstünden altına; boy bunun ~%92'si).
+  // Fork: oyunun satır yüksekliği son altyazılardan öğrenilir. Satır sayısı her altyazıda yalnız kutu yüksekliğinden
+  // tahmin edilince (1 mi 2 mi) yazı bir büyüyüp bir küçülüyordu. Artık son kutuların en alçakları (tek satırlılar)
+  // satır yüksekliğini verir; %10'dan küçük değişiklik boyu hiç oynatmaz.
+  var gameLineHeight = 0;
+  var gameHeights = [];
+  var measuredBox = null;
+  function learnGameLine(box) {
+    var height = box.bottom - box.top;
+    if (height <= 0.005 || height > 0.4) return;
+    gameHeights.push(height);
+    if (gameHeights.length > 15) gameHeights.shift();
+    var lowest = Math.min.apply(null, gameHeights);
+    var singles = gameHeights.filter(function (h) { return h <= lowest * 1.35; }).sort(function (a, b) { return a - b; });
+    var line = singles[Math.floor(singles.length / 2)];
+    if (!gameLineHeight || Math.abs(line - gameLineHeight) > gameLineHeight * 0.1) gameLineHeight = line;
+  }
   function gameFontSize(baseSize) {
-    if (!look.matchSize || !currentBox) return baseSize;
-    var height = currentBox.bottom - currentBox.top;
-    if (height <= 0.005 || height > 0.4) return baseSize;
-    var lines = Math.max(1, Math.min(4, Math.round(height / 0.042)));
+    if (!look.matchSize) { gameLineHeight = 0; gameHeights = []; return baseSize; }
+    if (currentBox && currentBox !== measuredBox) {
+      measuredBox = currentBox;
+      learnGameLine(currentBox);
+    }
+    if (!gameLineHeight) return baseSize;
     var screen = document.documentElement.clientHeight || window.innerHeight || 1080;
     // Önceki satırlar (taban boyun %80'i) oyunun boyuna göre de aynı oranda küçük kalır.
-    var size = height / lines * screen * 0.92 * (fontBase > 0 ? baseSize / fontBase : 1);
+    var size = gameLineHeight * screen * 0.92 * (fontBase > 0 ? baseSize / fontBase : 1);
     return Math.max(baseSize * 0.5, Math.min(baseSize * 2, size));
   }
 

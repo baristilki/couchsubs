@@ -117,15 +117,8 @@ public static class ScreenTranslation
                         placements.Count > 0 ? placements : null);
     }
 
-    /// <summary>
-    /// Satırları gruplara toplar. Kumanda ipuçları ve yazı tanıma çöpleri atılır; harfi olmayan ya da tek harfli
-    /// satırlar ("23m", "9", "+") göstergedir, çevrilmez. Bir satır, üstündeki satırın hemen altındaysa, yatayda onunla
-    /// üst üste biniyorsa ve yazı boyu benziyorsa o gruba katılır; küçük harfle başlayan satır üstteki bitmemiş cümleye
-    /// katılır (<see cref="Continues"/>). Gruplar yukarıdan aşağı; en çok <see cref="MaxGroups"/>, en çok yazısı olanlar.
-    /// <paramref name="menuRows"/> açıksa yalnız kısa büyük harfli etiketlerden oluşan grup (oyun menüsü) satır satır
-    /// ayrı gruplara bölünür (<see cref="IsMenuLabel"/>).
-    /// </summary>
-    public static IReadOnlyList<Group> Groups(Reading reading, bool menuRows = false)
+    /// <summary>Satırların yerine göre ilk gruplaması (<see cref="Groups"/>); menü satırları henüz bölünmemiştir.</summary>
+    private static List<List<TextLine>> LineGroups(Reading reading)
     {
         var lines = reading.WithButtonIcons().WithoutButtonPrompts().WithoutOcrNoise().Lines
             .Where(line => line.Box is not null && IsWords(line.Text))
@@ -145,6 +138,32 @@ public static class ScreenTranslation
             if (index >= 0) groups[index].Add(line);
             else groups.Add([line]);
         }
+        return groups;
+    }
+
+    /// <summary>
+    /// Fork: GTA 6 etkileşim menüsünün satırları ("HAIR", "GREET", "STYLIST"): alt alta en az iki kısa büyük harfli
+    /// etiketten oluşan grup. Ek alanda tek başına etiketler çevrilmez, menü satırları çevrilir (#460).
+    /// </summary>
+    public static IReadOnlySet<string> MenuLines(Reading reading) =>
+        LineGroups(reading).Where(group => group.Count > 1 && group.All(line => IsMenuLabel(line.Text)))
+            .SelectMany(group => group.Select(line => MenuKey(line.Text))).ToHashSet();
+
+    /// <summary><see cref="MenuLines"/> karşılaştırması: simge işaretleri ve boşluklar sayılmaz.</summary>
+    public static string MenuKey(string text) =>
+        string.Join(' ', text.Replace(ButtonIcons.Marker.ToString(), " ").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    /// <summary>
+    /// Satırları gruplara toplar. Kumanda ipuçları ve yazı tanıma çöpleri atılır; harfi olmayan ya da tek harfli
+    /// satırlar ("23m", "9", "+") göstergedir, çevrilmez. Bir satır, üstündeki satırın hemen altındaysa, yatayda onunla
+    /// üst üste biniyorsa ve yazı boyu benziyorsa o gruba katılır; küçük harfle başlayan satır üstteki bitmemiş cümleye
+    /// katılır (<see cref="Continues"/>). Gruplar yukarıdan aşağı; en çok <see cref="MaxGroups"/>, en çok yazısı olanlar.
+    /// <paramref name="menuRows"/> açıksa yalnız kısa büyük harfli etiketlerden oluşan grup (oyun menüsü) satır satır
+    /// ayrı gruplara bölünür (<see cref="IsMenuLabel"/>).
+    /// </summary>
+    public static IReadOnlyList<Group> Groups(Reading reading, bool menuRows = false)
+    {
+        var groups = LineGroups(reading);
         // GTA 6'nın etkileşim menüsü ("HAIR △" / "GREET ✕" / "STYLIST L2"): her satırın sağında kendi tuş simgesi var.
         // Satırlar tek kutuda çevrilince kutu satır aralığını tutmuyor, çeviriler simgelerinin yanından kayıyordu ("SAÇ"
         // HAIR ile GREET arasına düşüyor, HAIR açıkta kalıyordu). Her satır ayrı grup olunca çevirisi kendi satırının

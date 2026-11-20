@@ -223,9 +223,10 @@ public sealed partial class StreamWindow
             cover.CornerRadius = new CornerRadius(radius);
             return;
         }
-        blurred.Source = gameBitmap;
+        // Fork: küçültülmüş kopya yumuşak büyütülünce bulanık (StreamWindow.Blur.cs); BlurEffect çok pahalıydı.
+        blurred.Source = (ImageSource?)blurBitmap ?? gameBitmap;
         blurred.Clip = new RectangleGeometry(area, radius, radius);
-        blurred.Effect = new BlurEffect { Radius = Math.Max(12, area.Height * 0.45), KernelType = KernelType.Gaussian };
+        blurred.Effect = blurBitmap is null ? new BlurEffect { Radius = Math.Max(12, area.Height * 0.45), KernelType = KernelType.Gaussian } : null;
         blurred.Visibility = Visibility.Visible;
         cover.Background = new SolidColorBrush(Color.FromArgb(0x30, 0, 0, 0));
         cover.CornerRadius = new CornerRadius(radius);

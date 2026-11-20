@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using CouchSubs.Shell;
 
@@ -30,9 +31,47 @@ public sealed partial class StreamWindow
 
     private bool BlurRegions => controller.StreamBackground == StreamBackground.Game;
 
+    /// <summary>
+    /// Fork: bulanıklık için karenin 1/8'i boyunda kopyası. Küçük görüntü yumuşak büyütülünce kendiliğinden bulanık
+    /// görünür; tam boy görüntüde WPF BlurEffect her karede ekran kartını %80'in üstünde meşgul ediyor, pencere 18 Hz'e
+    /// düşüyordu.
+    /// </summary>
+    private WriteableBitmap? blurBitmap;
+    private byte[] blurPixels = [];
+    private const int BlurScale = 8;
+
+    /// <summary>Bulanıklık kopyasını kareden günceller (her kutunun 4 noktasının ortalaması).</summary>
+    private void UpdateBlurBitmap(byte[] pixels, int width, int height)
+    {
+        int w = Math.Max(1, width / BlurScale), h = Math.Max(1, height / BlurScale);
+        if (blurBitmap is null || blurBitmap.PixelWidth != w || blurBitmap.PixelHeight != h)
+        {
+            blurBitmap = new WriteableBitmap(w, h, 96, 96, PixelFormats.Bgr32, null);
+            blurPixels = new byte[w * h * 4];
+            if (blurred.Visibility == Visibility.Visible) blurred.Source = blurBitmap;
+            if (regionBlur.Visibility == Visibility.Visible) regionBlur.Source = blurBitmap;
+        }
+        var stride = width * 4;
+        const int a = BlurScale / 4, b = BlurScale * 3 / 4;
+        for (var y = 0; y < h; y++)
+        {
+            int row1 = ((y * BlurScale) + a) * stride, row2 = ((y * BlurScale) + b) * stride;
+            var target = y * w * 4;
+            for (var x = 0; x < w; x++)
+            {
+                int c1 = ((x * BlurScale) + a) * 4, c2 = ((x * BlurScale) + b) * 4;
+                for (var k = 0; k < 3; k++)
+                    blurPixels[target + k] = (byte)((pixels[row1 + c1 + k] + pixels[row1 + c2 + k] + pixels[row2 + c1 + k] + pixels[row2 + c2 + k]) >> 2);
+                target += 4;
+            }
+        }
+        blurBitmap.WritePixels(new Int32Rect(0, 0, w, h), blurPixels, w * 4, 0);
+    }
+
     private void InitRegionBlur()
     {
-        RenderOptions.SetBitmapScalingMode(regionBlur, BitmapScalingMode.Linear);
+        RenderOptions.SetBitmapScalingMode(regionBlur, BitmapScalingMode.HighQuality);
+        RenderOptions.SetBitmapScalingMode(blurred, BitmapScalingMode.HighQuality);
         root.Children.Insert(root.Children.IndexOf(game) + 1, regionBlur);
     }
 
@@ -68,17 +107,16 @@ public sealed partial class StreamWindow
             return;
         }
 
-        if (regions.Count == 0 || gameBitmap is null)
+        if (regions.Count == 0 || (gameBitmap is null && blurBitmap is null))
         {
             regionBlur.Visibility = Visibility.Collapsed;
             return;
         }
         var group = new GeometryGroup();
         foreach (var rect in regions) group.Children.Add(new RectangleGeometry(rect, corner, corner));
-        regionBlur.Source = gameBitmap;
+        regionBlur.Source = (ImageSource?)blurBitmap ?? gameBitmap;
         regionBlur.Clip = group;
-        regionBlur.Effect ??= new BlurEffect { KernelType = KernelType.Gaussian };
-        ((BlurEffect)regionBlur.Effect).Radius = Math.Max(10, regions.Min(rect => rect.Height) * 0.5);
+        regionBlur.Effect = null;
         regionBlur.Visibility = Visibility.Visible;
     }
 

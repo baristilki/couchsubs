@@ -392,11 +392,8 @@ public sealed partial class StreamWindow : Window
                 if (blurred.Visibility == Visibility.Visible) blurred.Source = gameBitmap;
             }
             // Fork: DirectX motorunda kare ekran kartında büyütülür; WriteableBitmap yalnız bulanık örtü için yazılır.
-            if (renderer is not null && TryRenderDirectX(renderer, pixels, width, height))
-            {
-                if (NeedsBitmapForBlur) gameBitmap.WritePixels(new Int32Rect(0, 0, width, height), pixels, width * 4, 0);
-                return;
-            }
+            if (NeedsBitmapForBlur || blurBitmap is null) UpdateBlurBitmap(pixels, width, height);
+            if (renderer is not null && TryRenderDirectX(renderer, pixels, width, height)) return;
             if (game.Source != gameBitmap) game.Source = gameBitmap;
             gameBitmap.WritePixels(new Int32Rect(0, 0, width, height), pixels, width * 4, 0);
         }, controller.StreamLowLatency);
@@ -437,7 +434,9 @@ public sealed partial class StreamWindow : Window
             var targetHeight = (int)Math.Round(picture.Height * dpi.DpiScaleY);
             // Ekrandan büyük ya da kaynaktan küçük hedef gerekmez.
             if (targetWidth < width || targetHeight < height) (targetWidth, targetHeight) = (width, height);
-            renderer.Render(pixels, width, height, targetWidth, targetHeight, controller.StreamSuperResolution);
+            // Fork: oyun modunda bu pencere yalnız Discord içindir: RTX büyütme oyun penceresinde zaten çalışıyor, ikinci
+            // kez çalışınca ekran kartı doluyordu.
+            renderer.Render(pixels, width, height, targetWidth, targetHeight, controller.StreamSuperResolution && !GameModeOn);
             if (game.Source != renderer.Image)
             {
                 game.Source = renderer.Image;

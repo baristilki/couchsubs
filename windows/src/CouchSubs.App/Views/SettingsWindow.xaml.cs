@@ -112,6 +112,7 @@ public partial class SettingsWindow : Window
             .First(item => (int)item.Tag == CpuThreadOptions.Normalize(settings.CpuTranslationThreads, Environment.ProcessorCount));
         FastSubtitleDetection.IsChecked = settings.FastSubtitleDetection;
         WatchSubtitleBackground.IsChecked = settings.WatchSubtitleBackground;
+        TranslateButtonPrompts.IsChecked = settings.TranslateButtonPrompts;
         OcrEngineChoice.SelectedItem = OcrEngineChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == settings.OcrEngine.ToString());
         ShowAdvancedOcr();
         ShowCpuThreads();
@@ -758,6 +759,9 @@ public partial class SettingsWindow : Window
 
     private void OnFastSubtitleDetection(object sender, RoutedEventArgs e) =>
         Update(s => s with { FastSubtitleDetection = FastSubtitleDetection.IsChecked == true });
+
+    private void OnTranslateButtonPrompts(object sender, RoutedEventArgs e) =>
+        Update(s => s with { TranslateButtonPrompts = TranslateButtonPrompts.IsChecked == true });
 
     private void OnWatchSubtitleBackground(object sender, RoutedEventArgs e) =>
         Update(s => s with { WatchSubtitleBackground = WatchSubtitleBackground.IsChecked == true });

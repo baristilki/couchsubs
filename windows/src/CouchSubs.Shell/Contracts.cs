@@ -366,6 +366,11 @@ public sealed record UserSettings
     public bool FastSubtitleDetection { get; init; }
     /// <summary>Yalnız GTA 6'nın lacivert altyazı zemini üstündeki yazıyı oku. Varsayılan kapalı.</summary>
     public bool WatchSubtitleBackground { get; init; }
+    /// <summary>
+    /// Fork: ek alanlarda tuş ipuçları ("Press △ to call Lucia") ve etkileşim yazıları ("SIT") da çevrilir; tuş simgesi
+    /// çevirinin içinde korunur. İngilizce bilmeyen oyuncular için. Varsayılan kapalı: yalnız mesaj ve cümleler çevrilir.
+    /// </summary>
+    public bool TranslateButtonPrompts { get; init; }
     /// <summary>Altyazı okuyucusu. Gelişmiş seçili ama modeli inmemişse Windows'unki kullanılır.</summary>
     public OcrEngine OcrEngine { get; init; } = OcrEngine.Windows;
     public DubbingSettings Dubbing { get; init; } = new();

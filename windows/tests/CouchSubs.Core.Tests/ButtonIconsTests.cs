@@ -380,14 +380,15 @@ public class ButtonIconsTests
         Assert.DoesNotContain(server.Sent, sent => sent.Text.Length > 0);
     }
 
-    [Fact(Skip = "Fork: ek alanda ipuçları çevrilmiyor (bkz. ExtraAreaLeavesButtonPromptsUntranslated)")]
+    /// <summary>Fork: "Tuş ipuçlarını da çevir" açıkken ipucu tuş simgesiyle birlikte çevrilir.</summary>
+    [Fact]
     public async Task ExtraAreaShowsTheButtonInsideTheTranslation()
     {
         // Alan karenin tamamı: okunan alanın kutuları kareyle aynı.
         var area = new WatchedArea("tip", "Tip", new CropRegion(Top: 0, Bottom: 1, Left: 0, Right: 1));
         var server = new Server();
         var translator = new Translator(text => text == "Hold Feldor to sprint." ? "Koşmak için Feldor'u basılı tutun." : text);
-        var watcher = new RegionWatcher(new Reader(Hold), translator, server);
+        var watcher = new RegionWatcher(new Reader(Hold), translator, server) { TranslatesPrompts = () => true };
         var frame = HoldFrame();
         await watcher.PassAsync(frame, [area]);
         await watcher.PassAsync(frame, [area]);

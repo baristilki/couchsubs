@@ -266,6 +266,11 @@
                                       Checked="OnWatchSubtitleBackground" Unchecked="OnWatchSubtitleBackground" />
                             <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,16"
                                        Text="{t:T 'Only translate lines on GTA 6’s dark blue subtitle background. Other text in the subtitle area is ignored.'}" />
+                            <!-- Fork: İngilizce bilmeyenler için ek alanlarda tuş ipuçları da çevrilir. -->
+                            <CheckBox x:Name="TranslateButtonPrompts" Content="{t:T 'Translate button prompts too'}"
+                                      Checked="OnTranslateButtonPrompts" Unchecked="OnTranslateButtonPrompts" />
+                            <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,6,0,16"
+                                       Text="{t:T 'In extra areas, button prompts (“Press △ to call Lucia”) and action labels (“SIT”) are translated too; the button icon stays in the translation. Off: only messages and sentences are translated.'}" />
                             <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,12"
                                        Text="{t:T 'These waits only delay lines that were read badly; most lines are shown without waiting. A shorter wait shows those lines sooner but lets more wrong translations through.'}" />
                             <TextBlock Text="{t:T 'Wait for a misread line'}" Margin="0,0,0,8" />

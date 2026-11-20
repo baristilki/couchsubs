@@ -87,6 +87,8 @@ public sealed class RegionWatcher
     public bool SkipsTurkish { get; set; } = true;
     /// <summary>Oynanan oyunun adı (bilinmiyorsa null); oyuna özgü yerleşim kuralları için.</summary>
     public Func<string?>? Game { get; set; }
+    /// <summary>Fork: tuş ipuçları ve etkileşim yazıları da çevrilsin mi (ayar: "Tuş ipuçlarını da çevir").</summary>
+    public Func<bool>? TranslatesPrompts { get; set; }
 
     /// <summary>
     /// Menü satırları ayrı ayrı yerleştirilir (<see cref="ScreenTranslation.Groups"/>): yalnız GTA 6. Etkileşim
@@ -189,7 +191,7 @@ public sealed class RegionWatcher
         if (Volatile.Read(ref session) != started) return;
         Interlocked.Increment(ref reads);
         ReadMeasured?.Invoke(now() - clock);
-        var candidate = MakeCandidate(reading, area.Region, crop, SplitsMenuRows(Game?.Invoke()));
+        var candidate = MakeCandidate(reading, area.Region, crop, SplitsMenuRows(Game?.Invoke()), TranslatesPrompts?.Invoke() == true);
         if (state.LastRead == candidate.Key)
         {
             state.Candidate = null;
@@ -207,17 +209,18 @@ public sealed class RegionWatcher
     /// yukarıdan aşağı parçalara toplanır. Yazının içindeki kumanda simgeleri <paramref name="frame"/>'den (okunan alan)
     /// kesilir; çeviride yerleri korunur.
     /// </summary>
-    internal static Candidate MakeCandidate(Reading reading, CropRegion region, Frame? frame = null, bool menuRows = false)
+    internal static Candidate MakeCandidate(Reading reading, CropRegion region, Frame? frame = null, bool menuRows = false,
+                                            bool prompts = false)
     {
         // Fork: GTA 6'da etkileşim menüsünün satırları çevrilir, her biri kendi yerine (#460).
         var menu = menuRows ? ScreenTranslation.MenuLines(reading) : new HashSet<string>();
         var lines = reading.WithButtonIcons().WithoutButtonPrompts().WithoutOcrNoise().Lines
             .Where(line => ScreenTranslation.IsWords(line.Text))
             // Fork: telefon/menü etiketleri ("PHONE SLEEP", "ALARM") çevrilmez; ek alanda yalnız mesaj ve cümleler kalır.
-            .Where(line => !ButtonPrompts.IsActionLabel(line.Text) || menu.Contains(ScreenTranslation.MenuKey(line.Text)))
+            .Where(line => prompts || !ButtonPrompts.IsActionLabel(line.Text) || menu.Contains(ScreenTranslation.MenuKey(line.Text)))
             .OrderBy(line => line.Box?.Top ?? 0)
             .ToList();
-        var (paragraphs, icons) = KeptMessages(ScreenTranslation.Paragraphs(lines), ScreenTranslation.ParagraphIcons(lines), menu);
+        var (paragraphs, icons) = KeptMessages(ScreenTranslation.Paragraphs(lines), ScreenTranslation.ParagraphIcons(lines), menu, prompts);
         var place = new TextBox(region.Left, region.Top, region.Right, region.Bottom);
         var boxes = lines.Where(line => line.Box is not null).Select(line => line.Box!.Value).ToList();
         TextBox? box = boxes.Count == 0 ? null : boxes.Skip(1).Aggregate(boxes[0], (a, b) => a.Union(b)).PlacedIn(place);
@@ -233,7 +236,7 @@ public sealed class RegionWatcher
         // Fork: gruplarda da ipuçları ve etiketler atılır; yazısı kalmayan grup hiç gösterilmez.
         var kept = groups
             .Select(group => (Group: group, Kept: KeptMessages(group.Paragraphs, group.Icons
-                ?? [.. group.Paragraphs.Select(_ => (IReadOnlyList<IconSlot>)[])], menu)))
+                ?? [.. group.Paragraphs.Select(_ => (IReadOnlyList<IconSlot>)[])], menu, prompts)))
             .Where(entry => entry.Kept.Paragraphs.Count > 0)
             .ToList();
         if (kept.Count is > 1 and < ScreenTranslation.MaxGroups)
@@ -261,14 +264,15 @@ public sealed class RegionWatcher
     /// Simge listesi paragraflarla aynı sırada kalır.
     /// </summary>
     private static (List<string> Paragraphs, List<IReadOnlyList<IconSlot>> Icons) KeptMessages(
-        IReadOnlyList<string> all, IReadOnlyList<IReadOnlyList<IconSlot>> allIcons, IReadOnlySet<string> menu)
+        IReadOnlyList<string> all, IReadOnlyList<IReadOnlyList<IconSlot>> allIcons, IReadOnlySet<string> menu, bool prompts = false)
     {
         var paragraphs = new List<string>();
         var icons = new List<IReadOnlyList<IconSlot>>();
         for (var i = 0; i < all.Count; i++)
         {
-            // GTA 6 menü satırı olduğu gibi çevrilir (simgesi yanında kalır).
-            if (menu.Contains(ScreenTranslation.MenuKey(all[i])))
+            // GTA 6 menü satırı olduğu gibi çevrilir (simgesi yanında kalır). "Tuş ipuçlarını da çevir" açıksa her yazı
+            // (ipucu ve etiket de) olduğu gibi çevrilir; yalnız yazı tanıma kalıntıları atılır.
+            if (menu.Contains(ScreenTranslation.MenuKey(all[i])) || (prompts && !IsFragment(all[i])))
             {
                 paragraphs.Add(all[i]);
                 icons.Add(i < allIcons.Count ? allIcons[i] : []);

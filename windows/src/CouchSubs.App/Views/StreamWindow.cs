@@ -378,9 +378,10 @@ public sealed partial class StreamWindow : Window
             }
             if (game.Source != gameBitmap) game.Source = gameBitmap;
             gameBitmap.WritePixels(new Int32Rect(0, 0, width, height), pixels, width * 4, 0);
-        });
+        }, controller.StreamLowLatency);
         if (newer is not { } version) return;
         gameVersion = version;
+        waitTotal += controller.GameVideo.LastWaitMs;
         if (game.Visibility != Visibility.Visible) game.Visibility = Visibility.Visible;
         CountShownFrame();
     }
@@ -443,6 +444,8 @@ public sealed partial class StreamWindow : Window
     }
 
     private int shownFrames;
+    /// <summary>Fork: gösterilen karelerin kuyrukta bekleme süreleri toplamı (günlükte ortalaması).</summary>
+    private double waitTotal;
     private long shownSince = Environment.TickCount64;
     private long versionSince = -1;
 
@@ -459,7 +462,10 @@ public sealed partial class StreamWindow : Window
         var received = (gameVersion - versionSince) * 1000.0 / elapsed;
         CouchSubs.RemotePlay.RemotePlayLog.Note($"yayın penceresi: {received:0.0} kare/sn geldi, {shownFrames * 1000.0 / elapsed:0.0} gösterildi, " +
                                                 $"ekran {renderTicks * 1000.0 / elapsed:0} Hz (eşit aralıklı)" +
-                                                (directX is { } d ? $", DirectX{(d.SuperResolutionActive ? " + RTX büyütme" : "")}" : ""));
+                                                (directX is { } d ? $", DirectX{(d.SuperResolutionActive ? " + RTX büyütme" : "")}" : "") +
+                                                $", kuyrukta {(shownFrames > 0 ? waitTotal / shownFrames : 0):0.0} ms" +
+                                                (controller.StreamLowLatency ? " (düşük gecikme)" : " (akıcı)"));
+        waitTotal = 0;
         shownFrames = 0;
         renderTicks = 0;
         shownSince = Environment.TickCount64;

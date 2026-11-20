@@ -77,7 +77,6 @@ public partial class SettingsWindow : Window
         StreamFpsChoice.SelectedItem = StreamFpsChoice.Items.Cast<ComboBoxItem>().First(item => (string)item.Tag == streamFps);
         StreamGameAudio.IsChecked = controller.StreamGameAudio;
         StreamHighQuality.IsChecked = controller.StreamHighQuality;
-        StreamUltra.IsChecked = controller.StreamUltra;
         StreamMatchGameColor.IsChecked = controller.StreamMatchGameColor;
         StreamMatchGameSize.IsChecked = controller.StreamMatchGameSize;
         DiscordPresenceOn.IsChecked = controller.DiscordPresenceEnabled;
@@ -1238,8 +1237,6 @@ public partial class SettingsWindow : Window
     private void OnStreamGameAudio(object sender, RoutedEventArgs e) => controller.StreamGameAudio = StreamGameAudio.IsChecked == true;
 
     private void OnStreamHighQuality(object sender, RoutedEventArgs e) => controller.StreamHighQuality = StreamHighQuality.IsChecked == true;
-
-    private void OnStreamUltra(object sender, RoutedEventArgs e) => controller.StreamUltra = StreamUltra.IsChecked == true;
 
     private void OnStreamMatchGameColor(object sender, RoutedEventArgs e) => controller.StreamMatchGameColor = StreamMatchGameColor.IsChecked == true;
 

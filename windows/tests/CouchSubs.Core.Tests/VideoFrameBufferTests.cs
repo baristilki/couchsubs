@@ -193,6 +193,21 @@ public class FramePacerTests
         Assert.Null(pacer.Next(21, 0, 4));
     }
 
+    /// <summary>Fork: düşük gecikmede kuyruk beklenmez, en yeni kare hemen gösterilir.</summary>
+    [Fact]
+    public void LowLatencyShowsTheNewestFrameAtOnce()
+    {
+        var now = 0.0;
+        var buffer = new VideoFrameBuffer(() => now);
+        var handle = System.Runtime.InteropServices.GCHandle.Alloc(new byte[] { 1, 1, 1, 1 }, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try { for (var i = 0; i < 3; i++) buffer.Write(handle.AddrOfPinnedObject(), 1, 1, 4); }
+        finally { handle.Free(); }
+        now = 1;
+        Assert.Equal(3, buffer.ReadPaced(4, (_, _, _) => { }, lowLatency: true));
+        Assert.Null(buffer.ReadPaced(4, (_, _, _) => { }, lowLatency: true));
+        Assert.Equal(1, buffer.LastWaitMs);
+    }
+
     [Fact]
     public void PacedReadsGiveOneFramePerInterval()
     {

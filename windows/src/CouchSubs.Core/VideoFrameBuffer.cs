@@ -116,18 +116,34 @@ public sealed class VideoFrameBuffer
     /// varsa <paramref name="use"/> kilit altında çağrılır ve sürümü döner; yoksa null. Kareler akışın aralığıyla eşit
     /// arayla verilir; kuyruk birikirse eski kareler atlanır (gecikme büyümesin).
     /// </summary>
-    public long? ReadPaced(double refreshMs, Action<byte[], int, int> use)
+    /// <param name="lowLatency">
+    /// Fork: oynarken düşük gecikme: kuyruk beklenmez, her yenilemede en yeni kare gösterilir (eskiler atlanır). Eşit
+    /// aralık yerine gecikme önceliklidir; kuyruklu gösterim 1-2 kare (16-33 ms) geç kalıyordu.
+    /// </param>
+    public long? ReadPaced(double refreshMs, Action<byte[], int, int> use, bool lowLatency = false)
     {
         lock (gate)
         {
-            if (pacer.Next(clock(), pending.Count, refreshMs) is not { } drop) return null;
+            var now = clock();
+            int drop;
+            if (lowLatency)
+            {
+                if (pending.Count == 0) return null;
+                drop = pending.Count - 1;
+            }
+            else if (pacer.Next(now, pending.Count, refreshMs) is { } paced) drop = paced;
+            else return null;
             for (var i = 0; i < drop; i++) Release(pending.Dequeue().Data);
             var frame = pending.Dequeue();
             use(frame.Data, frame.Width, frame.Height);
             Release(frame.Data);
+            LastWaitMs = now - frame.ArrivedMs;
             return frame.Version;
         }
     }
+
+    /// <summary>Fork: son gösterilen karenin gelişinden gösterilmesine kadar kuyrukta beklediği süre (ms).</summary>
+    public double LastWaitMs { get; private set; }
 
     /// <summary>Son kare üzerinde kilit altında hesap yapar (ör. yazı rengi); kare yoksa varsayılan döner. Kısa tutulmalı.</summary>
     public T? Read<T>(Func<byte[], int, int, T> use)

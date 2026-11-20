@@ -2055,6 +2055,21 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         }
     }
 
+    /// <summary>
+    /// Fork: yayın penceresinde oynarken düşük gecikme: kareler kuyrukta beklemeden, gelir gelmez gösterilir. Kapalıyken
+    /// eşit aralıklı (akıcı) gösterim, yalnız yayın izleyenler için. Varsayılan açık (pencereye bakarak oynanıyor).
+    /// </summary>
+    public bool StreamLowLatency
+    {
+        get => store.Load<bool?>(StoreKeys.StreamLowLatency) ?? true;
+        set
+        {
+            if (value == StreamLowLatency) return;
+            store.Save(StoreKeys.StreamLowLatency, value);
+            Changed(nameof(StreamLowLatency));
+        }
+    }
+
     /// <summary>Fork: DirectX motorunda NVIDIA RTX Video Super Resolution istensin mi. Varsayılan açık.</summary>
     public bool StreamSuperResolution
     {
@@ -2064,19 +2079,6 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (value == StreamSuperResolution) return;
             store.Save(StoreKeys.StreamSuperResolution, value);
             Changed(nameof(StreamSuperResolution));
-        }
-    }
-
-    /// <summary>Fork: oyun görüntüsü 1440p istensin mi (deneysel; yüksek kaliteyle). Varsayılan kapalı.</summary>
-    public bool StreamUltra
-    {
-        get => store.Load<bool?>(StoreKeys.StreamUltra) ?? false;
-        set
-        {
-            if (value == StreamUltra) return;
-            store.Save(StoreKeys.StreamUltra, value);
-            Changed(nameof(StreamUltra));
-            ApplyGameVideo();
         }
     }
 
@@ -2093,7 +2095,6 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (!on) source.GameVideo = null;
             source.GameVideoFps = StreamVideoFps;
             source.HighQuality = StreamHighQuality;
-            source.Ultra = StreamUltra;
             source.GameAudio = on && StreamGameAudio ? gameAudio ??= services.MakeGameAudioOutput() : null;
             ApplyGameVolume();
             if (on) source.GameVideo = GameVideo;

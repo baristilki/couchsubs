@@ -171,9 +171,4 @@ public interface IGameVideoSource
     /// etmezse kendiliğinden standart kaliteye dönülür. Değişirse bağlantı yeniden kurulur.
     /// </summary>
     bool HighQuality { get; set; }
-
-    /// <summary>
-    /// Fork: yüksek kalitede 1440p (2560x1440) istensin mi (deneysel). PS5 kabul etmezse 1080p HEVC'ye dönülür.
-    /// </summary>
-    bool Ultra { get => false; set { } }
 }

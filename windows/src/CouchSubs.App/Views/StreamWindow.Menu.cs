@@ -80,6 +80,9 @@ public sealed partial class StreamWindow
         foreach (var (step, label) in new[] { (0, "Off"), (1, "Slight"), (2, "Medium"), (3, "Strong") })
             sharp.Items.Add(Item(text[label], () => controller.StreamSharpness = step, isChecked: controller.StreamSharpness == step));
         menu.Items.Add(sharp);
+        // Fork: oynarken düşük gecikme (kuyruksuz) ya da yayın için akıcı (eşit aralıklı) gösterim.
+        menu.Items.Add(Item(text["Low latency (for playing)"], () => controller.StreamLowLatency = !controller.StreamLowLatency,
+            isChecked: controller.StreamLowLatency));
         // Fork: DirectX görüntü motoru ve NVIDIA RTX büyütmesi (deneysel).
         menu.Items.Add(Item(text["DirectX picture engine (experimental)"], () => controller.StreamDirectX = !controller.StreamDirectX,
             isChecked: controller.StreamDirectX));

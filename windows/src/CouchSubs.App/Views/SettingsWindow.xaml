@@ -593,9 +593,6 @@
                                       Checked="OnStreamGameAudio" Unchecked="OnStreamGameAudio" />
                             <CheckBox x:Name="StreamHighQuality" Content="{t:T 'High picture quality (HEVC, sharper in the stream)'}" Margin="0,0,0,4"
                                       Checked="OnStreamHighQuality" Unchecked="OnStreamHighQuality" />
-                            <!-- Fork: 1440p (deneysel); PS5 kabul etmezse 1080p'ye dönülür. -->
-                            <CheckBox x:Name="StreamUltra" Content="{t:T '1440p picture (experimental, needs high quality)'}" Margin="0,0,0,4"
-                                      Checked="OnStreamUltra" Unchecked="OnStreamUltra" />
                             <CheckBox x:Name="StreamMatchGameColor" Content="{t:T 'Use the game\'s subtitle colour'}" Margin="0,0,0,4"
                                       Checked="OnStreamMatchGameColor" Unchecked="OnStreamMatchGameColor" />
                             <CheckBox x:Name="StreamMatchGameSize" Content="{t:T 'Match the game\'s subtitle size'}" Margin="0,0,0,12"

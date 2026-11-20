@@ -329,27 +329,9 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
         }
     }
 
-    /// <summary>Fork: 1440p istensin mi (deneysel; yalnız yüksek kalitede).</summary>
-    public bool Ultra
-    {
-        get => ultra;
-        set
-        {
-            if (ultra == value) return;
-            ultra = value;
-            ultraRejected = false;
-            RemotePlayLog.Note($"oyun görüntüsü çözünürlüğü: {(value ? "1440p (deneysel)" : "1080p")}");
-            if (GameVideo is not null) Reopen();
-        }
-    }
-
-    private volatile bool ultra;
-    /// <summary>Fork: PS5 1440p bağlantıyı görüntü vermeden kapattı: bu oturum boyunca 1080p HEVC.</summary>
-    private volatile bool ultraRejected;
-
-    /// <summary>Bu bağlantıda istenecek yükseklik: sık kopmada 720, 1440p açık ve yüksek kalitedeyse 1440, değilse 1080.</summary>
-    private int RequestedHeight =>
-        quality.Lowered ? 720 : ultra && !ultraRejected && RequestedQuality == NativeMethods.QualityHigh ? 1440 : 1080;
+    /// <summary>Bu bağlantıda istenecek yükseklik: sık kopmada 720, değilse 1080. (PS5 Remote Play'de 1440p vermiyor:
+    /// "AvCap failed to initialize video", 25 ve 50 Mbps'te denendi.)</summary>
+    private int RequestedHeight => quality.Lowered ? 720 : 1080;
 
     /// <summary>PS5 yüksek kalitede açılan bağlantıyı görüntü vermeden kapattı: bu oturum boyunca standarda dönülür.</summary>
     private volatile bool highQualityRejected;
@@ -724,14 +706,6 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
         // bağlantı kopunca bütün oturum H.264 15 Mbps'e düşüyor, görüntü bulanık kalıyordu. Bir kopma da şans eseri
         // olabilir: standarda ancak art arda iki başarısız yüksek kalite bağlantıdan sonra dönülür.
         if (!searchAnswered) return;
-        // Fork: 1440p kabul edilmediyse önce 1080p HEVC denenir; yüksek kalite hemen bırakılmaz.
-        if (current.Height == 1440 && !ultraRejected)
-        {
-            ultraRejected = true;
-            highQualityFailures = 0;
-            RemotePlayLog.Note("PS5 1440p görüntüyü vermedi; 1080p yüksek kaliteyle bağlanılıyor");
-            return;
-        }
         if (!ShouldRejectHighQuality(++highQualityFailures)) return;
         highQualityRejected = true;
         RemotePlayLog.Note("PS5 yüksek görüntü kalitesini (HEVC) vermedi; standart kaliteyle bağlanılıyor");
@@ -779,8 +753,6 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
         private volatile DisconnectReason? sessionRequestHint;
         /// <summary>Yüksek kalitede (HEVC) açıldı.</summary>
         public bool High { get; private set; }
-        /// <summary>Fork: istenen görüntü yüksekliği (720, 1080, 1440).</summary>
-        public int Height { get; private set; }
         /// <summary>PS5 akışı başlattı (kuyrukta yazılır).</summary>
         public bool Connected { get; set; }
         private volatile bool gotPicture;
@@ -825,7 +797,6 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
                 {
                     var quality = owner.RequestedQuality;
                     box.High = quality == NativeMethods.QualityHigh;
-                    box.Height = videoHeight;
                     box.native = NativeMethods.SessionStart(console.Host, key, morningPointer, account, NativeFps(owner.GameVideo is not null),
                                                             owner.RequestedFps, videoHeight, (nint)frame, owner.WantsAudio ? (nint)audio : 0,
                                                             (nint)eventCallback, (nint)log, GCHandle.ToIntPtr(box.handle), quality);

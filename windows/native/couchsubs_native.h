@@ -98,7 +98,7 @@ typedef void (*cs_audio_cb)(const int16_t *pcm, int frames, int channels, int ra
 #define CS_QUALITY_STANDARD 0
 #define CS_QUALITY_HIGH 1
 /* Yüksek kalitede istenen bit hızı (kbps); standart 1080p 15000'dir. */
-#define CS_HIGH_BITRATE_KBPS 30000
+#define CS_HIGH_BITRATE_KBPS 40000
 
 /* cs_session_start_ex gibi; ek olarak (fork):
  *   video_fps: PS5'ten istenen kare hızı, 30 ya da 60 (başka değer 30 sayılır).

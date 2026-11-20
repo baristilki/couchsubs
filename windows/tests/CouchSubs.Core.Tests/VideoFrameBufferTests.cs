@@ -130,3 +130,65 @@ public class VideoFrameBufferTests
         Assert.True(reads > 0);
     }
 }
+
+/// <summary>Fork: kareler düzensiz gelse de eşit aralıkla gösterilir.</summary>
+public class FramePacerTests
+{
+    [Fact]
+    public void JitteryArrivalsAreShownEvenly()
+    {
+        var pacer = new FramePacer();
+        const double refresh = 1000.0 / 240;
+        // 60 kare/sn, ama kareler 12 ve 21 ms arayla geliyor.
+        double arrive = 0, now = 0;
+        var queued = 0;
+        var shownAt = new List<double>();
+        for (var i = 0; i < 120; i++)
+        {
+            pacer.Arrived(arrive);
+            queued++;
+            var next = arrive + (i % 2 == 0 ? 12 : 21.3);
+            for (; now < next; now += refresh)
+                if (pacer.Next(now, queued, refresh) is { } drop)
+                {
+                    queued -= drop + 1;
+                    shownAt.Add(now);
+                }
+            arrive = next;
+        }
+        var gaps = shownAt.Skip(20).Zip(shownAt.Skip(21), (a, b) => b - a).ToList();
+        // Gösterim aralıkları yaklaşık bir kare (16,7 ms ± bir yenileme); gelişteki 12/21 ms sıçrama kalmaz.
+        Assert.All(gaps, gap => Assert.InRange(gap, 16.7 - refresh - 0.1, 16.7 + refresh + 0.1));
+    }
+
+    [Fact]
+    public void BacklogIsDroppedToKeepLatencyLow()
+    {
+        var pacer = new FramePacer();
+        Assert.Equal(0, pacer.Next(0, 1, 4));
+        Assert.Null(pacer.Next(5, 1, 4));
+        Assert.Equal(2, pacer.Next(17, 4, 4));
+        Assert.Null(pacer.Next(18, 0, 4));
+    }
+
+    [Fact]
+    public void PacedReadsGiveOneFramePerInterval()
+    {
+        var now = 0.0;
+        var buffer = new VideoFrameBuffer(() => now);
+        var handle = System.Runtime.InteropServices.GCHandle.Alloc(new byte[] { 1, 1, 1, 1 }, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
+        {
+            buffer.Write(handle.AddrOfPinnedObject(), 1, 1, 4);
+            now = 2;
+            buffer.Write(handle.AddrOfPinnedObject(), 1, 1, 4);
+        }
+        finally { handle.Free(); }
+        Assert.Equal(1, buffer.ReadPaced(4, (_, _, _) => { }));
+        now = 6;
+        Assert.Null(buffer.ReadPaced(4, (_, _, _) => { }));
+        now = 17;
+        Assert.Equal(2, buffer.ReadPaced(4, (_, _, _) => { }));
+        Assert.True(buffer.HasFrame);
+    }
+}

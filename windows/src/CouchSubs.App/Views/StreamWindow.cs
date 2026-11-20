@@ -255,20 +255,21 @@ public sealed partial class StreamWindow : Window
         else StopGameRendering();
     }
 
-    private int drawQueued;
-
     private void StartGameRendering()
     {
         if (rendering) return;
         rendering = true;
-        controller.GameVideo.FrameWritten += OnFrameWritten;
+        // Fork: kareler ekran yenilemesinde, akışın kendi aralığıyla eşit arayla çizilir (VideoFrameBuffer.ReadPaced).
+        // Eskiden her kare geldiği anda çiziliyordu; ağdan düzensiz gelen kareler görüntüyü sıçratıyordu.
+        lastRendering = TimeSpan.Zero;
+        CompositionTarget.Rendering += OnRendering;
         // Akış durunca (FrameWritten gelmez) eski kare donup kalmasın: seyrek bir yoklama bunu fark eder.
         staleCheck.Start();
     }
 
     private void StopGameRendering()
     {
-        if (rendering) controller.GameVideo.FrameWritten -= OnFrameWritten;
+        if (rendering) CompositionTarget.Rendering -= OnRendering;
         staleCheck.Stop();
         // Başka oyuna geçilmiş olabilir: renk yeniden okunur.
         rendering = false;
@@ -278,15 +279,28 @@ public sealed partial class StreamWindow : Window
         gameVersion = -1;
     }
 
-    /// <summary>Kare iş parçacığında: arayüze tek bir çizim isteği bırakır.</summary>
-    private void OnFrameWritten()
+    private TimeSpan lastRendering;
+    /// <summary>Ekranın yenileme aralığı (ms), Rendering olaylarından öğrenilir; 60 Hz ile başlar.</summary>
+    private double refreshMs = 1000.0 / 60;
+    private int renderTicks;
+
+    /// <summary>Her ekran yenilemesinde (arayüz iş parçacığı): sırası gelen kare varsa çizilir.</summary>
+    private void OnRendering(object? sender, EventArgs e)
     {
-        if (Interlocked.Exchange(ref drawQueued, 1) == 1) return;
-        Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
+        if (!rendering) return;
+        if (e is RenderingEventArgs args)
         {
-            Volatile.Write(ref drawQueued, 0);
-            if (rendering) DrawLatestFrame();
-        });
+            // Aynı yenileme için olay iki kez gelebilir; yalnız ilki sayılır.
+            if (args.RenderingTime == lastRendering) return;
+            if (lastRendering != TimeSpan.Zero)
+            {
+                var gap = (args.RenderingTime - lastRendering).TotalMilliseconds;
+                if (gap is > 1 and < 50) refreshMs = (refreshMs * 0.9) + (gap * 0.1);
+            }
+            lastRendering = args.RenderingTime;
+        }
+        renderTicks++;
+        DrawLatestFrame();
     }
 
     private readonly DispatcherTimer staleCheck = new() { Interval = TimeSpan.FromMilliseconds(500) };
@@ -317,7 +331,7 @@ public sealed partial class StreamWindow : Window
             gameVersion = -1;
             return;
         }
-        var newer = controller.GameVideo.ReadIfNewer(gameVersion, (pixels, width, height) =>
+        var newer = controller.GameVideo.ReadPaced(refreshMs, (pixels, width, height) =>
         {
             if (gameBitmap is null || gameBitmap.PixelWidth != width || gameBitmap.PixelHeight != height)
             {
@@ -348,8 +362,10 @@ public sealed partial class StreamWindow : Window
         var elapsed = Environment.TickCount64 - shownSince;
         if (elapsed < 10_000) return;
         var received = (gameVersion - versionSince) * 1000.0 / elapsed;
-        CouchSubs.RemotePlay.RemotePlayLog.Note($"yayın penceresi: {received:0.0} kare/sn geldi, {shownFrames * 1000.0 / elapsed:0.0} gösterildi");
+        CouchSubs.RemotePlay.RemotePlayLog.Note($"yayın penceresi: {received:0.0} kare/sn geldi, {shownFrames * 1000.0 / elapsed:0.0} gösterildi, " +
+                                                $"ekran {renderTicks * 1000.0 / elapsed:0} Hz (eşit aralıklı)");
         shownFrames = 0;
+        renderTicks = 0;
         shownSince = Environment.TickCount64;
         versionSince = gameVersion;
     }

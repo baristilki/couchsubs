@@ -139,7 +139,7 @@ public class SubtitleServerTests
         Assert.Contains("event: region", lines);
         Assert.Contains("data: {\"box\":{\"bottom\":0.12,\"left\":0.7,\"right\":0.95,\"top\":0.05},\"id\":\"q\",\"line\":0.03,\"text\":\"Demirciyi bul\"}", lines);
         Assert.Contains("data: {\"id\":\"q\",\"text\":\"\"}", lines);
-        Assert.Equal([new SubtitleEvent(SubtitleEventKind.Region, "Demirciyi bul", Id: "q", Box: box), new SubtitleEvent(SubtitleEventKind.Region, "", Id: "q"),
+        Assert.Equal([new SubtitleEvent(SubtitleEventKind.Region, "Demirciyi bul", Id: "q", Box: box, LineHeight: 0.03), new SubtitleEvent(SubtitleEventKind.Region, "", Id: "q"),
                       new SubtitleEvent(SubtitleEventKind.RegionClear)], received);
     }
 

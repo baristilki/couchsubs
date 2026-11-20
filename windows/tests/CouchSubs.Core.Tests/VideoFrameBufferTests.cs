@@ -161,14 +161,36 @@ public class FramePacerTests
         Assert.All(gaps, gap => Assert.InRange(gap, 16.7 - refresh - 0.1, 16.7 + refresh + 0.1));
     }
 
+    /// <summary>Pencere ara sıra takılsa da (20-30 ms) kareler atılmaz.</summary>
+    [Fact]
+    public void StallsDoNotDropFrames()
+    {
+        var random = new Random(2);
+        var arrivals = Enumerable.Range(0, 600).Select(i => (i * 1000.0 / 60) + (random.NextDouble() * 8) - 4).Order().ToList();
+        var pacer = new FramePacer();
+        int queued = 0, shown = 0, dropped = 0, next = 0;
+        for (var now = 0.0; now < (600 * 17) + 200; now += random.NextDouble() < 0.75 ? 8.3 : 16 + (random.NextDouble() * 14))
+        {
+            while (next < arrivals.Count && arrivals[next] <= now) { queued++; next++; }
+            while (queued > VideoFrameBuffer.MaxPending) { queued--; dropped++; }
+            if (pacer.Next(now, queued, 11.4) is not { } drop) continue;
+            dropped += drop;
+            queued -= drop + 1;
+            shown++;
+        }
+        Assert.True(shown >= 590, $"{shown} gösterildi, {dropped} atıldı");
+    }
+
     [Fact]
     public void BacklogIsDroppedToKeepLatencyLow()
     {
         var pacer = new FramePacer();
         Assert.Equal(0, pacer.Next(0, 1, 4));
         Assert.Null(pacer.Next(5, 1, 4));
-        Assert.Equal(2, pacer.Next(17, 4, 4));
-        Assert.Null(pacer.Next(18, 0, 4));
+        // Birikme yetişmek için hemen gösterilir; yalnız sınırın üstü atılır.
+        Assert.Equal(0, pacer.Next(19, 3, 4));
+        Assert.Equal(1, pacer.Next(20, 5, 4));
+        Assert.Null(pacer.Next(21, 0, 4));
     }
 
     [Fact]

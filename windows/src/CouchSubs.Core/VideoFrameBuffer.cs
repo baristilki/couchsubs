@@ -18,7 +18,7 @@ public sealed class VideoFrameBuffer
     private sealed record Frame(byte[] Data, int Width, int Height, long Version, double ArrivedMs);
 
     /// <summary>Gösterilmeyi bekleyen en çok kare; dolunca en eskisi atlanır.</summary>
-    public const int MaxPending = 3;
+    public const int MaxPending = 5;
 
     private readonly Lock gate = new();
     private readonly Queue<Frame> pending = new();
@@ -178,13 +178,17 @@ public sealed class VideoFrameBuffer
 /// <summary>
 /// Fork: kare gösterme zamanlaması. Akışın kare aralığı gelen karelerden öğrenilir (yavaş ortalama, 60 kare/sn'de
 /// ~16,7 ms). Ekran her yenilendiğinde bir önceki gösterimden bu yana bir kare aralığı geçtiyse (yarım yenileme payıyla)
-/// kuyruğun başındaki kare gösterilir; gösterim saati kayıp birikmesin diye aralıkla ilerler. Kuyruk ikiden fazla
-/// kare biriktirirse fazlası atlanır.
+/// kuyruğun başındaki kare gösterilir; gösterim saati kayıp birikmesin diye aralıkla ilerler. Pencere bir an takılıp
+/// kareler birikirse (üç ve fazlası) atılmaz, her yenilemede bir tane gösterilerek yetişilir; yalnız
+/// <see cref="KeepQueued"/>'dan fazlası atlanır. Eskiden takılmada biriken kareler atılıyor, 60 yerine 54 kare/sn
+/// gösteriliyordu.
 /// </summary>
 public sealed class FramePacer
 {
     /// <summary>Gösterimden sonra kuyrukta kalabilecek en çok kare (gecikme sınırı).</summary>
-    public const int KeepQueued = 1;
+    public const int KeepQueued = 3;
+    /// <summary>Bu kadar kare birikince zaman beklenmez, yetişmek için hemen gösterilir.</summary>
+    public const int CatchUpAt = 3;
 
     private double interval = 1000.0 / 60;
     private double lastArrival = -1;
@@ -212,10 +216,10 @@ public sealed class FramePacer
         if (queued == 0) return null;
         if (lastShown >= 0)
         {
-            var since = nowMs - lastShown;
-            if (since < interval - (refreshMs / 2)) return null;
-            // Gösterim saati aralıkla ilerler; uzun boşluktan sonra (kare gelmedi) şimdiye çekilir.
-            lastShown = since > interval * 2 ? nowMs : lastShown + interval;
+            var due = lastShown + interval;
+            if (nowMs + (refreshMs / 2) < due && queued < CatchUpAt) return null;
+            // Gösterim saati aralıkla ilerler; geride kalınca (uzun boşluk ya da birikme) şimdiye çekilir.
+            lastShown = nowMs - due > interval || queued >= CatchUpAt ? nowMs : due;
         }
         else lastShown = nowMs;
         return Math.Max(0, queued - 1 - KeepQueued);

@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 using CouchSubs.Core;
 using CouchSubs.Shell;
 
@@ -339,6 +340,134 @@ public sealed partial class StreamWindow
                 LineHeight = size * 1.25,
             },
         };
+    }
+
+    /// <summary>
+    /// Fork: ek alan çevirisi TV'deki gibi (tv-webos/app.js showRegion ve placeItems ile aynı kurallar). Ölçüler TV'de
+    /// 1080 piksellik ekran içindir; burada oyun görüntüsünün yüksekliğine göre büyütülür.
+    /// <paramref name="block"/> değilse kutu İngilizce yazının ekran kenarına yakın yanına yaslanır (sağ yarıdaysa
+    /// sağına, alt yarıdaysa altına), yazı boyu satır yüksekliğinin 0,9'u (18-44); blok ise kendi yazısının tam
+    /// üstünde, ortalı ve satır yüksekliğinin 0,95'i. Tuş simgeleri çevirinin içinde.
+    /// </summary>
+    private Border MakeTvRegion(string text, CouchSubs.Core.TextBox area, double? line, IReadOnlyList<CouchSubs.Core.IconPlacement>? icons,
+                                bool block = false)
+    {
+        const double pad = 0.004;
+        var picture = PictureRect();
+        var k = picture.Height / 1080.0;
+        var lineHeight = (line is > 0 ? line.Value : (block ? area.Bottom - area.Top : 30.0 / 1080)) * picture.Height;
+        var size = block
+            ? Math.Clamp(lineHeight * 0.95, 14 * k, 96 * k)
+            : Math.Clamp(lineHeight * 0.9, 18 * k, 44 * k);
+        var textBlock = new TextBlock
+        {
+            FontSize = Math.Max(10, size),
+            FontWeight = FontWeights.SemiBold,
+            Foreground = Brushes.White,
+            TextWrapping = TextWrapping.Wrap,
+            TextAlignment = block ? TextAlignment.Center : TextAlignment.Left,
+            LineHeight = size * (block ? 1.15 : 1.2),
+            LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 2, ShadowDepth = 1, Opacity = 0.9, Color = Colors.Black },
+        };
+        FillWithIcons(textBlock, text, icons, size);
+        var rect = ToPicture(area, picture, pad);
+        var boxWidth = rect.Width;
+        var border = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(block ? (byte)0xF7 : (byte)0xE6, 0, 0, 0)),
+            CornerRadius = new CornerRadius(6 * k),
+            Padding = block ? new Thickness(6 * k, 2 * k, 6 * k, 2 * k) : new Thickness(10 * k, 4 * k, 10 * k, 4 * k),
+            Child = textBlock,
+        };
+        if (block)
+        {
+            border.HorizontalAlignment = HorizontalAlignment.Left;
+            border.VerticalAlignment = VerticalAlignment.Top;
+            border.Margin = new Thickness(Math.Max(0, rect.Left), Math.Max(0, rect.Top), 0, 0);
+            border.Width = Math.Max(80 * k, Math.Min(picture.Right, rect.Right) - Math.Max(0, rect.Left));
+            border.MinHeight = rect.Height;
+            return border;
+        }
+        double layerWidth = root.ActualWidth, layerHeight = root.ActualHeight;
+        border.MinWidth = boxWidth;
+        border.MaxWidth = Math.Max(boxWidth, picture.Width * 0.3);
+        if ((area.Left + area.Right) / 2 > 0.5)
+        {
+            border.HorizontalAlignment = HorizontalAlignment.Right;
+            border.Margin = new Thickness(0, 0, Math.Max(0, layerWidth - Math.Min(picture.Right, rect.Right)), 0);
+        }
+        else
+        {
+            border.HorizontalAlignment = HorizontalAlignment.Left;
+            border.Margin = new Thickness(Math.Max(picture.Left, rect.Left), 0, 0, 0);
+        }
+        var margin = border.Margin;
+        if ((area.Top + area.Bottom) / 2 > 0.5)
+        {
+            border.VerticalAlignment = VerticalAlignment.Bottom;
+            margin.Bottom = Math.Max(0, layerHeight - Math.Min(picture.Bottom, rect.Bottom));
+        }
+        else
+        {
+            border.VerticalAlignment = VerticalAlignment.Top;
+            margin.Top = Math.Max(picture.Top, rect.Top);
+        }
+        border.Margin = margin;
+        return border;
+    }
+
+    /// <summary>Çeviriyi tuş simgeleriyle yazar (simge yazı boyunda, satırın ortasında; TV'deki fillText gibi).</summary>
+    private static void FillWithIcons(TextBlock target, string text, IReadOnlyList<CouchSubs.Core.IconPlacement>? icons, double size)
+    {
+        var list = icons?.Where(icon => icon.Image.StartsWith("data:image/", StringComparison.Ordinal)).OrderBy(icon => icon.At).ToList();
+        if (list is not { Count: > 0 })
+        {
+            target.Text = text;
+            return;
+        }
+        var position = 0;
+        foreach (var icon in list)
+        {
+            var at = Math.Max(position, Math.Min(text.Length, icon.At));
+            if (at > position) target.Inlines.Add(new System.Windows.Documents.Run(text[position..at]));
+            if (IconImage(icon.Image) is { } image)
+                target.Inlines.Add(new System.Windows.Documents.InlineUIContainer(new Image
+                {
+                    Source = image,
+                    Height = size * 1.15,
+                    Margin = new Thickness(size * 0.2, 0, size * 0.2, 0),
+                }) { BaselineAlignment = BaselineAlignment.Center });
+            position = at;
+        }
+        if (position < text.Length) target.Inlines.Add(new System.Windows.Documents.Run(text[position..]));
+    }
+
+    private static readonly Dictionary<string, BitmapImage?> iconCache = new(StringComparer.Ordinal);
+
+    /// <summary>"data:image/png;base64,…" simgesi (önbellekli; bozuksa null).</summary>
+    private static BitmapImage? IconImage(string dataUrl)
+    {
+        if (iconCache.TryGetValue(dataUrl, out var known)) return known;
+        BitmapImage? image = null;
+        try
+        {
+            var comma = dataUrl.IndexOf(',');
+            if (comma > 0)
+            {
+                var bytes = Convert.FromBase64String(dataUrl[(comma + 1)..]);
+                image = new BitmapImage();
+                image.BeginInit();
+                image.CacheOption = BitmapCacheOption.OnLoad;
+                image.StreamSource = new System.IO.MemoryStream(bytes);
+                image.EndInit();
+                image.Freeze();
+            }
+        }
+        catch (Exception) { image = null; }
+        if (iconCache.Count > 200) iconCache.Clear();
+        iconCache[dataUrl] = image;
+        return image;
     }
 
     /// <summary>Oyun görüntüsü zemininde ek alan kutusu: altyazıyla aynı dilde, daha küçük ve yarı saydam.</summary>

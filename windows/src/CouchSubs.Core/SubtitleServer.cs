@@ -120,8 +120,14 @@ public sealed record SubtitleLook(bool OneLine, bool MatchSize, string? Font, st
 /// <param name="Id">Ek alan olayında alanın kimliği (<see cref="SubtitleEventKind.Region"/>; metin boşsa kutu kalkar).</param>
 /// <param name="Box">Ek alan olayında yazının karedeki yeri.</param>
 /// <param name="Blocks">Fork: ek alanda ayrı duran yazıların çevirileri kendi yerleriyle (TV'deki gibi); yoksa null.</param>
+/// <param name="LineHeight">Fork: ek alanda İngilizce satırın yüksekliği (karenin boyuna oranla); TV yazı boyunu bundan alır.</param>
+/// <param name="Icons">Fork: ek alan çevirisinin içindeki tuş simgeleri (TV'deki gibi).</param>
+/// <summary>Fork: ek alanda yeriyle bir çeviri bloğu (TV'deki <c>blocks</c> öğesi).</summary>
+public sealed record RegionBlock(TextBox Box, string Text, double LineHeight, IReadOnlyList<IconPlacement>? Icons);
+
 public sealed record SubtitleEvent(SubtitleEventKind Kind, string Text = "", int DurationMs = 0, bool Paragraphs = false, bool Replaces = false,
-                                   string? Id = null, TextBox? Box = null, IReadOnlyList<(TextBox Box, string Text)>? Blocks = null)
+                                   string? Id = null, TextBox? Box = null, IReadOnlyList<RegionBlock>? Blocks = null,
+                                   double? LineHeight = null, IReadOnlyList<IconPlacement>? Icons = null)
 {
     public static readonly SubtitleEvent Cleared = new(SubtitleEventKind.Clear);
 }
@@ -349,9 +355,10 @@ public sealed class SubtitleServer(int port = 8787, TimeSpan? pingInterval = nul
         if (box is { } b) json["box"] = BoxJson(b);
         if (lineHeight is { } line) json["line"] = Round(line);
         Broadcast(Frame("region", json), subtitle: true);
-        IReadOnlyList<(TextBox, string)>? placed = blocks is { Count: > 0 } && text.Length > 0
-            ? [.. blocks.Select(block => (block.Box, block.Translation))] : null;
-        EventSent?.Invoke(new SubtitleEvent(SubtitleEventKind.Region, text, Id: id, Box: box, Blocks: placed));
+        IReadOnlyList<RegionBlock>? placed = blocks is { Count: > 0 } && text.Length > 0
+            ? [.. blocks.Select(block => new RegionBlock(block.Box, block.Translation, block.LineHeight, block.Icons))] : null;
+        EventSent?.Invoke(new SubtitleEvent(SubtitleEventKind.Region, text, Id: id, Box: box, Blocks: placed,
+                                            LineHeight: text.Length > 0 ? lineHeight : null, Icons: text.Length > 0 ? icons : null));
     }
 
     /// <summary>Bütün ek alan kutularını kaldırır.</summary>

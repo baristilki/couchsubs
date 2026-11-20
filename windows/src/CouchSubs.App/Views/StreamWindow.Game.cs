@@ -64,7 +64,7 @@ public sealed partial class StreamWindow
     private (double X, double Y)? dragPosition;
     private Point dragGrab;
 
-    private bool GameMode => controller.StreamBackground == StreamBackground.Game && game.Visibility == Visibility.Visible;
+    private bool GameMode => controller.StreamBackground == StreamBackground.Game && (game.Visibility == Visibility.Visible || overlay);
 
     /// <summary>
     /// Bulanık örtü: oyun görüntüsünün aynı yerleşimli ikinci bir kopyası, yalnız örtü alanında (kırpılıp) bulanık

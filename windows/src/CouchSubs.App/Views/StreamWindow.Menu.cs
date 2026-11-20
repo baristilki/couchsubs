@@ -57,6 +57,10 @@ public sealed partial class StreamWindow
         var menu = ContextMenu!;
         menu.Items.Clear();
         menu.Items.Add(Item(text[fullScreen ? "Exit full screen (Esc)" : "Full screen (F11)"], ToggleFullScreen));
+        // Fork: oyun modu: DirectX tam ekran, en düşük gecikme (oyun penceresinde Esc ile çıkılır).
+        if (controller.GameVideoActive || GameModeOn)
+            menu.Items.Add(Item(text[GameModeOn ? "Exit game mode" : "Game mode: full screen, lowest latency (G)"], ToggleGameMode,
+                isChecked: GameModeOn));
         menu.Items.Add(new Separator());
         menu.Items.Add(Item(text["Mute game sound (M)"], () => controller.StreamGameMuted = !controller.StreamGameMuted,
             isChecked: controller.StreamGameMuted));

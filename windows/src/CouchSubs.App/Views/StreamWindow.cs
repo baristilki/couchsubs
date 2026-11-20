@@ -97,9 +97,10 @@ public sealed partial class StreamWindow : Window
         }
     }
 
-    private StreamWindow(AppController controller)
+    private StreamWindow(AppController controller, bool overlay = false)
     {
         this.controller = controller;
+        this.overlay = overlay;
         // Discord durumu açıkken başlık Discord uygulamasının adıdır: Discord pencere yayınını başlıkla gösterir
         // ("Yayında: Grand Theft Auto VI"). Kapalıysa sabit ad; yayın programı pencereyi bu adla bulur.
         Title = CurrentTitle;
@@ -131,7 +132,9 @@ public sealed partial class StreamWindow : Window
         root.Children.Add(linesHost);
         Content = root;
         InitGameLayout();
-        InitMenu();
+        if (!overlay) InitMenu();
+        // Katman ayarları en sonda: yukarıdaki pencere ayarlarının (ortala, boyutlandırılabilir) üstüne yazılır.
+        if (overlay) InitOverlay();
         ApplyBackground();
         linesHost.SizeChanged += (_, _) =>
         {
@@ -158,13 +161,18 @@ public sealed partial class StreamWindow : Window
         controller.StreamEvent += OnEvent;
         controller.StreamHidden += OnHidden;
         controller.PropertyChanged += OnChanged;
-        controller.GameVideoWanted = true;
-        UpdateGameRendering();
+        if (!overlay)
+        {
+            controller.GameVideoWanted = true;
+            UpdateGameRendering();
+        }
         Closed += (_, _) =>
         {
             controller.StreamEvent -= OnEvent;
             controller.StreamHidden -= OnHidden;
             controller.PropertyChanged -= OnChanged;
+            if (overlay) return;
+            StopGameMode();
             controller.GameVideoWanted = false;
             StopGameRendering();
             DropDirectX(null);
@@ -185,6 +193,11 @@ public sealed partial class StreamWindow : Window
         if (e.Key == System.Windows.Input.Key.F11 || (e.Key == System.Windows.Input.Key.Enter && System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Alt))
         {
             ToggleFullScreen();
+            e.Handled = true;
+        }
+        else if (e.Key == System.Windows.Input.Key.G)
+        {
+            ToggleGameMode();
             e.Handled = true;
         }
         else if (e.Key == System.Windows.Input.Key.Escape && fullScreen)
@@ -240,6 +253,13 @@ public sealed partial class StreamWindow : Window
 
     private void ApplyBackground()
     {
+        if (overlay)
+        {
+            // Katman: yalnız altyazı ve kutular; görüntü altındaki oyun penceresinde.
+            Background = Brushes.Transparent;
+            linesHost.Background = Brushes.Transparent;
+            return;
+        }
         var (red, green, blue) = controller.StreamBackground.Rgb();
         // Oyun görüntüsü varken zemin görüntünün kendisidir; kenar payları (16:9 dışı pencerede) siyah kalır.
         Background = new SolidColorBrush(Color.FromRgb(red, green, blue));
@@ -253,6 +273,7 @@ public sealed partial class StreamWindow : Window
     /// </summary>
     private void UpdateGameRendering()
     {
+        if (overlay) return;
         if (controller.GameVideoActive) StartGameRendering();
         else StopGameRendering();
     }

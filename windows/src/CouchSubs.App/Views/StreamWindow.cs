@@ -118,6 +118,7 @@ public sealed partial class StreamWindow : Window
         // Video kaynağında renkli alt piksel yumuşatma kenarda renk saçağı bırakır; gri tonlu yumuşatma keskin kalır.
         TextOptions.SetTextRenderingMode(this, TextRenderingMode.Grayscale);
         RenderOptions.SetBitmapScalingMode(game, BitmapScalingMode.Linear);
+        ApplySharpness();
         var layers = new Grid();
         layers.Children.Add(regionsPanel);
         layers.Children.Add(linesPanel);
@@ -322,6 +323,33 @@ public sealed partial class StreamWindow : Window
         return Color.FromRgb(c.R, c.G, c.B);
     }
 
+    private SharpenEffect? sharpen;
+
+    /// <summary>
+    /// Fork: keskinlik düzeyi değişti: süzgeç takılır ya da kaldırılır (kapalıyken hiç iş yapılmaz). Süzgeç
+    /// yüklenemezse (eski ekran kartı sürücüsü) görüntü süzgeçsiz gösterilir, pencere kapanmaz.
+    /// </summary>
+    private void ApplySharpness()
+    {
+        var level = controller.StreamSharpness;
+        try
+        {
+            if (level == 0)
+            {
+                game.Effect = null;
+                return;
+            }
+            sharpen ??= new SharpenEffect();
+            sharpen.Set(gameBitmap?.PixelWidth ?? 1920, gameBitmap?.PixelHeight ?? 1080, SharpenEffect.Strength(level));
+            game.Effect = sharpen;
+        }
+        catch (Exception error)
+        {
+            game.Effect = null;
+            CouchSubs.RemotePlay.RemotePlayLog.Note($"yayın penceresi: keskinleştirme açılamadı: {error.GetBaseException().Message}");
+        }
+    }
+
     private void DrawLatestFrame()
     {
         if (!controller.GameVideo.HasFrame)
@@ -337,6 +365,7 @@ public sealed partial class StreamWindow : Window
             {
                 gameBitmap = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgr32, null);
                 game.Source = gameBitmap;
+                sharpen?.Set(width, height, SharpenEffect.Strength(controller.StreamSharpness));
                 if (blurred.Visibility == Visibility.Visible) blurred.Source = gameBitmap;
             }
             gameBitmap.WritePixels(new Int32Rect(0, 0, width, height), pixels, width * 4, 0);
@@ -373,6 +402,7 @@ public sealed partial class StreamWindow : Window
     private void OnChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(AppController.GameVideoActive)) UpdateGameRendering();
+        if (e.PropertyName == nameof(AppController.StreamSharpness)) ApplySharpness();
         if (e.PropertyName == nameof(AppController.GameColors))
         {
             boxes.Clear();

@@ -54,6 +54,7 @@ public static class StoreKeys
     public const string StreamFreePosition = "streamFreePosition";
     /// <summary>Çevirinin yazı boyu oyunun altyazısınınkine uydurulsun mu (vars. açık).</summary>
     public const string StreamMatchGameSize = "streamMatchGameSize";
+    public const string StreamSharpness = "streamSharpness";
     /// <summary>Oyun görüntüsü zemininde çevirinin yazı tipi.</summary>
     public const string StreamFont = "streamFont";
     /// <summary>Bilgisayarda çalan (yayına giden) oyun sesinin düzeyi, 0-100.</summary>

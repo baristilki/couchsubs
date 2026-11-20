@@ -62,6 +62,11 @@ public sealed partial class StreamWindow
                 controller.StreamGameVolume = step;
             }, isChecked: !controller.StreamGameMuted && controller.StreamGameVolume == step));
         menu.Items.Add(Styled(level));
+        // Fork: oyun görüntüsünün keskinliği (ekran kartında).
+        var sharp = Styled(new MenuItem { Header = text["Picture sharpness"] });
+        foreach (var (step, label) in new[] { (0, "Off"), (1, "Slight"), (2, "Medium"), (3, "Strong") })
+            sharp.Items.Add(Item(text[label], () => controller.StreamSharpness = step, isChecked: controller.StreamSharpness == step));
+        menu.Items.Add(sharp);
         menu.Items.Add(new Separator());
         var cover = Styled(new MenuItem { Header = text["Game subtitle"] });
         foreach (var (choice, label) in new[]

@@ -1969,6 +1969,22 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         }
     }
 
+    /// <summary>
+    /// Fork: yayın penceresinde oyun görüntüsünün keskinleştirmesi: 0 kapalı, 1 hafif, 2 orta, 3 güçlü. Varsayılan orta
+    /// (1080p görüntü büyük ekrana büyütülünce yumuşuyor).
+    /// </summary>
+    public int StreamSharpness
+    {
+        get => Math.Clamp(store.Load<int?>(StoreKeys.StreamSharpness) ?? 2, 0, 3);
+        set
+        {
+            value = Math.Clamp(value, 0, 3);
+            if (value == StreamSharpness) return;
+            store.Save(StoreKeys.StreamSharpness, value);
+            Changed(nameof(StreamSharpness));
+        }
+    }
+
     /// <summary>Çevirinin yazı boyu oyunun kendi altyazısının boyuna uydurulsun mu. Varsayılan açık.</summary>
     public bool StreamMatchGameSize
     {

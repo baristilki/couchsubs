@@ -342,8 +342,106 @@ static void test_discover_ex_returns_after_timeout(void)
 	CHECK(cs_discover_ex(targets, 1, 100, NULL, &found) != 0);
 }
 
+/* Fork: ekran kartında çözme (D3D11VA) aynı kareleri verir; aygıt yoksa (CI) yazılıma düşer, yine kare çıkar. */
+static void test_fixture_decodes_hardware(const char *path)
+{
+	size_t size = 0;
+	uint8_t *data = read_file(path, &size);
+	CHECK(data != NULL);
+	if(!data)
+		return;
+	unit units[64];
+	size_t count = access_units(data, size, units, 64);
+	cs_decoder decoder;
+	CHECK(cs_decoder_init_hardware(&decoder, false) == 0);
+	printf("hardware decode: %s\n", cs_decoder_is_hardware(&decoder) ? "yes" : "no");
+	int frames = 0;
+	LARGE_INTEGER frequency, start, end;
+	QueryPerformanceFrequency(&frequency);
+	QueryPerformanceCounter(&start);
+	for(size_t i = 0; i < count; i++)
+	{
+		int got = cs_decoder_decode(&decoder, units[i].data, units[i].size);
+		CHECK(got >= 0);
+		if(got == 1)
+		{
+			frames++;
+			check_frame(&decoder);
+		}
+	}
+	frames += flush(&decoder);
+	QueryPerformanceCounter(&end);
+	printf("hardware decode: %d frames, %.2f ms/frame (decode + convert)\n", frames,
+			(double)(end.QuadPart - start.QuadPart) * 1000.0 / (double)frequency.QuadPart / (frames ? frames : 1));
+	CHECK(frames == 6);
+	cs_decoder_fini(&decoder);
+	free(data);
+}
+
+/* Fork: ölçüm: "--bench <dosya.hevc>" HEVC örneğini işlemcide ve ekran kartında çözüp kare başına süreyi yazar. */
+static double bench_now_ms(void)
+{
+	LARGE_INTEGER frequency, counter;
+	QueryPerformanceFrequency(&frequency);
+	QueryPerformanceCounter(&counter);
+	return (double)counter.QuadPart * 1000.0 / (double)frequency.QuadPart;
+}
+
+static void bench_decode(const uint8_t *data, size_t size, bool hardware)
+{
+	cs_decoder decoder;
+	if(cs_decoder_init_with(&decoder, true, hardware) != 0)
+	{
+		printf("init failed\n");
+		return;
+	}
+	AVCodecParserContext *parser = av_parser_init(AV_CODEC_ID_HEVC);
+	AVCodecContext *parse_context = avcodec_alloc_context3(NULL);
+	const uint8_t *in = data;
+	size_t left = size;
+	int frames = 0;
+	double total = 0, worst = 0;
+	while(left > 0)
+	{
+		uint8_t *out = NULL;
+		int out_size = 0;
+		int used = av_parser_parse2(parser, parse_context, &out, &out_size, in, (int)left, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
+		in += used;
+		left -= (size_t)used;
+		if(out_size <= 0)
+			continue;
+		double start = bench_now_ms();
+		int got = cs_decoder_decode(&decoder, out, (size_t)out_size);
+		if(got == 1)
+			cs_decoder_convert(&decoder, decoder.frame);
+		double spent = bench_now_ms() - start;
+		if(got == 1 && ++frames > 10)
+		{
+			total += spent;
+			if(spent > worst)
+				worst = spent;
+		}
+	}
+	printf("%s: %d frames, avg %.2f ms, worst %.2f ms (decode + convert)\n",
+			cs_decoder_is_hardware(&decoder) ? "GPU (D3D11VA)" : "CPU (software)", frames, frames > 10 ? total / (frames - 10) : 0, worst);
+	cs_decoder_fini(&decoder);
+	av_parser_close(parser);
+	avcodec_free_context(&parse_context);
+}
+
 int main(int argc, char **argv)
 {
+	if(argc == 3 && strcmp(argv[1], "--bench") == 0)
+	{
+		size_t size = 0;
+		uint8_t *data = read_file(argv[2], &size);
+		if(!data)
+			return 2;
+		bench_decode(data, size, false);
+		bench_decode(data, size, true);
+		free(data);
+		return 0;
+	}
 	if(argc < 2)
 	{
 		fprintf(stderr, "usage: %s <sample-1080p.h264>\n", argv[0]);
@@ -355,6 +453,7 @@ int main(int argc, char **argv)
 	test_throttle_thirty_fps_at_four();
 	test_quit_reasons();
 	test_fixture_decodes(argv[1]);
+	test_fixture_decodes_hardware(argv[1]);
 	test_garbage_does_not_crash();
 	test_discover_returns_after_timeout();
 	test_discover_ex_returns_after_timeout();

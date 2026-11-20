@@ -14,6 +14,7 @@
 
 #include <libavcodec/avcodec.h>
 #include <libavutil/frame.h>
+#include <libavutil/hwcontext.h>
 #include <libavutil/log.h>
 #include <libavutil/mem.h>
 #include <libswscale/swscale.h>
@@ -430,9 +431,30 @@ typedef struct {
 	int source_format;
 	int source_colorspace;
 	int source_range;
+	/* Fork: ekran kartında çözme (D3D11VA). Kare ekran kartından NV12 olarak alınıp BGRA'ya çevrilir. */
+	AVBufferRef *hw_device;
+	AVFrame *sw_frame;
 } cs_decoder;
 
-static int cs_decoder_init(cs_decoder *decoder, bool hevc)
+/* Fork: çözücü ekran kartı biçimini (D3D11) sunuyorsa onu seçer; yoksa yazılım biçimi. */
+static enum AVPixelFormat cs_get_format(AVCodecContext *codec, const enum AVPixelFormat *formats)
+{
+	for(const enum AVPixelFormat *format = formats; *format != AV_PIX_FMT_NONE; format++)
+		if(*format == AV_PIX_FMT_D3D11)
+			return *format;
+	return avcodec_default_get_format(codec, formats);
+}
+
+/* Fork: ekran kartında çözme yalnız COUCHSUBS_HARDWARE_DECODE=1 ile. Ölçüm (RTX 3080 Ti, 1080p HEVC 40 Mbps, kare
+   başına çözme + BGRA): işlemci 3,3 ms, ekran kartı 7,8 ms. Kareyi ekran kartından belleğe almak (altyazı okuma ve
+   yayın penceresi için gerekli) kazancı yiyor; yazılım çözücü bu bilgisayarda daha hızlı. */
+static bool cs_hardware_decode_wanted(void)
+{
+	const char *on = getenv("COUCHSUBS_HARDWARE_DECODE");
+	return on && on[0] == '1';
+}
+
+static int cs_decoder_init_with(cs_decoder *decoder, bool hevc, bool hardware)
 {
 	memset(decoder, 0, sizeof(*decoder));
 	decoder->source_format = -1;
@@ -448,6 +470,14 @@ static int cs_decoder_init(cs_decoder *decoder, bool hevc)
 	decoder->codec->flags |= AV_CODEC_FLAG_LOW_DELAY;
 	decoder->codec->thread_type = FF_THREAD_SLICE;
 	decoder->codec->thread_count = 0;
+	/* Fork: ekran kartında çözme (NVIDIA'da NVDEC birimi): işlemcide HEVC çözmekten hızlı, işlemciyi boşaltır.
+	   Aygıt açılamazsa yazılımla çözülür. */
+	if(hardware && av_hwdevice_ctx_create(&decoder->hw_device, AV_HWDEVICE_TYPE_D3D11VA, NULL, NULL, 0) == 0)
+	{
+		decoder->codec->hw_device_ctx = av_buffer_ref(decoder->hw_device);
+		decoder->codec->get_format = cs_get_format;
+		decoder->sw_frame = av_frame_alloc();
+	}
 	if(avcodec_open2(decoder->codec, codec, NULL) < 0)
 		goto fail;
 	return 0;
@@ -455,7 +485,28 @@ fail:
 	avcodec_free_context(&decoder->codec);
 	av_packet_free(&decoder->packet);
 	av_frame_free(&decoder->frame);
+	av_frame_free(&decoder->sw_frame);
+	av_buffer_unref(&decoder->hw_device);
 	return -1;
+}
+
+static int cs_decoder_init(cs_decoder *decoder, bool hevc)
+{
+	return cs_decoder_init_with(decoder, hevc, false);
+}
+
+/* Fork: ekran kartında çözme ile açar; açılamazsa yazılımla. */
+static int cs_decoder_init_hardware(cs_decoder *decoder, bool hevc)
+{
+	if(cs_hardware_decode_wanted() && cs_decoder_init_with(decoder, hevc, true) == 0)
+		return 0;
+	return cs_decoder_init_with(decoder, hevc, false);
+}
+
+/* Fork: çözücü ekran kartında mı çözüyor. */
+static bool cs_decoder_is_hardware(const cs_decoder *decoder)
+{
+	return decoder->hw_device != NULL;
 }
 
 static void cs_decoder_fini(cs_decoder *decoder)
@@ -463,6 +514,8 @@ static void cs_decoder_fini(cs_decoder *decoder)
 	avcodec_free_context(&decoder->codec);
 	av_packet_free(&decoder->packet);
 	av_frame_free(&decoder->frame);
+	av_frame_free(&decoder->sw_frame);
+	av_buffer_unref(&decoder->hw_device);
 	sws_freeContext(decoder->sws);
 	decoder->sws = NULL;
 	av_freep(&decoder->bgra);
@@ -471,6 +524,20 @@ static void cs_decoder_fini(cs_decoder *decoder)
 /* Son çözülen kareyi BGRA'ya çevirir. */
 static bool cs_decoder_convert(cs_decoder *decoder, AVFrame *frame)
 {
+	/* Fork: ekran kartında çözülen kare (D3D11 dokusu) önce belleğe NV12 olarak alınır. */
+	if(frame->format == AV_PIX_FMT_D3D11)
+	{
+		if(!decoder->sw_frame)
+			return false;
+		av_frame_unref(decoder->sw_frame);
+		if(av_hwframe_transfer_data(decoder->sw_frame, frame, 0) < 0)
+			return false;
+		decoder->sw_frame->colorspace = frame->colorspace;
+		decoder->sw_frame->color_range = frame->color_range;
+		decoder->sw_frame->width = frame->width;
+		decoder->sw_frame->height = frame->height;
+		frame = decoder->sw_frame;
+	}
 	int width = frame->width, height = frame->height;
 	if(width <= 0 || height <= 0)
 		return false;
@@ -734,17 +801,19 @@ CS_API cs_session *cs_session_start_ex2(const char *host, const uint8_t regist_k
 	/* Yüksek kalite: HEVC (aynı bit hızında H.264'ten belirgin temiz) ve daha yüksek bit hızı. Çözücü bu DLL'de
 	 * yoksa H.264'e dönülür. */
 	bool hevc = quality == CS_QUALITY_HIGH;
-	if(hevc && cs_decoder_init(&session->decoder, true) != 0)
+	if(hevc && cs_decoder_init_hardware(&session->decoder, true) != 0)
 	{
 		cs_logf(log, user, 1, "%s", "HEVC decoder not available, using H.264");
 		hevc = false;
 	}
-	if(!hevc && cs_decoder_init(&session->decoder, false) != 0)
+	if(!hevc && cs_decoder_init_hardware(&session->decoder, false) != 0)
 	{
 		cs_logf(log, user, 0, "%s", "H.264 decoder could not be opened");
 		free(session);
 		return NULL;
 	}
+	/* Fork: hangi çözücü kullanılıyor (günlükte). */
+	cs_logf(log, user, 2, "%s", cs_decoder_is_hardware(&session->decoder) ? "Çözücü: ekran kartı (D3D11VA)" : "Çözücü: işlemci (yazılım)");
 	session->decoder_ready = true;
 
 	ChiakiConnectInfo info;

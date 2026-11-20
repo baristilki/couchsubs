@@ -323,6 +323,7 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
             if (highQuality == value) return;
             highQuality = value;
             highQualityRejected = false;
+            highQualityFailures = 0;
             RemotePlayLog.Note($"oyun görüntüsü kalitesi: {(value ? "yüksek (HEVC)" : "standart")}");
             if (GameVideo is not null) Reopen();
         }
@@ -330,6 +331,9 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
 
     /// <summary>PS5 yüksek kalitede açılan bağlantıyı görüntü vermeden kapattı: bu oturum boyunca standarda dönülür.</summary>
     private volatile bool highQualityRejected;
+    /// <summary>Fork: yüksek kalitede art arda başarısız bağlantı sayısı; <see cref="HighQualityTries"/>'a ulaşınca standarda dönülür.</summary>
+    private int highQualityFailures;
+    internal const int HighQualityTries = 2;
 
     /// <summary>Bu bağlantıda istenecek kalite: yüksek kalite yalnız oyun görüntüsü açıkken (yazı okuma için gerekmez).</summary>
     private int RequestedQuality =>
@@ -689,10 +693,21 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
         // Kalitenin suçu olmayan kapanmalar: PS5 başka bağlantıyla meşgul ("Remote is already in use", uygulama yeniden
         // açılınca eski oturum birkaç saniye kalıyor), reddetti, şifre istedi ya da kullanıcı durdurdu.
         if (why is not (DisconnectKind.Network or DisconnectKind.Other)) return;
-        if (current.Connected && !stalled && current.GotPicture) return;
+        if (current.Connected && !stalled && current.GotPicture)
+        {
+            highQualityFailures = 0;
+            return;
+        }
+        // Fork: PS5 aramaya yanıt vermediyse (uykudan uyanıyor) kopma kalitenin suçu değildir; eskiden ilk uyanışta
+        // bağlantı kopunca bütün oturum H.264 15 Mbps'e düşüyor, görüntü bulanık kalıyordu. Bir kopma da şans eseri
+        // olabilir: standarda ancak art arda iki başarısız yüksek kalite bağlantıdan sonra dönülür.
+        if (!searchAnswered) return;
+        if (!ShouldRejectHighQuality(++highQualityFailures)) return;
         highQualityRejected = true;
         RemotePlayLog.Note("PS5 yüksek görüntü kalitesini (HEVC) vermedi; standart kaliteyle bağlanılıyor");
     }
+
+    internal static bool ShouldRejectHighQuality(int failures) => failures >= HighQualityTries;
 
     /// <summary>Akış sürerken bağlantı koptu: sık oluyorsa sonraki oturumlar 720p açılır.</summary>
     private void NoteDrop()

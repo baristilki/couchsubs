@@ -331,6 +331,14 @@ public class DisconnectReasonTests
 
 public class SessionReasonTests
 {
+    /// Fork: tek kopma yüksek kaliteyi (HEVC) bırakmaz; art arda iki başarısız bağlantıdan sonra standarda dönülür.
+    [Fact]
+    public void HighQualityNeedsTwoFailures()
+    {
+        Assert.False(StreamSession.ShouldRejectHighQuality(1));
+        Assert.True(StreamSession.ShouldRejectHighQuality(2));
+    }
+
     /// PS5 aramaya yanıt vermediyse ve oturum ağ hatasıyla düştüyse neden "bulunamadı"dır; yanıt verdiyse neden olduğu gibi kalır.
     [Fact]
     public void MissingConsoleIsReportedAsNotFound()

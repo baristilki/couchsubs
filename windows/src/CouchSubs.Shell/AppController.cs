@@ -2040,6 +2040,19 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         }
     }
 
+    /// <summary>Fork: oyun görüntüsü 1440p istensin mi (deneysel; yüksek kaliteyle). Varsayılan kapalı.</summary>
+    public bool StreamUltra
+    {
+        get => store.Load<bool?>(StoreKeys.StreamUltra) ?? false;
+        set
+        {
+            if (value == StreamUltra) return;
+            store.Save(StoreKeys.StreamUltra, value);
+            Changed(nameof(StreamUltra));
+            ApplyGameVideo();
+        }
+    }
+
     /// <summary>Oyun sesi çıkışı; ilk gerektiğinde açılır, uygulama kapanırken bırakılır.</summary>
     private IGameAudioOutput? gameAudio;
 
@@ -2053,6 +2066,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (!on) source.GameVideo = null;
             source.GameVideoFps = StreamVideoFps;
             source.HighQuality = StreamHighQuality;
+            source.Ultra = StreamUltra;
             source.GameAudio = on && StreamGameAudio ? gameAudio ??= services.MakeGameAudioOutput() : null;
             ApplyGameVolume();
             if (on) source.GameVideo = GameVideo;

@@ -761,10 +761,18 @@ CS_API cs_session *cs_session_start_ex2(const char *host, const uint8_t regist_k
 	/* Bağlantı sık kopup 720p'ye düşüldüyse yüksek bit hızı istenmez (bant genişliği yetmiyor). */
 	if(quality == CS_QUALITY_HIGH && !low)
 		info.video_profile.bitrate = CS_HIGH_BITRATE_KBPS;
+	/* Fork: 1440p (deneysel): PS5'ten 2560x1440 istenir; yalnız yüksek kalitede (HEVC). */
+	bool ultra = video_height == 1440 && hevc;
+	if(ultra)
+	{
+		info.video_profile.width = 2560;
+		info.video_profile.height = 1440;
+		info.video_profile.bitrate = CS_ULTRA_BITRATE_KBPS;
+	}
 	if(log)
 	{
 		char line[96];
-		snprintf(line, sizeof(line), "Video: %dp/%d %s %u kbps", low ? 720 : 1080, video_fps == 60 ? 60 : 30,
+		snprintf(line, sizeof(line), "Video: %dp/%d %s %u kbps", ultra ? 1440 : low ? 720 : 1080, video_fps == 60 ? 60 : 30,
 				hevc ? "HEVC" : "H.264", (unsigned)info.video_profile.bitrate);
 		log(2, line, user);
 	}

@@ -382,11 +382,43 @@ public sealed partial class StreamWindow
         };
         if (block)
         {
-            border.HorizontalAlignment = HorizontalAlignment.Left;
+            // Fork: tek satırlık İngilizce (menü satırı) tek satır kalır: Türkçe uzunsa kutu ekranın içine doğru
+            // genişler (sağdaki menüde sola), yine sığmazsa yazı küçülür. Sözcük ortadan bölünmez, alt satıra taşıp
+            // alttaki satırın üstüne binmez. Çok satırlı yazı kendi genişliğinde kırılır, gerekirse küçülür.
+            var singleLine = rect.Height < lineHeight * 1.7;
+            var room = Math.Max(rect.Width, picture.Width * (singleLine ? 0.28 : 0.35));
+            var padX = 12 * k;
+            textBlock.TextWrapping = singleLine ? TextWrapping.NoWrap : TextWrapping.Wrap;
+            textBlock.TextAlignment = TextAlignment.Center;
+            var floor = Math.Max(10, 12 * k);
+            for (var guard = 0; guard < 40; guard++)
+            {
+                textBlock.Measure(new Size(singleLine ? double.PositiveInfinity : Math.Max(1, room - padX), double.PositiveInfinity));
+                var tooWide = textBlock.DesiredSize.Width + padX > room;
+                var tooTall = !singleLine && textBlock.DesiredSize.Height > Math.Max(rect.Height * 1.5, lineHeight * 2.6);
+                if ((!tooWide && !tooTall) || textBlock.FontSize <= floor) break;
+                var smaller = Math.Max(floor, textBlock.FontSize * 0.92);
+                textBlock.FontSize = smaller;
+                textBlock.LineHeight = smaller * 1.15;
+                foreach (var image in textBlock.Inlines.OfType<System.Windows.Documents.InlineUIContainer>().Select(c => c.Child).OfType<Image>())
+                    image.Height = smaller * 1.15;
+            }
+            var width = Math.Max(rect.Width, Math.Min(room, textBlock.DesiredSize.Width + padX));
             border.VerticalAlignment = VerticalAlignment.Top;
-            border.Margin = new Thickness(Math.Max(0, rect.Left), Math.Max(0, rect.Top), 0, 0);
-            border.Width = Math.Max(80 * k, Math.Min(picture.Right, rect.Right) - Math.Max(0, rect.Left));
             border.MinHeight = rect.Height;
+            border.Width = width;
+            var top = Math.Max(0, rect.Top);
+            if ((area.Left + area.Right) / 2 > 0.5)
+            {
+                // Sağdaki menü: kutunun sağ kenarı İngilizce yazının sağında kalır (tuş simgesi açıkta).
+                border.HorizontalAlignment = HorizontalAlignment.Left;
+                border.Margin = new Thickness(Math.Max(picture.Left, Math.Min(picture.Right, rect.Right) - width), top, 0, 0);
+            }
+            else
+            {
+                border.HorizontalAlignment = HorizontalAlignment.Left;
+                border.Margin = new Thickness(Math.Max(picture.Left, rect.Left), top, 0, 0);
+            }
             return border;
         }
         double layerWidth = root.ActualWidth, layerHeight = root.ActualHeight;

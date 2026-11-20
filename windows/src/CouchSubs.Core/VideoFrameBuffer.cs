@@ -117,8 +117,8 @@ public sealed class VideoFrameBuffer
     /// arayla verilir; kuyruk birikirse eski kareler atlanır (gecikme büyümesin).
     /// </summary>
     /// <param name="lowLatency">
-    /// Fork: oynarken düşük gecikme: kuyruk beklenmez, her yenilemede en yeni kare gösterilir (eskiler atlanır). Eşit
-    /// aralık yerine gecikme önceliklidir; kuyruklu gösterim 1-2 kare (16-33 ms) geç kalıyordu.
+    /// Fork: oynarken düşük gecikme: zaman beklenmez, her yenilemede sıradaki kare gösterilir; en çok bir kare geride
+    /// kalınır. Eşit aralık yerine gecikme önceliklidir; kuyruklu gösterim 1-2 kare (16-33 ms) geç kalıyordu.
     /// </param>
     public long? ReadPaced(double refreshMs, Action<byte[], int, int> use, bool lowLatency = false)
     {
@@ -129,7 +129,9 @@ public sealed class VideoFrameBuffer
             if (lowLatency)
             {
                 if (pending.Count == 0) return null;
-                drop = pending.Count - 1;
+                // Her yenilemede sıradaki kare: yenileme döngüsü düzensizken (80 Hz civarı) iki kare arka arkaya gelince
+                // eskisini atmak 60 karenin 45'ini gösteriyordu. En çok bir kare geride kalınır, fazlası atlanır.
+                drop = Math.Max(0, pending.Count - 2);
             }
             else if (pacer.Next(now, pending.Count, refreshMs) is { } paced) drop = paced;
             else return null;

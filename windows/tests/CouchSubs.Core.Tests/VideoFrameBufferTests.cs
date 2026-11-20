@@ -195,7 +195,7 @@ public class FramePacerTests
 
     /// <summary>Fork: düşük gecikmede kuyruk beklenmez, en yeni kare hemen gösterilir.</summary>
     [Fact]
-    public void LowLatencyShowsTheNewestFrameAtOnce()
+    public void LowLatencyStaysAtMostOneFrameBehind()
     {
         var now = 0.0;
         var buffer = new VideoFrameBuffer(() => now);
@@ -203,6 +203,8 @@ public class FramePacerTests
         try { for (var i = 0; i < 3; i++) buffer.Write(handle.AddrOfPinnedObject(), 1, 1, 4); }
         finally { handle.Free(); }
         now = 1;
+        // Üç kare birikmiş: en eskisi atlanır, sıradaki gösterilir; sonraki yenilemede en yenisi.
+        Assert.Equal(2, buffer.ReadPaced(4, (_, _, _) => { }, lowLatency: true));
         Assert.Equal(3, buffer.ReadPaced(4, (_, _, _) => { }, lowLatency: true));
         Assert.Null(buffer.ReadPaced(4, (_, _, _) => { }, lowLatency: true));
         Assert.Equal(1, buffer.LastWaitMs);

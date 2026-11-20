@@ -418,6 +418,8 @@ struct AndroidTVInstallSection: View {
     @State private var pairCode = ""
     @State private var phase = TVInstallPhase.idle
     @State private var replaceNeeded = false
+    /// 5555'e bağlanılamadı: "Kablosuz hata ayıklamayla dene" gösterilir (GitHub #478).
+    @State private var offerWireless = false
     @State private var started = false
 
     var body: some View {
@@ -426,7 +428,11 @@ struct AndroidTVInstallSection: View {
         if let candidates {
             if candidates.isEmpty { MobileNote(text: TVText.androidNone, tone: Mobile.Palette.secondary) }
             ForEach(candidates, id: \.host) { item in
-                Button { if !phase.isWorking { address = item.host } } label: {
+                Button {
+                    guard !phase.isWorking else { return }
+                    address = item.host
+                    wireless = AdbMode.prefersWireless(legacyAdbReachable: item.debugging)
+                } label: {
                     InstallCandidateRow(name: "Android TV", detail: item.host,
                                         status: item.debugging ? (TVText.androidDebugOn, true) : (TVText.androidDebugOff, false),
                                         selected: AndroidTvInstaller.parseAddress(address)?.0 == item.host)
@@ -449,7 +455,15 @@ struct AndroidTVInstallSection: View {
         InstallSteps(title: TVText.androidStepsTitle,
                      steps: wireless ? [TVText.androidStep1, TVText.androidWirelessStep2, TVText.androidWirelessStep3]
                         : [TVText.androidStep1, TVText.androidStep2, TVText.androidStep3])
-        InstallResult(phase: phase)
+        if offerWireless, !wireless, case .failed = phase {
+            // Eskiden yalnız genel "TV yanıt vermedi" yazısı vardı; 5555 kapalı TV'de çözüm kablosuz hata ayıklamadır.
+            MobileNote(text: TVText.androidErrLegacyClosed)
+            Button(TVText.androidTryWireless) { switchToWireless() }.buttonStyle(.mobileSecondary)
+            ShareLink(item: InstallLog.shared.file) { Text(verbatim: TVText.shareLog) }
+                .font(Mobile.TypeScale.caption).tint(Mobile.Palette.accent)
+        } else {
+            InstallResult(phase: phase)
+        }
         if replaceNeeded, !phase.isWorking {
             Button(TVText.androidReplace) { install(allowReplace: true) }.buttonStyle(.mobileDestructive)
         }
@@ -479,7 +493,19 @@ struct AndroidTVInstallSection: View {
         var list = open.map { (host: $0, debugging: true) }
         for host in known where !list.contains(where: { $0.host == host }) { list.insert((host, false), at: 0) }
         candidates = list
-        if address.isEmpty, let first = list.first(where: { $0.debugging }) ?? list.first { address = first.host }
+        // 5555'i açık TV yoksa bilinen TV seçilir ve kablosuz hata ayıklama sekmesi açılır (GitHub #478).
+        if address.isEmpty, let first = list.first(where: { $0.debugging }) ?? list.first {
+            address = first.host
+            wireless = AdbMode.prefersWireless(legacyAdbReachable: first.debugging)
+        }
+    }
+
+    /// 5555'e bağlanılamadı: kablosuz hata ayıklama sekmesine geçilir, TV'nin adresi kalır (port TV'den yazılır).
+    private func switchToWireless() {
+        wireless = true
+        address = AdbMode.hostOnly(address)
+        offerWireless = false
+        phase = .idle
     }
 
     private func install(allowReplace: Bool = false) {
@@ -497,7 +523,9 @@ struct AndroidTVInstallSection: View {
             pairing = AndroidTvInstaller.Pairing(port: pair.1, code: code)
         }
         let selectedPairing = pairing
+        let usedWireless = wireless
         replaceNeeded = false
+        offerWireless = false
         phase = .working(pairing != nil ? .pairing : .connecting)
         working = true
         UIApplication.shared.isIdleTimerDisabled = true
@@ -516,6 +544,7 @@ struct AndroidTVInstallSection: View {
                 await model.tvAppInstalled(brand: .androidTV, host: target.0, port: target.1 == AdbConnection.defaultPort ? nil : target.1, version: result.version)
             } catch let failure as AndroidInstallFailure {
                 replaceNeeded = failure.error == .replaceNeeded
+                offerWireless = AdbMode.offersWireless(wireless: usedWireless, error: failure.error)
                 phase = .failed(text: failureText(failure))
             } catch {
                 phase = .failed(text: TVText.errFailed + "\n\n" + TVText.details("\(error)"))

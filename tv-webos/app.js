@@ -6,7 +6,7 @@
   'use strict';
 
   // TV uygulamasının sürümü: appinfo.json, tv-tizen/config.xml ve tv-android/app/build.gradle ile aynı tutulur.
-  var APP_VERSION = '0.9.31';
+  var APP_VERSION = '0.9.32';
   var t = window.t;
   var config = window.COUCHSUBS_CONFIG || {};
   var platform = window.COUCHSUBS_PLATFORM;
@@ -515,9 +515,10 @@
     if (textId !== 'subtitle-text' || placement !== 'cover' || !currentBox) return null;
     var width = document.documentElement.clientWidth || window.innerWidth || 1920;
     var height = document.documentElement.clientHeight || window.innerHeight || 1080;
+    var box = coverBounds(screenBox(currentBox, isOverlay()), isOverlay());
     return {
-      width: bandShape ? width : (currentBox.right - currentBox.left + 2 * COVER_PAD) * width,
-      height: (currentBox.bottom - currentBox.top + 2 * COVER_PAD) * height
+      width: bandShape ? width : (box.right - box.left) * width,
+      height: (box.bottom - box.top) * height
     };
   }
 
@@ -909,12 +910,8 @@
     return bottom;
   }
 
-  function showScreen(items, duration) {
-    var host = $('screen');
-    // "Ekran çevriliyor…" yazısı sonuçların üstünde kalmasın.
-    hideSubtitle('screen');
-    host.innerHTML = '';
-    host.className = '';
+  // Yeriyle gelen çevirileri (ekranı çevir öğeleri, ek alan blokları) kendi İngilizce yazılarının üstüne koyar.
+  function placeItems(host, items) {
     var width = window.innerWidth || 1920;
     var height = window.innerHeight || 1080;
     for (var i = 0; i < (items || []).length; i++) {
@@ -947,6 +944,15 @@
       // En küçük okunabilir boyutta da sığmayan metni kesmeyiz/gizlemeyiz.
       // Bu uç durumda eski doğal büyüme davranışı korunur.
     }
+  }
+
+  function showScreen(items, duration) {
+    var host = $('screen');
+    // "Ekran çevriliyor…" yazısı sonuçların üstünde kalmasın.
+    hideSubtitle('screen');
+    host.innerHTML = '';
+    host.className = '';
+    placeItems(host, items);
     clearTimeout(screenTimer);
     screenTimer = setTimeout(hideScreen, duration || 20000);
   }
@@ -961,7 +967,9 @@
   // Bilgisayar altyazının yanında ekranın köşelerindeki yazıları da (görev, telefon mesajı, bildirim) sürekli okur ve
   // her alanın çevirisini "region" olayıyla gönderir: {id, text, box, line}. Çeviri İngilizce yazının yerinde küçük bir
   // kutuda durur; ekranın sağ yarısındaki kutu sağa, alt yarısındaki alta yaslanır, Türkçe uzun gelirse kutu ekranın
-  // içine doğru büyür. Boş "text" o alanın kutusunu, "region-clear" hepsini kaldırır. Ana altyazıya dokunulmaz.
+  // içine doğru büyür. Alanda birbirinden ayrı duran yazılar varsa "blocks" her grubun çevirisini kendi yeriyle taşır
+  // ve her biri "ekranı çevir"deki gibi kendi yazısının üstüne konur. Boş "text" o alanın kutusunu, "region-clear"
+  // hepsini kaldırır. Ana altyazıya dokunulmaz.
 
   var regionBoxes = {};
   var REGION_PAD = 0.004;
@@ -973,14 +981,27 @@
     if (!id) return;
     var box = validBox(data.box);
     if (!data.text || !box) return hideRegion(id);
+    // Alanda ayrı duran yazı grupları (görev başlığı ve ayrı sütundaki hedef) kendi yerleriyle gelir: her biri "ekranı
+    // çevir"deki gibi kendi İngilizce yazısının üstüne konur. Bloksuz olayda alanın çevirisi tek kutuda kalır.
+    var blocks = Array.isArray(data.blocks) ? data.blocks : null;
+    var kind = blocks && blocks.length ? 'region-blocks' : 'region';
     var el = regionBoxes[id];
+    // Bloklar her olayda baştan dizilir; tek kutudan bloklara (ya da tersine) geçen alanın eski kutusu kalkar.
+    if (el && (el.className !== kind || kind === 'region-blocks')) {
+      hideRegion(id);
+      el = null;
+    }
     if (!el) {
       el = document.createElement('div');
-      el.className = 'region';
+      el.className = kind;
       $('regions').appendChild(el);
       regionBoxes[id] = el;
     }
     $('regions').className = '';
+    if (kind === 'region-blocks') {
+      placeItems(el, blocks);
+      return;
+    }
     var width = window.innerWidth || 1920;
     var height = window.innerHeight || 1080;
     fillText(el, data.text, data.icons);
@@ -1047,7 +1068,7 @@
     var el = $('subtitle');
     var cover = $('subtitle-cover');
     var place = effectivePlacement();
-    var box = place === 'fixed' ? null : currentBox;
+    var box = place === 'fixed' || !currentBox ? null : screenBox(currentBox, isOverlay());
     el.style.left = '8%';
     el.style.right = '8%';
     el.style.top = 'auto';
@@ -1092,13 +1113,39 @@
   // farklı iki kutu görünüyordu. Örtü çevirinin zeminini tamamen kapladığından ikisi tek bir siyah kutu gibi görünür.
   var COVER_PAD = 0.012;
 
+  // Katman modu (Android TV, #473): HDMI'yı CouchSubs değil TV'nin kendi giriş ekranı çizer ve resmi çoğu TV'de kenar
+  // taşmasıyla (overscan) %5'e kadar büyütür. İngilizce satırın yeri bilgisayarın gördüğü karedeki yeridir; ekranda daha
+  // geniş ve kenara doğru kaymış durur. Örtü kareye göre çizilince İngilizce satırdan dar kalıyor, yazı yanlardan
+  // görünüyordu (arka plan "Tam" olsa da saydam sanılıyordu). Uygulama içinde (TvView) resim büyütülmez; orada değişmez.
+  var OVERLAY_ZOOM = 1.05;
+  var OVERLAY_PAD = 0.01;
+
+  function isOverlay() {
+    return (' ' + ((document.body && document.body.className) || '') + ' ').indexOf(' overlay ') >= 0;
+  }
+
+  // Karedeki kutunun ekrandaki yeri: katmanda ekran ortasına göre büyütülmüş, uygulama içinde aynı.
+  function screenBox(box, overlay) {
+    if (!overlay) return box;
+    function at(value) { return Math.max(0, Math.min(1, 0.5 + (value - 0.5) * OVERLAY_ZOOM)); }
+    return { left: at(box.left), top: at(box.top), right: at(box.right), bottom: at(box.bottom) };
+  }
+
+  // Örtünün kapladığı alan (ekranın oranı olarak): satırın kutusu ve iki yanında pay. Katmanda pay biraz daha geniştir:
+  // TV resmi hiç büyütmese de büyütülmüş kutu ile bu pay İngilizce satırı yine kaplar.
+  function coverBounds(box, overlay) {
+    var pad = COVER_PAD + (overlay ? OVERLAY_PAD : 0);
+    return { left: box.left - pad, top: box.top - pad, right: box.right + pad, bottom: box.bottom + pad };
+  }
+
   function placeCover(cover, box, text) {
     var width = document.documentElement.clientWidth || window.innerWidth || 1920;
     var height = document.documentElement.clientHeight || window.innerHeight || 1080;
-    var left = (box.left - COVER_PAD) * width;
-    var top = (box.top - COVER_PAD) * height;
-    var right = (box.right + COVER_PAD) * width;
-    var bottom = (box.bottom + COVER_PAD) * height;
+    var bounds = coverBounds(box, isOverlay());
+    var left = bounds.left * width;
+    var top = bounds.top * height;
+    var right = bounds.right * width;
+    var bottom = bounds.bottom * height;
     if (text && text.width > 0 && text.height > 0) {
       left = Math.min(left, text.left);
       top = Math.min(top, text.top);
@@ -1551,6 +1598,12 @@
   var SCAN_PAUSE_MS = 30000;
   var SCAN_SOON_MS = 3000;
   var FAILS_BEFORE_SCAN = 3;
+  // TV kendi adresini söyleyemiyor ve kayıtlı adres de yoksa taranacak yaygın ev ağları (modemlerin varsayılanları,
+  // sırayla). Eskiden bu durumda tarama listesi boş kalıyor, hiçbir adres denenmiyordu: telefondan ya da başlatma
+  // parametresi vermeyen yoldan kurulan TV (eski webOS, adresini vermeyen Samsung) "Ağda CouchSubs aranıyor…" ekranında
+  // kalıyor, telefon "TV uygulaması bekleniyor" diyordu (#469, #484). Bir ağda CouchSubs bulununca sonrakiler taranmaz.
+  var GUESS_SUBNETS = ['192.168.1', '192.168.0', '10.0.0', '192.168.2', '192.168.100', '192.168.31', '192.168.50',
+    '192.168.178', '10.0.1', '192.168.10', '192.168.3', '192.168.8', '192.168.88'];
   var scanTimer = null;
   var scanDue = 0;
   var scanning = false;
@@ -1597,7 +1650,7 @@
     el.textContent = (tvAddress ? t('waitingAddress').replace('%1', tvAddress) + ' · ' : '') + t('waitingSearching');
   }
 
-  // Taranacak ağlar: TV'nin kendi ağı, sonra kayıtlı adresin ağı (aynıysa bir kez).
+  // Taranacak ağlar: TV'nin kendi ağı, sonra kayıtlı adresin ağı (aynıysa bir kez); ikisi de yoksa yaygın ev ağları (guessed).
   function scanSubnets(done) {
     var fromServer = subnetOf(server);
     function finish(ip) {
@@ -1609,7 +1662,8 @@
       var own = subnetOf(ip);
       if (own) list.push(own);
       if (fromServer && fromServer !== own) list.push(fromServer);
-      done(list);
+      if (list.length) return done(list, false);
+      done(GUESS_SUBNETS.slice(), true);
     }
     if (!platform.localAddress) return finish(null);
     var answered = false;
@@ -1709,18 +1763,29 @@
     if (scanning) return;
     cancelScan();
     scanning = true;
-    scanSubnets(function (subnets) {
+    scanSubnets(function (subnets, guessed) {
       var addresses = [];
       for (var s = 0; s < subnets.length; s++) {
         for (var host = 1; host <= 254; host++) addresses.push('http://' + subnets[s] + '.' + host + ':' + SERVER_PORT);
       }
       var next = 0, active = 0, done = false, found = [];
+      // Tahmin edilen ağlar birer birer taranır: CouchSubs bulunan ağda durulur (bilinen ağlar hep birlikte).
+      var stop = guessed ? Math.min(254, addresses.length) : addresses.length;
       function pump() {
-        while (!done && active < SCAN_PARALLEL && next < addresses.length) {
+        // Tahminli tarama uzun sürer; bu arada CouchSubs adresini kendisi verip bağlantı açıldıysa tarama bırakılır.
+        if (guessed && !done && !fallback && eventSource && eventSource.readyState === 1) {
+          done = true;
+          scanning = false;
+          return;
+        }
+        while (!done && active < SCAN_PARALLEL && next < stop) {
           active++;
           tryAddress(addresses[next++]);
         }
-        if (!done && !active && next >= addresses.length) finish(pickServer(found, serverId));
+        if (done || active || next < stop) return;
+        if (found.length || stop >= addresses.length) return finish(pickServer(found, serverId));
+        stop = Math.min(stop + 254, addresses.length);
+        pump();
       }
       // Kayıtlı kimlik bulununca tarama hemen biter; yoksa bütün ağ taranıp aralarından seçilir (eskiden ilk bulunan).
       function tryAddress(address) {

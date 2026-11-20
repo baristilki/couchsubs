@@ -221,6 +221,17 @@
                          bilgisi olduğu için durum karoları gibi simgeli ve büyük değil (docs/TASARIM.md › InfoCard). -->
                     <c:Card Margin="0,12,0,0" Padding="16,4">
                         <StackPanel>
+                            <!-- Görüntünün nereden okunduğu; dokununca Ayarlar › Görüntü kaynağı (Xbox'ta gizli). -->
+                            <StackPanel x:Name="PictureSourceRow">
+                                <Button Style="{StaticResource InfoRowButton}" Click="OnPictureSourceSettings"
+                                        AutomationProperties.Name="{t:T 'Picture source'}">
+                                    <DockPanel>
+                                        <TextBlock Text="{t:T 'Picture source'}" Style="{StaticResource InfoRowLabel}" />
+                                        <TextBlock x:Name="PictureSourceText" Style="{StaticResource InfoRowValue}" HorizontalAlignment="Right" Margin="12,0,0,0" />
+                                    </DockPanel>
+                                </Button>
+                                <Border Style="{StaticResource InfoDivider}" />
+                            </StackPanel>
                             <Button Style="{StaticResource InfoRowButton}" Click="OnTranslationSettings"
                                     AutomationProperties.Name="{t:T 'Translation'}">
                                 <DockPanel>

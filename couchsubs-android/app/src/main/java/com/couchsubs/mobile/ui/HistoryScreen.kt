@@ -46,7 +46,7 @@ fun HistoryScreen(onBack: () -> Unit) {
     var confirmClear by remember { mutableStateOf(false) }
     ScreenScaffold(top = { TopBar(stringResource(R.string.history), onBack = onBack) }, bottom = {
         if (entries.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.gap)) {
-            SecondaryButton(stringResource(if (copiedAll) R.string.history_copied else R.string.history_copy_all), Modifier.weight(1f)) {
+            SecondaryButton(stringResource(if (copiedAll) R.string.history_copied else R.string.history_copy), Modifier.weight(1f)) {
                 copy(context, SubtitleHistory.plainText(entries))
                 copiedAll = true
             }

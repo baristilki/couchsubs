@@ -11,6 +11,9 @@ struct TVStep: View {
     @State private var error: String?
     /// Bağlanılan TV'nin markası (Samsung'da izin kutusu ayrıca anlatılır).
     @State private var pairingBrand: TVBrand?
+    /// Aramada çıkmayan TV'nin elle yazılan adresi (webOS 3.x gibi, #498).
+    @State private var manualHost = ""
+    @State private var adding = false
 
     var body: some View {
         StepLayout(title: "Connect your TV",
@@ -35,6 +38,13 @@ struct TVStep: View {
                             Spacer()
                             Button("Connect") { Task { await pair(tv) } }.buttonStyle(.primary).disabled(working)
                         }
+                    }
+                    HintText(text: "TV not in the list? Enter its IP address (on the TV under Settings › Network).")
+                    HStack {
+                        TextField("IP address, e.g. 192.168.1.20", text: $manualHost)
+                            .textFieldStyle(CSTextFieldStyle())
+                            .onSubmit { Task { await addManual() } }
+                        Button("Add") { Task { await addManual() } }.buttonStyle(.secondary).disabled(adding)
                     }
                 }
                 Card {
@@ -89,6 +99,27 @@ struct TVStep: View {
         searching = true
         tvs = await model.discoverTVs()
         searching = false
+    }
+
+    /// Elle yazılan adres listeye eklenir: Samsung 8001'de kendini tanıtırsa Samsung, değilse LG (webOS 3 cihaz tanımını
+    /// her zaman vermiyor; adres yanlışsa Bağlan "TV yanıt vermedi" der).
+    private func addManual() async {
+        error = nil
+        guard let host = ManualAddress.normalize(manualHost) else {
+            error = String(localized: "This is not a valid IP address. Type it like 192.168.1.20, without http:// or a port number.")
+            return
+        }
+        guard !tvs.contains(where: { $0.host == host }) else { return }
+        adding = true
+        let tv: LGTV
+        if let samsung = await SamsungDiscovery.tv(at: host) {
+            tv = samsung
+        } else {
+            tv = await LGDiscovery.tv(at: host) ?? LGTV(name: "LG TV", host: host)
+        }
+        tvs.append(tv)
+        manualHost = ""
+        adding = false
     }
 
     private func pair(_ tv: LGTV) async {

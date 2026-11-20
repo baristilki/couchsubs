@@ -141,6 +141,12 @@ final class PhoneModel: ObservableObject {
     /// PS5 bağlantısı kendiliğinden koptu (kullanıcı durdurmadı). Uygulama, etkin değilken yerel bildirim gösterir;
     /// testlerde boş.
     var onConnectionLost: () -> Void = {}
+    /// Çeviri sürerken uygulama arka plana geçti ya da ekran kilitlendi: iOS uygulamayı kısa süre sonra askıya alır ve
+    /// altyazı durur (Android'deki ön plan hizmetinin iOS'ta karşılığı yok). Uygulama gecikmeli bir yerel bildirim kurar;
+    /// `onResumedFromBackground` onu geri alır. Testlerde boş.
+    var onPausedInBackground: () -> Void = {}
+    /// Uygulama yeniden öne geldi: arka planda kurulan bildirim (henüz gösterilmediyse) iptal edilir, gösterildiyse silinir.
+    var onResumedFromBackground: () -> Void = {}
     /// PS5'te yeni bir oyun tanındı (paket sunucusuna o oyun için bakılır).
     var onGameStarted: () -> Void = {}
     /// Çeviri başlarken bildirim izni istenir (tercih açıksa; iOS yalnız ilk seferde sorar). Testlerde boş.
@@ -521,9 +527,18 @@ final class PhoneModel: ObservableObject {
     /// Arka plana gitmeden yalnız etkin olmaktan çıkıp dönünce (Denetim Merkezi, bildirim, izin penceresi) çalışan PS5
     /// oturumu kapatılıp açılmaz: eskiden her dönüşte kapatılıyor, PS5'te ikinci hesap girip çıkıyordu.
     func becameActive(afterBackground: Bool = true) {
+        if afterBackground { onResumedFromBackground() }
         guard isRunning else { return }
         if afterBackground || !Self.isLive(sessionState) { session?.reconnectNow() }
         keeper?.reconnect()
+    }
+
+    /// Uygulama arka plana geçti (ana ekran, başka uygulama ya da kilit tuşu). Çeviri sürüyorsa ve bildirim tercihi açıksa
+    /// kullanıcı uyarılır: iPhone'da altyazı yalnız CouchSubs ekranı açıkken sürer (iOS arka planda yerel ağ bağlantısını ve
+    /// görüntü okumayı durdurur). Deneme modunda PS5 yok, uyarı da yok.
+    func enteredBackground() {
+        guard isRunning, !demoMode, notifiesDisconnect else { return }
+        onPausedInBackground()
     }
 
     /// Bağlı ya da bağlanıyor; yeniden bağlanmaya gerek yok.

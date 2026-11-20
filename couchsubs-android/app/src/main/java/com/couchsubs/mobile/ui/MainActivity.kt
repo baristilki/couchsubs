@@ -23,9 +23,11 @@ import androidx.compose.runtime.getValue
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.couchsubs.mobile.Services
 import com.couchsubs.mobile.account.Telemetry
+import com.couchsubs.mobile.promo.PromoController
 import com.couchsubs.mobile.service.LiveState
 import com.couchsubs.mobile.service.TranslationService
 import com.couchsubs.mobile.settings.SubtitleTarget
@@ -77,9 +79,16 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge(SystemBarStyle.dark(Color.TRANSPARENT), SystemBarStyle.dark(Color.TRANSPARENT))
         super.onCreate(savedInstanceState)
         val settings = Services.settings
+        // Tanıtım popup'ı: uygulama ön plana her geldiğinde (soğuk açılışta hemen, sonra en çok günde bir) promo.json'a
+        // arka planda bakılır; ağ hatası sessizdir. Kurulum ya da ilk tur bitmediyse bu açılışta hazırlanmaz.
+        lifecycle.addObserver(androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_START)
+                PromoController.refresh(applicationContext, Services.scope, setupDone = Routes.next() == Routes.MAIN && settings.tourShown)
+        })
         setContent {
             CouchSubsTheme {
                 val navigation = rememberNavController()
+                val currentEntry by navigation.currentBackStackEntryAsState()
                 val status by LiveState.status.collectAsState()
                 LaunchedEffect(status.running) {
                     if (status.running && settings.keepScreenOn) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -158,6 +167,7 @@ class MainActivity : ComponentActivity() {
                                 TvAppUpdate.pending = tv
                                 navigation.navigate(Routes.TV_INSTALL)
                             },
+                            onHome = currentEntry?.destination?.route == Routes.MAIN,
                         )
                     }
                     composable(Routes.PACKS) {

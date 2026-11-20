@@ -23,16 +23,64 @@ public static class LgDiscovery
     internal const string SearchTarget = "urn:lge-com:service:webos-second-screen:1";
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(2) };
 
+    /// <summary>Yedek arama: webOS 3.x (2017) TV'ler ikinci ekran hedefine cevap vermiyor, "ssdp:all"a veriyor (#498).</summary>
+    internal const string AllTarget = "ssdp:all";
+
     public static async Task<IReadOnlyList<LgTv>> SearchAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
     {
-        var hosts = await CollectResponses(SearchTarget, timeout ?? TimeSpan.FromSeconds(3), cancellationToken);
+        var wait = timeout ?? TimeSpan.FromSeconds(3);
+        var hosts = await CollectResponses(SearchTarget, wait, cancellationToken);
+        // Cevap yoksa eski webOS için "ssdp:all": hem çok noktaya yayınla hem ağdaki her adrese tek tek (o TV yalnız
+        // doğrudan gönderilen aramaya cevap verdi).
+        if (hosts.Count == 0)
+            hosts = await CollectResponses(AllTarget, wait, cancellationToken,
+                LocalNetwork.ScanTargets(LocalNetwork.PrivateAddresses()).ToList());
         var tvs = new List<LgTv>();
         foreach (var host in hosts.Distinct().Order(StringComparer.Ordinal))
             tvs.Add(new LgTv(await FriendlyName(host) ?? "LG TV", host));
         return tvs;
     }
 
-    /// <summary>SSDP yanıtından TV'nin adresini çıkarır; LG'nin ikinci ekran servisi değilse null.</summary>
+    /// <summary>
+    /// Elle yazılan adresteki TV: Samsung 8001'de kendini tanıtırsa Samsung, değilse LG sayılır (webOS 3 cihaz tanımını
+    /// her zaman vermiyor; adres yanlışsa Bağlan "TV yanıt vermedi" der).
+    /// </summary>
+    public static async Task<LgTv> TvAtAsync(string host, CancellationToken cancellationToken = default)
+    {
+        if (await SamsungDiscovery.DeviceNameAsync(host, cancellationToken) is { } samsung)
+            return new LgTv(samsung, host, TvBrand.Samsung);
+        return new LgTv(await FriendlyName(host) ?? "LG TV", host);
+    }
+
+    /// <summary>
+    /// Elle yazılan TV adresi (Mac/telefon: ManualAddress): boşluk, "http://", port ve yol atılır, virgül noktaya döner.
+    /// Yalnız IPv4 kabul edilir; değilse null.
+    /// </summary>
+    public static string? NormalizeHost(string? input)
+    {
+        var text = (input ?? "").Trim().Replace(',', '.');
+        var scheme = text.IndexOf("://", StringComparison.Ordinal);
+        if (scheme >= 0) text = text[(scheme + 3)..];
+        var end = text.IndexOfAny(['/', '?', '#', ':']);
+        if (end >= 0) text = text[..end];
+        text = text.TrimEnd('.');
+        var parts = text.Split('.');
+        if (parts.Length != 4) return null;
+        var values = new List<string>();
+        foreach (var part in parts)
+        {
+            if (part.Length is < 1 or > 3 || !part.All(char.IsAsciiDigit)) return null;
+            var value = int.Parse(part, System.Globalization.CultureInfo.InvariantCulture);
+            if (value > 255) return null;
+            values.Add(value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+        return string.Join('.', values);
+    }
+
+    /// <summary>
+    /// SSDP yanıtından TV'nin adresini çıkarır; aranan hedef değilse null. "ssdp:all" aramasında her cihaz cevap verir:
+    /// yalnız kendini LG webOS TV olarak tanıtan yanıt (bkz. IsLgHeader) alınır.
+    /// </summary>
     public static string? HostFromSsdpResponse(string response, string searchTarget = SearchTarget)
     {
         string? location = null;
@@ -43,13 +91,23 @@ public static class LgDiscovery
             if (colon < 0) continue;
             var name = line[..colon].Trim().ToUpperInvariant();
             var value = line[(colon + 1)..].Trim();
-            if (name == "LOCATION") location = value;
-            else if (name is "ST" or "NT") isLg = isLg || value == searchTarget;
+            if (name == "LOCATION") { location = value; continue; }
+            if (name is "ST" or "NT" && value == searchTarget) isLg = true;
+            if (searchTarget == AllTarget && name is "ST" or "NT" or "USN" or "SERVER" && IsLgHeader(value)) isLg = true;
         }
         return isLg && Uri.TryCreate(location, UriKind.Absolute, out var url) ? url.Host : null;
     }
 
-    internal static async Task<List<string>> CollectResponses(string searchTarget, TimeSpan timeout, CancellationToken cancellationToken)
+    /// <summary>
+    /// LG webOS TV'nin SSDP başlığı mı: sunucu adında "webOS" (webOS 3: "... LGE WebOS TV ...") ya da cihaz kimliğinde
+    /// "LGTV" (webOS 3: "uuid:LGTV2017..."). LG'nin TV olmayan cihazları sayılmaz.
+    /// </summary>
+    internal static bool IsLgHeader(string value) =>
+        value.Contains("webos", StringComparison.OrdinalIgnoreCase) || value.Contains("lgtv", StringComparison.OrdinalIgnoreCase);
+
+    /// <param name="unicast">Verilirse istek ayrıca bu adreslerin her birine tek tek gönderilir.</param>
+    internal static async Task<List<string>> CollectResponses(string searchTarget, TimeSpan timeout, CancellationToken cancellationToken,
+        IReadOnlyList<string>? unicast = null)
     {
         var hosts = new List<string>();
         using var udp = new UdpClient(AddressFamily.InterNetwork);
@@ -71,6 +129,13 @@ public static class LgDiscovery
                 }
                 catch (SocketException) { /* bu bağdaştırıcıdan gönderilemedi; diğerleri denenir */ }
             }
+        }
+        foreach (var host in unicast ?? [])
+        {
+            var direct = Encoding.ASCII.GetBytes(
+                $"M-SEARCH * HTTP/1.1\r\nHOST: {host}:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\nST: {searchTarget}\r\n\r\n");
+            try { await udp.SendAsync(direct, new IPEndPoint(IPAddress.Parse(host), 1900), cancellationToken); }
+            catch (SocketException) { /* bu adrese gönderilemedi */ }
         }
 
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

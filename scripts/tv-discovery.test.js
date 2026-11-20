@@ -109,9 +109,11 @@ function startTv({ saved, alive, localIp, hasLocalAddress, consolePort, savedHdm
     close() { this.closed = true; this.readyState = 2; }
   }
 
+  const probes = [];
   class FakeXHR {
     open(method, url) { this.url = url; }
     send() {
+      probes.push(this.url);
       const base = this.url.replace(/\/hello$/, '');
       if (alive.has(base)) {
         clock.setTimeout(() => {
@@ -198,6 +200,8 @@ function startTv({ saved, alive, localIp, hasLocalAddress, consolePort, savedHdm
     server: () => elements.get('st-server') && elements.get('st-server').textContent,
     savedHdmi: () => storage.get('couchsubs.hdmi'),
     stored: (key) => storage.get('couchsubs.' + key),
+    // Sorulan /hello adresleri (tarama ve kimlik sorusu).
+    probed: () => probes.slice(),
     exits: () => exits,
     pickServer: (found, savedId) => window.__pickServer(found, savedId),
     // Bilgisayar açık uygulamayı yeniden açar (Samsung DEEP_LINK, parametreler PAYLOAD'da).
@@ -240,6 +244,50 @@ test('platform adres söyleyemiyorsa (localAddress yok) da kayıtlı adresin ağ
   });
   tv.clock.advance(60000);
   assert.strictEqual(tv.saved(), 'http://192.168.1.7:8787');
+});
+
+// #469, #484: telefondan kurulan TV'de kayıtlı adres yoktur; TV kendi adresini de söyleyemezse eskiden hiçbir adres
+// denenmiyor, TV "Ağda CouchSubs aranıyor…" ekranında kalıyordu.
+test('kayıtlı adres yok ve TV adresini söyleyemiyorsa yaygın ev ağları taranır, telefon bulunur', () => {
+  const phone = 'http://192.168.0.34:8787';
+  const tv = startTv({
+    alive: new Set([phone]), hello: { [phone]: { id: 'phone', tvs: 0 } },
+    hasLocalAddress: true, localIp: null
+  });
+  tv.clock.advance(60000);
+  assert.strictEqual(tv.lastOpened(), phone + '/events');
+  assert.strictEqual(tv.saved(), phone);
+  assert.strictEqual(tv.stored('serverId'), 'phone');
+});
+
+test('platform adres sormayı hiç bilmiyorsa (localAddress yok) ve kayıt yoksa da ev ağları taranır', () => {
+  const phone = 'http://10.0.0.12:8787';
+  const tv = startTv({ alive: new Set([phone]), hasLocalAddress: false });
+  tv.clock.advance(90000);
+  assert.strictEqual(tv.saved(), phone);
+});
+
+test('tahminli taramada CouchSubs bulunan ağda durulur, sonraki ağlar denenmez', () => {
+  const phone = 'http://192.168.1.77:8787';
+  const later = 'http://192.168.0.5:8787';
+  const tv = startTv({ alive: new Set([phone, later]), hasLocalAddress: true, localIp: null });
+  tv.clock.advance(60000);
+  assert.strictEqual(tv.lastOpened(), phone + '/events');
+  assert.ok(!tv.probed().some((url) => url.startsWith('http://192.168.0.')));
+});
+
+test('tahminli tarama sürerken telefon adresini başlatma parametresiyle verirse ona bağlı kalınır', () => {
+  const phone = 'http://192.168.100.9:8787';
+  const other = 'http://192.168.100.20:8787';
+  const tv = startTv({
+    alive: new Set([phone, other]), hello: { [phone]: { id: 'phone', tvs: 0 }, [other]: { id: 'other', tvs: 0 } },
+    hasLocalAddress: true, localIp: null
+  });
+  tv.clock.advance(5000);
+  tv.relaunch(JSON.stringify({ server: phone }));
+  tv.clock.advance(180000);
+  assert.strictEqual(tv.lastOpened(), phone + '/events');
+  assert.strictEqual(tv.stored('serverId'), 'phone');
 });
 
 test('sürekli bağlantı hatası taramayı ertelemez (zamanlayıcı her hatada baştan kurulmaz)', () => {
@@ -388,6 +436,40 @@ test('ek alanın çevirisi kendi yerinde küçük kutuda görünür, boş metin 
   tv.emit('region-clear', {});
   assert.strictEqual(host.children.length, 0);
   assert.strictEqual(host.className, 'hidden');
+});
+
+// Alanda ayrı duran yazı grupları (başlık, ayrı sütundaki hedef) "blocks" ile kendi yerleriyle gelir; alt alta tek
+// kutuda değil, her biri kendi İngilizce yazısının üstünde gösterilir.
+test('ek alanın blokları kendi yerlerinde gösterilir, bloksuz olaya dönünce tek kutu kalır', () => {
+  const tv = startTv({ saved: 'http://192.168.1.109:8787', alive: new Set(['http://192.168.1.109:8787']), hasLocalAddress: false });
+  tv.clock.advance(1000);
+  const host = tv.element('regions');
+  const blocks = [
+    { text: 'Demirciyi bul', box: { left: 0.7, top: 0.05, right: 0.95, bottom: 0.08 }, line: 0.03 },
+    { text: 'Ahıra git', box: { left: 0.55, top: 0.2, right: 0.65, bottom: 0.23 }, line: 0.03 }
+  ];
+  tv.emit('region', { id: 'q', text: 'Demirciyi bul\nAhıra git', box: { left: 0.55, top: 0.05, right: 0.95, bottom: 0.23 }, blocks });
+  assert.strictEqual(host.children.length, 1);
+  assert.strictEqual(host.className, '');
+  const group = host.children[0];
+  assert.strictEqual(group.className, 'region-blocks');
+  assert.deepStrictEqual(group.children.map((c) => c.textContent), ['Demirciyi bul', 'Ahıra git']);
+  // Her blok kendi yazısının sol üstünde (pay 0.004), birleşik kutunun köşesinde değil.
+  assert.strictEqual(group.children[0].style.left, (0.696 * 100) + '%');
+  assert.strictEqual(group.children[1].style.left, (0.546 * 100) + '%');
+  assert.strictEqual(group.children[1].style.top, (0.196 * 100) + '%');
+  // Aynı alanın yeni blokları eskilerin yerine geçer, birikmez.
+  tv.emit('region', { id: 'q', text: 'Ahıra git', box: blocks[1].box, blocks: [blocks[1]] });
+  assert.strictEqual(host.children.length, 1);
+  assert.deepStrictEqual(host.children[0].children.map((c) => c.textContent), ['Ahıra git']);
+  // Bloksuz olay (tek grup ya da eski bilgisayar) eski tek kutuya döner.
+  tv.emit('region', { id: 'q', text: 'Köprüyü geç', box: { left: 0.7, top: 0.05, right: 0.95, bottom: 0.1 } });
+  assert.strictEqual(host.children.length, 1);
+  assert.strictEqual(host.children[0].className, 'region');
+  assert.strictEqual(host.children[0].textContent, 'Köprüyü geç');
+  tv.emit('region', { id: 'q', text: 'Demirciyi bul\nAhıra git', box: blocks[0].box, blocks });
+  tv.emit('region', { id: 'q', text: '' });
+  assert.strictEqual(host.children.length, 0);
 });
 
 test('yeri bilinmeyen ya da bozuk ek alan olayı bir şey göstermez', () => {
@@ -588,4 +670,52 @@ test('panel ipucu üç açılıştan sonra gösterilmez', () => {
   assert.strictEqual(tv.element('panel').className, 'hidden');
   assert.strictEqual(tv.element('panel-tip').className, 'hidden');
   assert.strictEqual(tv.stored('panelTips'), '3');
+});
+
+// webOS'ta TV'nin kendi adresi (#469): yeni webOS'un hizmeti yanıt vermezse eski webOS'unki (com.palm) sorulur.
+function webosAddress(answers) {
+  const clock = makeClock();
+  const asked = [];
+  class PalmServiceBridge {
+    call(uri) {
+      asked.push(uri);
+      const reply = answers[uri];
+      if (reply !== undefined) clock.setTimeout(() => this.onservicecallback(JSON.stringify(reply)), 50);
+    }
+  }
+  const window = {};
+  const context = { window, document: {}, PalmServiceBridge, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, JSON };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'platform.js'), 'utf8'), context, { filename: 'platform.js' });
+  let result = 'yanıt yok';
+  window.COUCHSUBS_PLATFORM.localAddress((ip) => { result = ip; });
+  clock.advance(3000);
+  return { result, asked };
+}
+
+const NEW_CM = 'luna://com.webos.service.connectionmanager/getStatus';
+const OLD_CM = 'luna://com.palm.connectionmanager/getStatus';
+
+test('webOS: yeni connectionmanager adres verirse eski sorulmaz (kablolu önce)', () => {
+  const { result, asked } = webosAddress({
+    [NEW_CM]: { wired: { state: 'connected', ipAddress: '192.168.1.5' }, wifi: { state: 'connected', ipAddress: '192.168.1.6' } }
+  });
+  assert.strictEqual(result, '192.168.1.5');
+  assert.deepStrictEqual(asked, [NEW_CM]);
+});
+
+test('webOS: yeni hizmet hata dönerse ya da yanıtsız kalırsa eski webOS\'un com.palm.connectionmanager\'ı sorulur', () => {
+  const failed = webosAddress({
+    [NEW_CM]: { returnValue: false, errorText: 'Unknown method' },
+    [OLD_CM]: { wired: { state: 'disconnected' }, wifi: { state: 'connected', ipAddress: '192.168.0.12' } }
+  });
+  assert.strictEqual(failed.result, '192.168.0.12');
+  assert.deepStrictEqual(failed.asked, [NEW_CM, OLD_CM]);
+  const silent = webosAddress({ [OLD_CM]: { wifi: { state: 'connected', ipAddress: '10.0.0.8' } } });
+  assert.strictEqual(silent.result, '10.0.0.8');
+});
+
+test('webOS: iki hizmet de adres vermezse null, 3 sn içinde', () => {
+  assert.strictEqual(webosAddress({}).result, null);
+  assert.strictEqual(webosAddress({ [NEW_CM]: {}, [OLD_CM]: { returnValue: false } }).result, null);
 });

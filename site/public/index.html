@@ -241,6 +241,39 @@ section.has-bg > .wrap{position:relative}
 .faq details[open] summary::after{transform:translateY(-30%) rotate(225deg)}
 .faq details p{margin:0 0 22px; color:var(--muted); max-width:40em}
 
+/* Sponsorlar */
+.sponsors{padding:clamp(48px, 7vw, 80px) 0; border-top:1px solid var(--line)}
+.sponsors h2{font:700 15px/1 var(--text); color:var(--muted); margin:0 0 20px}
+.sp-list{display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:12px; list-style:none; margin:0; padding:0}
+.sp-list a{display:flex; align-items:center; gap:14px; height:100%; padding:14px 16px; background:var(--night-2); border:1px solid var(--line); border-radius:14px; text-decoration:none; transition:border-color .15s ease}
+.sp-list a:hover{border-color:var(--line-2)}
+.sp-list img{width:44px; height:44px; border-radius:11px; flex:none}
+.sp-list b{display:block; font:700 17px/1.2 var(--display)}
+.sp-list span{display:block; font-size:13px; line-height:1.3; color:var(--muted)}
+@media (max-width:1060px){ .sp-list{grid-template-columns:repeat(3, minmax(0, 1fr))} }
+@media (max-width:620px){ .sp-list{grid-template-columns:1fr 1fr} .sp-list li:last-child{grid-column:1 / -1} .sp-list a{padding:12px; gap:12px} .sp-list img{width:40px; height:40px} }
+.sp-list img.sp-word{width:140px; height:auto; border-radius:0; margin:6px 0 8px}
+/* Enmera yazı logosu: koyu zeminde beyaz, açık zeminde siyah sürüm (site şimdilik hep koyu) */
+.sp-list .on-light{display:none}
+:root[data-theme="light"] .sp-list .on-light{display:block} :root[data-theme="light"] .sp-list .on-dark{display:none}
+footer .sp-foot{flex-basis:100%}
+
+/* Tanıtım penceresi (promo.json "sitePopup", günde bir) */
+.promo{padding:0; border:0; background:transparent; max-width:96vw; max-height:none; overflow:visible; margin:auto}
+.promo::backdrop{background:rgba(0,0,0,.75); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px)}
+.promo[open]{animation:promo-in .22s ease-out}
+@keyframes promo-in{from{opacity:0; transform:translateY(8px) scale(.98)}}
+.promo-link{display:block; border-radius:24px; overflow:hidden; background:var(--night-2); box-shadow:0 24px 80px rgba(0,0,0,.55)}
+.promo-link img{display:block; width:auto; height:auto; max-width:min(88vw, 720px); max-height:80vh; object-fit:contain}
+.promo-x{position:absolute; top:0; right:0; transform:translate(50%,-50%); width:44px; height:44px; display:grid; place-items:center; border:0; padding:0; background:transparent; color:var(--on-amber); cursor:pointer; z-index:1; -webkit-tap-highlight-color:transparent}
+.promo-x::before{content:''; position:absolute; inset:3px; border-radius:999px; background:var(--cream); box-shadow:0 2px 10px rgba(0,0,0,.35)}
+.promo-x:hover::before{background:#fff}
+.promo-x:focus{outline:none}
+.promo-x:focus-visible::before{outline:3px solid var(--amber, #f5b83d); outline-offset:2px}
+.promo-x svg{position:relative; width:18px; height:18px}
+.promo-tag{position:absolute; bottom:calc(100% + 14px); left:50%; transform:translateX(-50%); padding:6px 14px; border-radius:8px; background:rgba(255,255,255,.14); color:var(--cream); font:500 12px/1 var(--text); white-space:nowrap; pointer-events:none}
+@media (prefers-reduced-motion:reduce){ .promo[open]{animation:none} }
+
 footer{border-top:1px solid var(--line); padding:48px 0 64px; color:var(--muted); font-size:14px}
 footer .wrap{display:flex; flex-wrap:wrap; gap:16px 40px; justify-content:space-between}
 footer p{margin:0; max-width:52em}
@@ -290,7 +323,7 @@ footer a{color:var(--cream)}
               </a>
               <a class="btn ghost" data-indir="windows" href="https://github.com/yorulmazsinan/couchsubs/releases/latest/download/CouchSubs-windows-Setup.exe">Windows için indir</a>
             </div>
-            <p class="note" id="hero-note">macOS 13 ve üstü, Windows 10 ve 11. TV'ler: LG, Samsung, Android TV.</p>
+            <p class="note" id="hero-note">macOS 13 ve üstü, Windows 10 ve 11. Telefon: Android, iPhone. TV'ler: LG, Samsung, Android TV.</p>
           </div>
           <div class="beat" data-beat="1">
             <h2>Önce okur.</h2>
@@ -470,7 +503,7 @@ footer a{color:var(--cream)}
             <div class="phone"><img src="img/telefon-calisiyor.webp" alt="Telefon ekranı: çeviri sürüyor, hazır paketten gelen satırlar" width="780" height="1688" loading="lazy"></div>
             <div class="phone"><img src="img/telefon-paketler.webp" alt="Telefon ekranı: yedi oyunun hazır çeviri paketi" width="780" height="1688" loading="lazy"></div>
           </div>
-          <p class="soon"><b>Android</b> uygulaması Google Play'de, bilgisayar gerekmez. <b>iPhone</b> sürümü test ediliyor.</p>
+          <p class="soon"><b>Android</b> uygulaması Google Play'de, <b>iPhone</b> uygulaması TestFlight'ta. Telefonda bilgisayar gerekmez.</p>
         </div>
       </div>
     </div>
@@ -483,6 +516,7 @@ footer a{color:var(--cream)}
           <h2 id="paketler-h">Bu oyunların Türkçe yaması hazır.</h2>
         </div>
         <ul class="games">
+          <li>Grand Theft Auto VI</li>
           <li>Grand Theft Auto V</li>
           <li>Red Dead Redemption 2</li>
           <li>Elden Ring</li>
@@ -497,7 +531,7 @@ footer a{color:var(--cream)}
       <aside>
         <div class="fx fx-aside" data-fx="paketler" aria-hidden="true"></div>
         <p><strong>Oyunu açınca yama kendiliğinden seçilir.</strong> Yamada olan satır çeviri motoruna gitmeden, anında çıkar.</p>
-        <p>Yamada olmayan satırları seçtiğin motor çevirir. Yeni yamalar güncellemeyle gelir; listede olmayan oyunlar da çalışır.</p>
+        <p>Yamada olmayan satırları seçtiğin motor çevirir. Yeni yamaları uygulama kendiliğinden indirir; listede olmayan oyunlar da çalışır.</p>
       </aside>
     </div>
   </section>
@@ -521,22 +555,22 @@ footer a{color:var(--cream)}
         </div>
         <div class="card">
           <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="2" y="5" width="20" height="13" rx="2"/><path d="M8 21h8"/></svg>Android TV</h3>
-          <p>Vestel, Arçelik, Beko, Grundig, Philips ve diğer Android TV, Google TV'ler. Bilgisayardaki CouchSubs kendisi kurar; elle kurmak istersen APK burada.</p>
+          <p>Vestel, Arçelik, Beko, Grundig, Philips ve diğer Android TV, Google TV'ler. Bilgisayardaki ya da telefondaki CouchSubs kendisi kurar; elle kurmak istersen APK burada.</p>
           <a class="btn ghost" data-indir="androidtv" href="https://github.com/yorulmazsinan/couchsubs/releases/latest/download/CouchSubs-androidtv.apk">APK'yı indir</a>
         </div>
         <div class="card">
           <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="2" y="5" width="20" height="13" rx="2"/><path d="M8 21h8"/></svg>LG ve Samsung TV</h3>
-          <p>webOS 4 ve üstü LG'ler, 2019 ve sonrası Samsung'lar. TV uygulamasını bilgisayardaki CouchSubs kendisi kurar, ayrı bir şey indirmezsin.</p>
+          <p>webOS 4 ve üstü LG'ler, 2019 ve sonrası Samsung'lar. TV uygulamasını bilgisayardaki ya da telefondaki CouchSubs kendisi kurar, ayrı bir şey indirmezsin.</p>
           <a class="btn ghost" href="https://github.com/yorulmazsinan/couchsubs/blob/main/docs/tv-kurulum.md" rel="noopener">TV kurulum rehberi</a>
         </div>
-        <div class="card later">
+        <div class="card main" data-os="iphone">
           <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg>iPhone</h3>
-          <p>iPhone'a APK yüklenmez; iPhone uygulamaları yalnız App Store'dan gelir. iPhone sürümü App Store'a hazırlanıyor.</p>
-          <span class="tag">Yakında</span>
+          <p>Herkese açık TestFlight'ta ücretsiz. App Store'dan TestFlight'ı indir, bağlantıyı iPhone'da aç, <strong>Kabul Et</strong> ve <strong>Yükle</strong>'ye bas. <strong>Kod gerekmez:</strong> TestFlight'ı kurduktan sonra "Kodu Kullan"a basma; bağlantıyı iPhone'da Safari'de aç. Telefon PS5'e kendisi bağlanır, TV uygulamasını da kendisi kurar.</p>
+          <a class="btn primary" data-indir="iphone-testflight" href="https://testflight.apple.com/join/Um3jb5Fx" rel="noopener">TestFlight'ta aç</a>
         </div>
         <div class="card main" data-os="android">
           <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg>Android telefon</h3>
-          <p>Google Play'de ücretsiz: Android 8 ve üstü (64 bit). Telefon PS5'e kendisi bağlanır, bilgisayar gerekmez. Daha önce siteden APK kurduysanız Play sürümünden önce onu silin.</p>
+          <p>Google Play'de ücretsiz: Android 8 ve üstü, 32 ve 64 bit cihazlar. Telefon PS5'e kendisi bağlanır, TV uygulamasını da kendisi kurar; bilgisayar gerekmez. Daha önce siteden APK kurduysanız Play sürümünden önce onu silin.</p>
           <a class="btn primary" data-indir="android-play" href="https://play.google.com/store/apps/details?id=com.couchsubs.mobile" rel="noopener">Google Play'den indir</a>
         </div>
       </div>
@@ -548,6 +582,19 @@ footer a{color:var(--cream)}
     </div>
   </section>
 
+  <section class="sponsors" id="sponsorlar" aria-labelledby="sponsorlar-h">
+    <div class="wrap">
+      <h2 id="sponsorlar-h">Sponsorlarımız</h2>
+      <ul class="sp-list">
+        <li><a href="https://enmera.com.tr" data-sponsor="Enmera" rel="noopener sponsored" target="_blank"><div><img class="sp-word on-dark" src="promo/logos/enmera-white.png" alt="Enmera" width="140" height="21" loading="lazy" decoding="async"><img class="sp-word on-light" src="promo/logos/enmera-black.png" alt="Enmera" width="140" height="21" loading="lazy" decoding="async"><span>E-ticaret yazılımı</span></div></a></li>
+        <li><a href="https://searvia.com" data-sponsor="Searvia" rel="noopener sponsored" target="_blank"><img src="promo/logos/searvia.png" alt="" width="44" height="44" loading="lazy" decoding="async"><div><b>Searvia</b><span>SEO ve ASO</span></div></a></li>
+        <li><a href="https://apps.apple.com/tr/app/cebbin-expense-tracker/id6761289792" data-sponsor="Cebbin" rel="noopener sponsored" target="_blank"><img src="promo/logos/cebbin.png" alt="" width="44" height="44" loading="lazy" decoding="async"><div><b>Cebbin</b><span>Harcama takibi</span></div></a></li>
+        <li><a href="https://apps.apple.com/tr/app/gramla-nutrition-fitness/id6815593927" data-sponsor="Gramla" data-android="https://play.google.com/store/apps/details?id=com.enmera.gramla" rel="noopener sponsored" target="_blank"><img src="promo/logos/gramla.png" alt="" width="44" height="44" loading="lazy" decoding="async"><div><b>Gramla</b><span>Beslenme ve fitness</span></div></a></li>
+        <li><a href="https://apps.apple.com/tr/app/bakkal-mini-market-game/id6822638855" data-sponsor="Bakkal" data-android="https://play.google.com/store/apps/details?id=com.enmera.bakkal" rel="noopener sponsored" target="_blank"><img src="promo/logos/bakkal.png" alt="" width="44" height="44" loading="lazy" decoding="async"><div><b>Bakkal</b><span>Mini market oyunu</span></div></a></li>
+      </ul>
+    </div>
+  </section>
+
   <section class="block" id="sss" aria-labelledby="sss-h">
     <div class="wrap">
       <div class="head-row"><div class="head"><h2 id="sss-h">Sık sorulanlar</h2></div><div class="fx" data-fx="sss" aria-hidden="true"></div></div>
@@ -556,11 +603,11 @@ footer a{color:var(--cream)}
           <h3>Genel</h3>
           <details>
             <summary>Ücretli mi?</summary>
-            <p>Hayır. CouchSubs tamamen ücretsiz; abonelik, reklam ya da hesap yok. Daha iyi çeviri istersen kendi Gemini veya DeepL anahtarını girebilirsin, o da isteğe bağlı.</p>
+            <p>Hayır. CouchSubs tamamen ücretsiz; abonelik ya da hesap yok. Daha iyi çeviri istersen kendi Gemini veya DeepL anahtarını girebilirsin, o da isteğe bağlı.</p>
           </details>
           <details>
             <summary>Hangi oyunlarda çalışır?</summary>
-            <p>Ekranda İngilizce altyazı gösteren her PS5 oyununda. GTA V, Red Dead Redemption 2, Elden Ring gibi hazır yaması olan oyunlarda satırlar yamadan anında gelir; diğerlerini seçtiğin çeviri motoru çevirir.</p>
+            <p>Ekranda İngilizce altyazı gösteren her PS5 oyununda. GTA 6, GTA V, Red Dead Redemption 2, Elden Ring gibi hazır yaması olan oyunlarda satırlar yamadan anında gelir; diğerlerini seçtiğin çeviri motoru çevirir.</p>
           </details>
           <details>
             <summary>PS5'e ya da oyuna bir şey kuruluyor mu?</summary>
@@ -572,11 +619,15 @@ footer a{color:var(--cream)}
           </details>
           <details>
             <summary>Oynarken bilgisayar açık kalmalı mı?</summary>
-            <p>Evet. Okuma ve çeviri bilgisayarda yapılır; CouchSubs arka planda açık kalmalı. Bilgisayarın TV'nin yanında olması gerekmez, aynı ev ağında olması yeter.</p>
+            <p>Bilgisayarla kullanıyorsan evet. Okuma ve çeviri bilgisayarda yapılır; CouchSubs arka planda açık kalmalı. Bilgisayarın TV'nin yanında olması gerekmez, aynı ev ağında olması yeter. Telefonla kullanıyorsan çeviri sürerken uygulama açık ve ekran açık kalmalı: iPhone arka plana alınınca ya da kilitlenince altyazı durur, CouchSubs bunu bildirimle haber verir; uygulamaya dönünce kendiliğinden devam eder.</p>
           </details>
           <details>
             <summary>Telefonda ya da iPhone'da çalışır mı?</summary>
-            <p>Android telefon uygulaması Google Play'de: Play Store'da "CouchSubs" diye aratın ya da İndir bölümündeki düğmeye basın. Telefon PS5'e kendisi bağlanır, bilgisayar gerekmez. iPhone'lar APK açmadığı için iPhone sürümü App Store'dan gelecek.</p>
+            <p>Evet. Android uygulaması Google Play'de: Play Store'da "CouchSubs" diye aratın ya da İndir bölümündeki düğmeye basın. iPhone uygulaması herkese açık TestFlight'ta: App Store'dan TestFlight'ı indirin, <a href="https://testflight.apple.com/join/Um3jb5Fx" rel="noopener">bu bağlantıyı</a> iPhone'da açın, <strong>Kabul Et</strong> ve <strong>Yükle</strong>'ye basın. Kod gerekmez: TestFlight'ı kurduktan sonra "Kodu Kullan"a basmayın; bağlantıyı iPhone'da Safari'de açın. Sonra CouchSubs'ı açıp PS5'i eşleyin. App Store sürümü Apple'ın incelemesinde. İki telefonda da bilgisayar gerekmez; telefon PS5'e kendisi bağlanır, Samsung, LG ve Android TV'ye TV uygulamasını da kendisi kurar.</p>
+          </details>
+          <details>
+            <summary>Xbox'ta çalışır mı?</summary>
+            <p>Evet, Beta olarak: Windows uygulaması ve Android telefon Xbox'a da bağlanır. Bir sorun görürsen GitHub'da bildir.</p>
           </details>
         </div>
         <div class="faq">
@@ -587,7 +638,7 @@ footer a{color:var(--cream)}
           </details>
           <details>
             <summary>Hangi TV'ler destekleniyor?</summary>
-            <p>webOS 4 ve üstü LG'ler (bir kullanıcı 2015 model webOS 2.2'de de çalıştırdı), 2019 ve sonrası Samsung'lar (2016–2018 modelleri deneysel) ve Vestel, Arçelik, Beko, Grundig, Philips gibi Android TV, Google TV'ler. TV yoksa altyazı bilgisayar ekranında da gösterilir.</p>
+            <p>webOS 4 ve üstü LG'ler (bir kullanıcı 2015 model webOS 2.2'de de çalıştırdı), 2019 ve sonrası Samsung'lar (2016–2018 modelleri deneysel) ve Vestel, Arçelik, Beko, Grundig, Philips gibi Android TV, Google TV'ler. Odyssey G8/G9 gibi Samsung ultra geniş monitörlerde görüntü ekranı doldurur. Eski LG'ler (webOS 3.x) aramada bulunur; TV listede çıkmazsa Windows ve Mac'te IP adresini elle yazabilirsin. 2016 Samsung'larda (Tizen 2.4) "install failed 118" kurulum hatası beta.54'te düzeldi. TV yoksa altyazı bilgisayar ekranında da gösterilir.</p>
           </details>
           <details>
             <summary>Windows "bilgisayarınızı korudu" diyor.</summary>
@@ -596,6 +647,14 @@ footer a{color:var(--cream)}
           <details>
             <summary>TV'de altyazı çıkmıyor.</summary>
             <p>Oyunda altyazının açık olduğuna, TV'de CouchSubs uygulamasının açık olduğuna ve TV'nin bilgisayarla aynı ağda olduğuna bak. Altyazı okunmuyorsa Ayarlar › Altyazı alanı'ndan alanı ayarla. Olmazsa uygulamadaki altyazı günlüğüyle GitHub'da sorun bildir.</p>
+          </details>
+          <details>
+            <summary>Evde iki PS5 ya da iki TV var.</summary>
+            <p>Sorun değil. CouchSubs PS5'i adıyla tanır, başka PS5'e geçmez; ağda birden çok Android TV varsa hangisine kurulacağını sorar. Her TV kendi bilgisayarına ya da telefonuna bağlanır.</p>
+          </details>
+          <details>
+            <summary>PS5 bağlantısı sık kopuyor.</summary>
+            <p>Bağlantı sık koparsa CouchSubs görüntüyü kendiliğinden 720p'ye düşürür; hata kodunun ne demek olduğunu da ekranda yazar. Wi-Fi zayıfsa PS5'i ağa kabloyla bağlamak da işe yarar.</p>
           </details>
           <details>
             <summary>Samsung TV kendiliğinden HDMI'ya geçiyor.</summary>
@@ -623,6 +682,7 @@ footer a{color:var(--cream)}
   <div class="wrap">
     <p>CouchSubs açık kaynaktır (AGPL-3.0). Kaynak kodu <a href="https://github.com/yorulmazsinan/couchsubs" rel="noopener">GitHub'da</a>. <a href="/gizlilik">Gizlilik</a>. © 2026 Enmera</p>
     <p>CouchSubs, Sony Interactive Entertainment ile bağlantılı değildir. PlayStation ve PS5, Sony Interactive Entertainment Inc.'in markalarıdır. Oyun adları sahiplerinin markalarıdır.</p>
+    <p class="sp-foot">Sponsorlarımız: <a href="https://enmera.com.tr" data-sponsor="Enmera" rel="noopener sponsored" target="_blank">Enmera</a>, <a href="https://searvia.com" data-sponsor="Searvia" rel="noopener sponsored" target="_blank">Searvia</a>, <a href="https://apps.apple.com/tr/app/cebbin-expense-tracker/id6761289792" data-sponsor="Cebbin" rel="noopener sponsored" target="_blank">Cebbin</a>, <a href="https://apps.apple.com/tr/app/gramla-nutrition-fitness/id6815593927" data-sponsor="Gramla" data-android="https://play.google.com/store/apps/details?id=com.enmera.gramla" rel="noopener sponsored" target="_blank">Gramla</a>, <a href="https://apps.apple.com/tr/app/bakkal-mini-market-game/id6822638855" data-sponsor="Bakkal" data-android="https://play.google.com/store/apps/details?id=com.enmera.bakkal" rel="noopener sponsored" target="_blank">Bakkal</a>.</p>
   </div>
 </footer>
 
@@ -639,6 +699,10 @@ footer a{color:var(--cream)}
     actions.innerHTML = '<a class="btn primary" data-indir="android-play" href="https://play.google.com/store/apps/details?id=com.couchsubs.mobile" rel="noopener">Google Play\'den indir</a><a class="btn ghost" href="#indir">Diğer seçenekler</a>';
     document.getElementById('hero-note').textContent = 'Android telefonda bilgisayar gerekmez: Google Play\'den kurun.';
     var dla = document.querySelector('.dl'); dla.prepend(dla.querySelector('[data-os="android"]'));
+  } else if (/iPhone|iPad|iPod/i.test(ua)) {
+    actions.innerHTML = '<a class="btn primary" data-indir="iphone-testflight" href="https://testflight.apple.com/join/Um3jb5Fx" rel="noopener">TestFlight\'ta aç</a><a class="btn ghost" href="#indir">Diğer seçenekler</a>';
+    document.getElementById('hero-note').textContent = 'iPhone uygulaması herkese açık TestFlight\'ta: önce App Store\'dan TestFlight\'ı indir.';
+    var dli = document.querySelector('.dl'); dli.prepend(dli.querySelector('[data-os="iphone"]'));
   } else if (mobile) {
     actions.innerHTML = '<a class="btn primary" href="#indir">İndirme seçenekleri</a>';
     document.getElementById('hero-note').textContent = 'CouchSubs bilgisayarda çalışır. Bu sayfayı Mac ya da Windows bilgisayarında aç.';
@@ -661,6 +725,87 @@ footer a{color:var(--cream)}
     }).catch(function(){});
 })();
 
+// Sponsor bağlantıları ve günde bir kez tanıtım penceresi (promo.json; mobil uygulamalar da aynı dosyayı okur)
+(function(){
+  var android = /Android/i.test(navigator.userAgent);
+  function storeLinks(){
+    if (!android) return;
+    document.querySelectorAll('a[data-android]').forEach(function(a){
+      if (a.getAttribute('data-android')) a.href = a.getAttribute('data-android');
+    });
+  }
+  storeLinks();
+  document.addEventListener('click', function(e){
+    var a = e.target.closest('a[data-sponsor]');
+    if (a) window.dataLayer.push({event:'sponsor_tik', sponsor:a.getAttribute('data-sponsor')});
+  });
+
+  var preview = /[?&]promo=1(&|$)/.test(location.search);
+  function store(fn){ try { return fn(window.localStorage); } catch (e) { return null; } }
+
+  function showPopup(p){
+    var src = p.image;
+    if (!src || !p.link) return;
+    var key = 'promo:' + p.id;
+    var img = new Image();
+    img.alt = p.alt || '';
+    img.onload = function(){
+      // Sayfa açıkken başka sekmede gösterildiyse ikinci kez açma
+      var last = +store(function(s){ return s.getItem(key); }) || 0;
+      if (!preview && Date.now() - last < (p.everyHours || 24) * 3600e3) return;
+      img.width = img.naturalWidth; img.height = img.naturalHeight;
+      var d = document.createElement('dialog');
+      d.className = 'promo';
+      d.setAttribute('aria-label', p.alt || 'Sponsor');
+      d.innerHTML = '<a class="promo-link" target="_blank" rel="noopener sponsored"></a><span class="promo-tag">Sponsorlu</span>' +
+        '<button type="button" class="promo-x" aria-label="Kapat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
+      var link = d.querySelector('.promo-link'), x = d.querySelector('.promo-x');
+      link.href = p.link; link.appendChild(img);
+      document.body.appendChild(d);
+      var back = document.activeElement;
+      function close(){ if (d.open) d.close(); }
+      d.addEventListener('close', function(){ d.remove(); if (back && back.focus) back.focus(); });
+      x.addEventListener('click', close);
+      d.addEventListener('click', function(e){ if (e.target === d) close(); });
+      link.addEventListener('click', function(){ window.dataLayer.push({event:'promo_tik', promo:p.id}); setTimeout(close, 0); });
+      d.addEventListener('keydown', function(e){
+        if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+        if (e.key !== 'Tab') return;
+        var first = link, lastEl = x;
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); lastEl.focus(); }
+        else if (!e.shiftKey && document.activeElement === lastEl) { e.preventDefault(); first.focus(); }
+      });
+      if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+      try { x.focus({focusVisible:false, preventScroll:true}); } catch (e) { x.focus(); }
+      store(function(s){ s.setItem(key, String(Date.now())); });
+      window.dataLayer.push({event:'promo_gosterim', promo:p.id});
+    };
+    img.src = src;
+  }
+
+  function start(){
+    fetch('/promo.json?t=' + Date.now(), {cache:'no-store'})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(j){
+        if (!j) return;
+        (j.sponsors || []).forEach(function(sp){
+          document.querySelectorAll('a[data-sponsor="' + sp.name + '"]').forEach(function(a){
+            if (sp.url) a.href = sp.url;
+            if (sp.android) a.setAttribute('data-android', sp.android);
+          });
+        });
+        storeLinks();
+        var p = j.sitePopup;
+        if (!p || !p.id || !p.active) return;
+        if (!preview) {
+          var last = +store(function(s){ return s.getItem('promo:' + p.id); }) || 0;
+          if (Date.now() - last < (p.everyHours || 24) * 3600e3) return;
+        }
+        setTimeout(function(){ showPopup(p); }, 10000);
+      }).catch(function(){});
+  }
+  if (document.readyState === 'complete') start(); else addEventListener('load', start);
+})();
 
 // Kurulum rehberi sekmeleri (ok tuşlarıyla da gezilir)
 (function(){
@@ -1051,10 +1196,10 @@ requestAnimationFrame(frame);
     } };
   })();
 
-  // Paketler: yedi oyun kutusu, kaydırdıkça raftan çekilir
+  // Paketler: oyun kutuları, kaydırdıkça raftan çekilir
   scenes.paketler = (() => {
     const s = baseScene(), cam = new THREE.PerspectiveCamera(30, 4 / 3, 0.1, 50);
-    const names = ['GTA V', 'RDR 2', 'ELDEN RING', 'MAFIA', 'AC SHADOWS', 'DS 2', 'MW 2019', 'SPIDER-MAN 2', 'DEATH STR.'];
+    const names = ['GTA VI', 'GTA V', 'RDR 2', 'ELDEN RING', 'MAFIA', 'AC SHADOWS', 'DS 2', 'MW 2019', 'SPIDER-MAN 2', 'DEATH STR.'];
     const cases = names.map((n, i) => {
       const spine = canvasTex(64, 512, (g, w, h) => { g.fillStyle = i === 0 ? '#F5B83D' : '#24262c'; g.fillRect(0, 0, w, h); g.save(); g.translate(w / 2 + 9, h / 2); g.rotate(-Math.PI / 2); g.fillStyle = i === 0 ? '#17181B' : '#F3EEE4'; g.font = '700 28px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText(n, 0, 0); g.restore(); });
       const side = std(i === 0 ? 0xD9A030 : 0x2c2e35, 0.5);

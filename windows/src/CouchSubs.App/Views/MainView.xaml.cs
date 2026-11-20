@@ -90,6 +90,8 @@ public partial class MainView : UserControl
         var settings = controller.Settings;
         ShowScreenKeys(settings);
         EngineText.Text = settings.Engine == TranslationEngine.Free ? text["Free"] : settings.Engine.DisplayName();
+        PictureSourceText.Text = controller.PictureSourceTitle ?? "";
+        PictureSourceRow.Visibility = controller.PictureSourceTitle is null ? Visibility.Collapsed : Visibility.Visible;
         var packs = controller.InstalledPacks.Count;
         var active = settings.GamePacks && settings.SourceLanguage == "en" && settings.TargetLanguage == "tr" && packs > 0;
         PackTile.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
@@ -174,6 +176,9 @@ public partial class MainView : UserControl
 
     private void OnTranslationSettings(object sender, RoutedEventArgs e) =>
         SettingsWindow.Open(Window.GetWindow(this), controller, SettingsSection.Translation);
+
+    private void OnPictureSourceSettings(object sender, RoutedEventArgs e) =>
+        SettingsWindow.Open(Window.GetWindow(this), controller, SettingsSection.PictureSource);
 
     /// <summary>Yeni canlı satır 0,18 sn'de belirir; Windows'ta animasyonlar kapalıysa geçiş yok (docs/TASARIM.md).</summary>
     private void FadeInLiveLine()

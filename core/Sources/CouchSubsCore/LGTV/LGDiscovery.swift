@@ -6,9 +6,14 @@ import Foundation
 /// Yerel ağdaki LG webOS TV'leri SSDP ile bulur.
 public enum LGDiscovery {
     static let searchTarget = "urn:lge-com:service:webos-second-screen:1"
+    /// Yedek arama: webOS 3.x (2017) TV'ler ikinci ekran hedefine cevap vermiyor, "ssdp:all"a veriyor (#498).
+    static let allTarget = "ssdp:all"
 
     public static func search(timeout: Duration = .seconds(3)) async -> [LGTV] {
-        let hosts = await Task.detached { collectHosts(searchTarget: searchTarget, timeout: timeout) }.value
+        var hosts = await Task.detached { collectHosts(searchTarget: searchTarget, timeout: timeout) }.value
+        if hosts.isEmpty {
+            hosts = await Task.detached { collectHosts(searchTarget: allTarget, timeout: timeout) }.value
+        }
         var tvs: [LGTV] = []
         for host in Set(hosts).sorted() {
             tvs.append(LGTV(name: await friendlyName(host: host) ?? "LG TV", host: host))
@@ -25,12 +30,17 @@ public enum LGDiscovery {
     private static func scan() async -> [LGTV] {
         let targets = LocalNetwork.homeTargets()
         async let ssdp = Task.detached { collectHosts(searchTarget: searchTarget, timeout: .milliseconds(2500), unicast: targets) }.value
+        // webOS 3.x tek adrese gönderilen "ssdp:all"a cevap veriyor (#498).
+        async let ssdpAll = Task.detached { collectHosts(searchTarget: allTarget, timeout: .milliseconds(2500), unicast: targets) }.value
         var tvs = await LocalNetwork.probeAll { host in await probe(host: host) }.map(\.value)
-        for host in Set(await ssdp).sorted() where !tvs.contains(where: { $0.host == host }) {
+        for host in Set(await ssdp + ssdpAll).sorted() where !tvs.contains(where: { $0.host == host }) {
             tvs.append(LGTV(name: await friendlyName(host: host) ?? "LG TV", host: host))
         }
         return tvs.sorted { $0.host.compare($1.host, options: .numeric) == .orderedAscending }
     }
+
+    /// Elle yazılan adresteki LG TV (cihaz tanımı ya da ikinci ekran sunucusu yanıt verirse); yoksa nil.
+    public static func tv(at host: String) async -> LGTV? { await probe(host: host) }
 
     /// Bir adresin LG webOS TV olup olmadığı: cihaz tanımı (1990) LG/webOS diyorsa ya da ikinci ekran sunucusu (3000)
     /// karşılık veriyorsa.
@@ -67,21 +77,29 @@ public enum LGDiscovery {
         return name.isEmpty ? nil : name
     }
 
-    /// SSDP yanıtından TV'nin adresini çıkarır; LG'nin ikinci ekran servisi değilse nil.
+    /// SSDP yanıtından TV'nin adresini çıkarır; aranan hedef değilse nil. "ssdp:all" aramasında her cihaz cevap
+    /// verir: yalnız kendini LG webOS TV olarak tanıtan yanıt (bkz. isLGHeader) alınır.
     static func host(fromSSDPResponse response: String, searchTarget: String = searchTarget) -> String? {
         var location: String?
         var isLG = false
         for line in response.components(separatedBy: "\r\n") {
             let parts = line.split(separator: ":", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
             guard parts.count == 2 else { continue }
-            switch parts[0].uppercased() {
-            case "LOCATION": location = parts[1]
-            case "ST", "NT": isLG = isLG || parts[1] == searchTarget
-            default: break
-            }
+            let name = parts[0].uppercased()
+            if name == "LOCATION" { location = parts[1]; continue }
+            guard ["ST", "NT", "USN", "SERVER"].contains(name) else { continue }
+            if name == "ST" || name == "NT", parts[1] == searchTarget { isLG = true }
+            if searchTarget == allTarget, isLGHeader(parts[1]) { isLG = true }
         }
         guard isLG, let location, let url = URL(string: location) else { return nil }
         return url.host
+    }
+
+    /// LG webOS TV'nin SSDP başlığı mı: ikinci ekran servisi, sunucu adında "webOS" (webOS 3: "... LGE WebOS TV ...")
+    /// ya da cihaz kimliğinde "LGTV" (webOS 3: "uuid:LGTV2017..."). LG'nin TV olmayan cihazları sayılmaz.
+    static func isLGHeader(_ value: String) -> Bool {
+        let text = value.lowercased()
+        return text.contains("webos") || text.contains("lgtv")
     }
 
     /// SSDP arama isteği; tek adrese gönderilirken HOST o adresi taşır (UPnP 1.1 tek adresli M-SEARCH).

@@ -43,4 +43,30 @@ public class SsapMessagesTests
         Assert.Equal("192.168.1.153", LgDiscovery.HostFromSsdpResponse(response));
         Assert.Null(LgDiscovery.HostFromSsdpResponse("HTTP/1.1 200 OK\r\nST: urn:other\r\n\r\n"));
     }
+
+    // webOS 3.x (2017) ikinci ekran hedefine cevap vermiyor; "ssdp:all" yanıtı LG olarak tanınır, başka cihaz alınmaz (#498).
+    [Fact]
+    public void SsdpAllResponseFromOldWebOsIsRecognised()
+    {
+        const string root = "HTTP/1.1 200 OK\r\nLOCATION: http://192.168.1.40:1259/\r\nST: upnp:rootdevice\r\nUSN: uuid:LGTV2017-1234::upnp:rootdevice\r\nSERVER: Linux/3.10.19-32.afro.4 UPnP/1.0 LGE WebOS TV LGE_DLNA_SDK/1.6.0\r\n\r\n";
+        Assert.Equal("192.168.1.40", LgDiscovery.HostFromSsdpResponse(root, LgDiscovery.AllTarget));
+        const string netflix = "HTTP/1.1 200 OK\r\nLOCATION: http://192.168.1.40:9080\r\nST: urn:mdx-netflix-com:service:target:1\r\nUSN: uuid:LGTV2017-1234::urn:mdx-netflix-com:service:target:1\r\n\r\n";
+        Assert.Equal("192.168.1.40", LgDiscovery.HostFromSsdpResponse(netflix, LgDiscovery.AllTarget));
+        const string router = "HTTP/1.1 200 OK\r\nLOCATION: http://192.168.1.1:49152/desc.xml\r\nST: upnp:rootdevice\r\nUSN: uuid:abcd::upnp:rootdevice\r\nSERVER: Linux UPnP/1.0 MiniUPnPd\r\n\r\n";
+        Assert.Null(LgDiscovery.HostFromSsdpResponse(router, LgDiscovery.AllTarget));
+        // Asıl aramada yalnız ikinci ekran servisi sayılır.
+        Assert.Null(LgDiscovery.HostFromSsdpResponse(root));
+    }
+
+    [Theory]
+    [InlineData("192.168.1.40", "192.168.1.40")]
+    [InlineData(" http://192.168.1.40:3000/ ", "192.168.1.40")]
+    [InlineData("192,168,1,40", "192.168.1.40")]
+    [InlineData("192.168.001.040", "192.168.1.40")]
+    [InlineData("192.168.1", null)]
+    [InlineData("192.168.1.400", null)]
+    [InlineData("lgtv", null)]
+    [InlineData("", null)]
+    public void ManualTvAddressIsCleaned(string input, string? expected) =>
+        Assert.Equal(expected, LgDiscovery.NormalizeHost(input));
 }

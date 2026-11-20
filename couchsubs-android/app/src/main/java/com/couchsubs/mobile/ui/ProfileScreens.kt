@@ -126,6 +126,7 @@ fun ProfileScreen(onBack: () -> Unit, onSettings: () -> Unit, onPairing: () -> U
             { RowItem(stringResource(R.string.profile_help), onClick = { open(context, context.getString(R.string.url_help)) }) },
         ))
         Text(stringResource(R.string.profile_no_account), style = Tokens.Type.caption, color = Tokens.Color.secondary)
+        DeveloperSignature()
     }
 }
 
@@ -349,6 +350,7 @@ fun SettingsScreen(onBack: () -> Unit, onPacks: () -> Unit, onTarget: () -> Unit
         AnimatedNote(testNote, Tokens.Color.secondary)
         Text(stringResource(R.string.settings_copyright), style = Tokens.Type.caption, color = Tokens.Color.secondary,
             modifier = Modifier.padding(top = Tokens.Space.inline))
+        DeveloperSignature()
     }
 }
 

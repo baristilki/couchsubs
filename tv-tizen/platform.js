@@ -14,12 +14,15 @@
   var WIDE_RATIO = 1.9;
   // Sayfa her TV'de 1080 CSS piksel yükseklikte düzenlenir (index.html: width=1920); geniş ekranda da öyle kalır.
   var PAGE_HEIGHT = 1080;
+  // 16:9 (ve dar) yüzeyde görünüm genişliği: ortak index.html'deki gibi.
+  var NARROW_WIDTH = 1920;
 
-  // Ultrawide ekran (#304): config.xml'deki base_screen_resolution=fullscreen ile yüzey ekranın tamamı olur. Ortak
-  // index.html'in sabit 1920 piksellik görünümü bu yüzeyde sayfayı 1920x800'e indirir, yazılar 16:9 TV'dekinden küçük
-  // kalırdı. Geniş yüzeyde görünüm genişliği yüksekliği 1080 tutacak şekilde verilir (3440x1440 için 2580): yazı ve
-  // kutular 16:9 TV'dekiyle aynı boyda, app.js yerleşimi innerWidth/innerHeight'tan hesaplandığı için ekrana yayılır.
-  // 16:9 yüzeyde (bütün TV'ler, ayarı tanımayan modeller) null döner: hiçbir şey değişmez.
+  // Ultrawide ekran (#304): Samsung yüzeyi config.xml'deki base_screen_resolution ile ve ancak sayfa
+  // "width=device-width" görünümüyle açılırsa ekranın tamamı yapar (Samsung "21:9 Aspect Ratio Support" belgesi);
+  // ortak index.html'in sabit "width=1920"si uygulamayı 16:9 kutuda tutuyordu. Samsung paketinde görünüm bu yüzden
+  // device-width'tir (scripts/package-tizen.sh) ve burada asıl değerine getirilir. Geniş yüzeyde genişlik yüksekliği 1080
+  // tutacak şekilde verilir (3440x1440 için 2580): yazı ve kutular 16:9 TV'dekiyle aynı boyda, app.js yerleşimi
+  // innerWidth/innerHeight'tan hesaplandığı için ekrana yayılır. 16:9 yüzeyde null döner, görünüm eskisi gibi 1920 olur.
   function viewportFor(width, height) {
     if (!(width > 0) || !(height > 0)) return null;
     var ratio = width / height;
@@ -28,11 +31,20 @@
 
   function fitWideScreen() {
     try {
-      var content = viewportFor(window.innerWidth, window.innerHeight);
-      if (!content) return;
+      var content = viewportFor(window.innerWidth, window.innerHeight) || 'width=' + NARROW_WIDTH;
       var meta = document.querySelector('meta[name="viewport"]');
       if (meta) meta.setAttribute('content', content);
     } catch (e) {}
+  }
+
+  // Samsung ağ API'sindeki IPv4 adresi (izin: network.public); API yoksa ya da adres boşsa null.
+  function samsungIp() {
+    try {
+      var ip = webapis.network.getIp();
+      return /^\d+\.\d+\.\d+\.\d+$/.test(ip || '') && ip !== '0.0.0.0' ? ip : null;
+    } catch (e) {
+      return null;
+    }
   }
 
   function hdmiSources(callback) {
@@ -77,6 +89,7 @@
 
     // Birim testi için (scripts/tv-tizen.test.js).
     viewportFor: viewportFor,
+    samsungIp: samsungIp,
 
     // Anynet+ (HDMI-CEC) ya da Otomatik Kaynak Değiştirme TV'yi kendiliğinden HDMI'ya geçirirse uygulama ipucu
     // gösterir (app.js). Menü adları Samsung'unkiler; başka TV'lerde gösterilmez.
@@ -96,11 +109,6 @@
       // Eski TV'lerde API yoksa sessizce geçilir.
       try {
         webapis.appcommon.setScreenSaver(webapis.appcommon.AppCommonScreenSaverState.SCREEN_SAVER_OFF);
-      } catch (e) {}
-      // Ekranın kararmasını ve TV'nin boşta sanıp kapanmasını Tizen'in güç API'siyle de engeller (izin: power).
-      // Uygulama kapanınca istek kendiliğinden düşer. API ya da izin yoksa sessizce geçilir.
-      try {
-        tizen.power.request('SCREEN', 'SCREEN_NORMAL');
       } catch (e) {}
     },
 
@@ -143,8 +151,10 @@
           otherwise();
         }
       }
+      // Tizen'in sistem bilgisi adres vermezse Samsung'un ağ API'si (webapis.network.getIp) sorulur; o da yoksa null.
+      // Adres bilinmeyince app.js yaygın ev ağlarını tarar (#484).
       read('ETHERNET_NETWORK', function () {
-        read('WIFI_NETWORK', function () { callback(null); });
+        read('WIFI_NETWORK', function () { callback(samsungIp()); });
       });
     },
 

@@ -126,12 +126,20 @@ struct MainControls: View {
             SubtitleOutputCard()
             // Ayar bilgisi durum karosu gibi değil, satır olarak durur (TASARIM.md › InfoCard).
             InfoCard {
+                // Görüntünün nereden okunduğu; dokununca Ayarlar › Görüntü kaynağı (DM'de ayar bulunamıyordu).
+                InfoRow("Picture source", value: pictureSourceName, action: { model.openSettings(.source) })
+                InfoDivider()
                 InfoRow("Translation", value: engineName, action: { model.openSettings(.translation) })
                 InfoDivider()
                 InfoRow("Translate screen") { Keycap("⌥⌘T") }
             }
             MainWarnings()
         }
+    }
+
+    private var pictureSourceName: String {
+        model.settings.frameSource == .remotePlayWindow
+            ? String(localized: "Remote Play window on this Mac") : String(localized: "The PS5 (second account)")
     }
 
     private var engineName: String {

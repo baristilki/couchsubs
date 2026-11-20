@@ -24,20 +24,38 @@ object TvDiscovery {
         "urn:dial-multiscreen-org:service:dial:1" to TvBrand.ANDROID_TV,
     )
 
-    /** SSDP yanıtından (adres, marka); hedeflerden biri değilse null. */
+    /** Yedek arama: webOS 3.x (2017) LG TV'ler ikinci ekran hedefine cevap vermiyor, "ssdp:all"a veriyor (#498). */
+    private const val ALL_TARGET = "ssdp:all"
+
+    /**
+     * SSDP yanıtından (adres, marka); hedeflerden biri değilse null. Kendini LG webOS TV olarak tanıtan her yanıt
+     * (bkz. [isLgHeader]) LG sayılır: "ssdp:all" aramasında eski LG'ler yalnız böyle görünür.
+     */
     fun parse(response: String): Pair<String, TvBrand>? {
         var location: String? = null
         var brand: TvBrand? = null
+        var lg = false
         for (line in response.split("\r\n")) {
             val colon = line.indexOf(':')
             if (colon < 0) continue
             val name = line.substring(0, colon).trim().uppercase()
             val value = line.substring(colon + 1).trim()
             if (name == "LOCATION") location = value
-            else if (name == "ST" || name == "NT") targets[value]?.let { brand = it }
+            if (name == "ST" || name == "NT") targets[value]?.let { brand = it }
+            if (name in setOf("ST", "NT", "USN", "SERVER") && isLgHeader(value)) lg = true
         }
+        if (lg) brand = TvBrand.LG
         val host = location?.let { runCatching { URL(it).host }.getOrNull() } ?: return null
         return brand?.let { host to it }
+    }
+
+    /**
+     * LG webOS TV'nin SSDP başlığı mı: sunucu adında "webOS" (webOS 3: "... LGE WebOS TV ...") ya da cihaz kimliğinde
+     * "LGTV" (webOS 3: "uuid:LGTV2017..."). Windows/Mac: LgDiscovery, aynı kural.
+     */
+    fun isLgHeader(value: String): Boolean {
+        val text = value.lowercase()
+        return "webos" in text || "lgtv" in text
     }
 
     /** Ağda arar (bloklar, ~[timeoutMs]); aynı adreste LG/Samsung, DIAL'dan önce gelir. */
@@ -47,7 +65,7 @@ object TvDiscovery {
             socket.soTimeout = 300
             val group = InetAddress.getByName("239.255.255.250")
             repeat(2) {
-                for (target in targets.keys) {
+                for (target in targets.keys + ALL_TARGET) {
                     val request = "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\nST: $target\r\n\r\n"
                     val bytes = request.toByteArray(Charsets.US_ASCII)
                     socket.send(DatagramPacket(bytes, bytes.size, group, 1900))

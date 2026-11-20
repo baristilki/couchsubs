@@ -133,7 +133,7 @@ private let cipherAlgorithms = ["aes128-ctr", "aes192-ctr", "aes256-ctr"]
 private let macAlgorithms = ["hmac-sha2-256-etm@openssh.com", "hmac-sha2-512-etm@openssh.com", "hmac-sha1-etm@openssh.com",
                              "hmac-sha2-256", "hmac-sha2-512", "hmac-sha1"]
 
-private struct SshMac {
+struct SshMac {
     let name: String
     var etm: Bool { name.hasSuffix("-etm@openssh.com") }
     var length: Int { name.hasPrefix("hmac-sha2-512") ? 64 : name.hasPrefix("hmac-sha2-256") ? 32 : 20 }
@@ -147,7 +147,7 @@ private struct SshMac {
 }
 
 /// AES-CTR akışı (CommonCrypto); şifreleme ve çözme aynı işlemdir.
-private final class AesCtr {
+final class AesCtr {
     private var cryptor: CCCryptorRef?
 
     init(key: [UInt8], iv: [UInt8]) throws {
@@ -381,7 +381,9 @@ final class SshSession {
                 _ = try reader.string()
                 if try reader.bool() { try sendPacket([82]) }
             case 20:
-                throw SshError(.broken, "TV anahtarları yeniden değiştirmek istedi (desteklenmiyor)")
+                // TV bağlantı sırasında anahtarları yeniden değiştirmek isteyebilir (RFC 4253 §9; dropbear ve OpenSSH
+                // süre ya da veri sınırında kendiliğinden başlatır). Değişim bitince akış kaldığı yerden sürer.
+                try keyExchange(serverInit: payload)
             default:
                 return payload
             }
@@ -409,11 +411,18 @@ final class SshSession {
         guard serverVersion.hasPrefix("SSH-2.0-") || serverVersion.hasPrefix("SSH-1.99-") else {
             throw SshError(.broken, "SSH sürümü desteklenmiyor: \(serverVersion)")
         }
+        try keyExchange(serverInit: nil)
+    }
 
+    /// Anahtar değişimi (RFC 4253 §7-8). `serverInit` verilirse TV başlatmıştır (yeniden değişim, §9): KEXINIT'i zaten
+    /// okunmuştur. Oturum kimliği ilk değişimin özeti olarak kalır; paket sıra numaraları sıfırlanmaz.
+    private func keyExchange(serverInit received: [UInt8]?) throws {
+        let first = sessionId.isEmpty
         var kexInit = SshWriter()
         kexInit.byte(20)
         kexInit.bytes += randomBytes(16)
-        kexInit.nameList(SshKex.allCases.map(\.rawValue) + ["ext-info-c"])
+        // ext-info-c yalnız ilk KEXINIT'te yazılır (RFC 8308 §2.1).
+        kexInit.nameList(SshKex.allCases.map(\.rawValue) + (first ? ["ext-info-c"] : []))
         kexInit.nameList(hostKeyAlgorithms)
         kexInit.nameList(cipherAlgorithms)
         kexInit.nameList(cipherAlgorithms)
@@ -428,7 +437,9 @@ final class SshSession {
         let clientInit = kexInit.bytes
         try sendPacket(clientInit)
 
-        let serverInit = try nextMessage()
+        // Sunucunun ilk KEXINIT'i de anahtar değişimi iletisidir; genel ileti döngüsünden (nextMessage) okunmaz, yoksa
+        // yeniden değişim sanılır (#483).
+        let serverInit = try received ?? kexMessage()
         guard serverInit.first == 20 else { throw SshError(.broken, "KEXINIT beklenirken \(serverInit.first ?? 0)") }
         var parse = SshReader(serverInit)
         _ = try parse.byte()
@@ -460,7 +471,7 @@ final class SshSession {
         let macOut = try pick(macAlgorithms, serverMacOut, "MAC")
         let macIn = try pick(macAlgorithms, serverMacIn, "MAC")
         guard serverCompressionOut.contains("none"), serverCompressionIn.contains("none") else { throw SshError(.broken, "sıkıştırmasız bağlantı yok") }
-        if guessFollows, serverKex.first != kex.rawValue { _ = try nextMessage() } // Yanlış tahminin paketi atılır.
+        if guessFollows, serverKex.first != kex.rawValue { _ = try kexMessage() } // Yanlış tahminin paketi atılır.
 
         // Anahtar değişimi.
         var exchange = SshWriter()
@@ -497,7 +508,7 @@ final class SshSession {
             initMessage.byte(30)
             initMessage.string(clientPublic)
             try sendPacket(initMessage.bytes)
-            let reply = try nextMessage()
+            let reply = try kexMessage()
             guard reply.first == 31 else { throw SshError(.broken, "KEX yanıtı beklenirken \(reply.first ?? 0)") }
             var reader = SshReader(reply)
             _ = try reader.byte()
@@ -523,7 +534,7 @@ final class SshSession {
             initMessage.byte(30)
             initMessage.mpint(eBytes)
             try sendPacket(initMessage.bytes)
-            let reply = try nextMessage()
+            let reply = try kexMessage()
             guard reply.first == 31 else { throw SshError(.broken, "KEX yanıtı beklenirken \(reply.first ?? 0)") }
             var reader = SshReader(reply)
             _ = try reader.byte()
@@ -541,10 +552,7 @@ final class SshSession {
         let hash = kex.hash.digest(exchange.bytes)
         try Self.verifyHostSignature(hostKey: hostKey, signature: signature, data: hash)
 
-        try sendPacket([21])
-        let newKeys = try nextMessage()
-        guard newKeys.first == 21 else { throw SshError(.broken, "NEWKEYS beklenirken \(newKeys.first ?? 0)") }
-        sessionId = hash
+        if first { sessionId = hash }
 
         var sharedMpint = SshWriter()
         sharedMpint.mpint(shared)
@@ -556,12 +564,36 @@ final class SshSession {
         func keyLength(_ cipher: String) -> Int { cipher.hasPrefix("aes256") ? 32 : cipher.hasPrefix("aes192") ? 24 : 16 }
         let outMac = SshMac(name: macOut)
         let inMac = SshMac(name: macIn)
-        outgoing.cipher = try AesCtr(key: derive("C", keyLength(cipherOut)), iv: derive("A", 16))
+        let outCipher = try AesCtr(key: derive("C", keyLength(cipherOut)), iv: derive("A", 16))
+        let inCipher = try AesCtr(key: derive("D", keyLength(cipherIn)), iv: derive("B", 16))
+        // Giden yön NEWKEYS gönderilir gönderilmez, gelen yön TV'nin NEWKEYS'inden sonra yeni anahtarlara geçer (§7.3).
+        try sendPacket([21])
+        outgoing.cipher = outCipher
         outgoing.mac = outMac
         outgoing.macKey = derive("E", outMac.length)
-        incoming.cipher = try AesCtr(key: derive("D", keyLength(cipherIn)), iv: derive("B", 16))
+        let newKeys = try kexMessage()
+        guard newKeys.first == 21 else { throw SshError(.broken, "NEWKEYS beklenirken \(newKeys.first ?? 0)") }
+        incoming.cipher = inCipher
         incoming.mac = inMac
         incoming.macKey = derive("F", inMac.length)
+    }
+
+    /// Anahtar değişimi sürerken gelen ileti: kapatma hata olur, yoksay ve hata ayıklama atlanır, kalanı döner.
+    private func kexMessage() throws -> [UInt8] {
+        while true {
+            let payload = try readPacket()
+            switch payload.first {
+            case nil, 2, 3, 4:
+                continue
+            case 1:
+                var reader = SshReader(payload)
+                _ = try reader.byte()
+                _ = try reader.uint32()
+                throw SshError(.broken, "TV bağlantıyı kapattı: \((try? reader.text()) ?? "")")
+            default:
+                return payload
+            }
+        }
     }
 
     private static func secret(_ value: SharedSecret) -> [UInt8] { value.withUnsafeBytes { Array($0) } }

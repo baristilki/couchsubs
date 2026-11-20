@@ -157,7 +157,9 @@ tasks.register('samsungTvPackage', Zip) {
         include 'index.html'
         filter { String line ->
             if (line == '  <script src="platform.js"></script>') '  <script src="$WEBAPIS/webapis/webapis.js"></script>\n' + line
+            // Samsung ultrawide ekranda yüzey ancak bu görünümle genişler (package-tizen.sh, #304).
             else line.replace('src="icon.png"', 'src="panel-icon.png"')
+                .replace('<meta name="viewport" content="width=1920">', '<meta name="viewport" content="width=device-width">')
         }
     }
     from("$repoRoot/tv-tizen") { include 'platform.js', 'config.xml', 'icon.png' }

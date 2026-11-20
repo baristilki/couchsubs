@@ -388,3 +388,25 @@ final class LoginPasscodeTests: XCTestCase {
         XCTAssertEqual(LoginPasscode.reply(saved: "1234", incorrect: true), .stop(.loginPasscodeIncorrect))
     }
 }
+
+/// Kullanıcı PS5'i kapatınca (dinlenme modu) yeniden bağlanma döngüsü PS5'i yeniden açmamalı; eskiden açıyordu ve ana
+/// ekran PS5 kapatılmış görünürken "PS5 bağlı" diyordu.
+final class WakePolicyTests: XCTestCase {
+    func testWakesOnlyBeforeFirstConnection() {
+        var policy = WakePolicy()
+        XCTAssertEqual(policy.action(awake: false), .wake)
+        XCTAssertEqual(policy.action(awake: true), .connect)
+        XCTAssertEqual(policy.action(awake: nil), .connect)
+        policy.streamed()
+        XCTAssertEqual(policy.action(awake: false), .waitUntilOn)
+        XCTAssertEqual(policy.action(awake: true), .connect)
+        XCTAssertEqual(policy.action(awake: nil), .connect)
+    }
+
+    func testNewStartWakesAgain() {
+        var policy = WakePolicy()
+        policy.streamed()
+        policy.reset()
+        XCTAssertEqual(policy.action(awake: false), .wake)
+    }
+}

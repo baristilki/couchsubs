@@ -97,6 +97,7 @@ struct ProfileScreen: View {
             .buttonStyle(.plain)
             Text(verbatim: "CouchSubs \(AppIdentity.version) · Copyright © 2026 Sinan Yorulmaz · AGPL-3.0")
                 .font(Mobile.TypeScale.caption).foregroundStyle(Mobile.Palette.secondary).frame(maxWidth: .infinity)
+            DeveloperSignature()
         } bottom: {
             EmptyView()
         }
@@ -330,6 +331,7 @@ struct SettingsScreen: View {
                     .disabled(model.isStarting)
                 }
             }
+            DeveloperSignature()
         } bottom: {
             Button("Send test subtitle") { model.sendTestSubtitle() }.buttonStyle(.mobileSecondary)
         }

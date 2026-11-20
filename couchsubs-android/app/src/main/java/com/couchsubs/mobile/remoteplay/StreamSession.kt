@@ -153,6 +153,42 @@ class ReconnectPolicy {
 }
 
 /**
+ * Dinlenme modundaki PS5 uyandırılsın mı (Mac/iPhone ve Windows'taki WakePolicy ile aynı kural). Yalnız kullanıcı çeviriyi
+ * başlattıktan sonra, PS5'e henüz bağlanılmamışken uyandırılır. Eskiden yeniden bağlanma döngüsü de uyandırıyordu: oyuncu
+ * PS5'i kapatınca (dinlenme modu) uygulama birkaç saniye sonra PS5'i yeniden açıp bağlanıyor, TV kapalıyken ana ekran
+ * "PS5 bağlı" diyordu. Bu çeviride akış bir kez kurulduysa dinlenmedeki PS5'e dokunulmaz; açılınca bağlanılır.
+ */
+class WakePolicy {
+    enum class Action {
+        /** PS5 uyanık ya da aramaya yanıt vermedi: oturum açılmaya çalışılır. */
+        CONNECT,
+        /** PS5 dinlenmede, çeviri yeni başladı: uyandırılır. */
+        WAKE,
+        /** PS5 dinlenmede ve bu çeviride zaten bağlanılmıştı (kullanıcı kapattı): açılması beklenir. */
+        WAIT_UNTIL_ON,
+    }
+
+    private var hasStreamed = false
+
+    /** Kullanıcı çeviriyi başlattı. */
+    fun reset() {
+        hasStreamed = false
+    }
+
+    /** PS5'e bağlanıldı. */
+    fun streamed() {
+        hasStreamed = true
+    }
+
+    /** [awake]: aramada PS5'in durumu (null: yanıt vermedi). */
+    fun action(awake: Boolean?): Action = when {
+        awake != false -> Action.CONNECT
+        hasStreamed -> Action.WAIT_UNTIL_ON
+        else -> Action.WAKE
+    }
+}
+
+/**
  * Bağlantı sık kopuyorsa görüntü 720p'ye düşürülür (Mac/iPhone ve Windows'taki QualityFallback ile aynı kural). 1080p akış
  * ~15 Mbit/sn, 720p ~10 Mbit/sn ister. Kablosuz ağda PS5 akışı birkaç dakikada bir kopuyor ya da görüntü takılıyordu
  * (GitHub #388, #401); altyazı okumak için 720p yeterlidir. [WINDOW_MS] içinde [DROPS_TO_LOWER] kopma olursa bu çeviri
@@ -301,6 +337,8 @@ class StreamSession(
     @Volatile private var console = console
     private val queue = Executors.newSingleThreadScheduledExecutor { Thread(it, "CouchSubs session").apply { isDaemon = true } }
     private val policy = ReconnectPolicy()
+    /** Dinlenmedeki PS5 yalnız çeviri başlarken uyandırılır (yalnız kuyrukta). */
+    private val wakePolicy = WakePolicy()
     /** Bağlantı sık koparsa görüntü 720p'ye düşürülür (yalnız kuyrukta). */
     private val quality = QualityFallback()
     /** Geçerli oturum bağlandı mı (yalnız kuyrukta): yalnız akış sürerken olan kopmalar sayılır. */
@@ -321,6 +359,7 @@ class StreamSession(
         val current = bump(true)
         queue.execute {
             policy.reset()
+            wakePolicy.reset()
             watchdog.reset()
             connect(current)
         }
@@ -373,18 +412,27 @@ class StreamSession(
             relocate() ?: atHost
         }
         searchAnswered = info != null
+        val action = wakePolicy.action(info?.isAwake)
         Log.i(TAG, if (info == null) "PS5 ${console.host} aramaya yanıt vermedi, yine de bağlanılıyor"
-            else "PS5 ${info.name} ${info.host} ${if (info.isAwake) "uyanık" else "dinlenmede, uyandırılıyor"}")
-        if (info != null && !info.isAwake) {
-            try {
-                ConsoleDiscovery.wake(console)
-            } catch (error: Exception) {
-                Log.w(TAG, "wake: ${error.message}")
+            else "PS5 ${info.name} ${info.host} " + when {
+                info.isAwake -> "uyanık"
+                action == WakePolicy.Action.WAKE -> "dinlenmede, uyandırılıyor"
+                else -> "dinlenmede, açılması bekleniyor"
+            })
+        when (action) {
+            WakePolicy.Action.CONNECT -> openSession(current)
+            WakePolicy.Action.WAKE -> {
+                try {
+                    ConsoleDiscovery.wake(console)
+                } catch (error: Exception) {
+                    Log.w(TAG, "wake: ${error.message}")
+                }
+                waitForWake(current, System.currentTimeMillis() + 20_000)
             }
-            waitForWake(current, System.currentTimeMillis() + 20_000)
-            return
+            // Kullanıcı PS5'i kapattı: yeniden açılmaz; aralıklı bakılır, PS5 açılınca bağlanılır.
+            WakePolicy.Action.WAIT_UNTIL_ON ->
+                scheduleReconnect(current, SessionState.Disconnected(DisconnectKind.CONSOLE_ASLEEP))
         }
-        openSession(current)
     }
 
     private fun relocate(): ConsoleInfo? {
@@ -468,6 +516,7 @@ class StreamSession(
             NativeBridge.EVENT_CONNECTED -> queue.execute {
                 if (nativeGeneration != eventGeneration || native == 0L) return@execute
                 policy.connected(SystemClock.elapsedRealtime())
+                wakePolicy.streamed()
                 streaming = true
                 watchdog.connected(SystemClock.elapsedRealtime())
                 emit(SessionState.Streaming)

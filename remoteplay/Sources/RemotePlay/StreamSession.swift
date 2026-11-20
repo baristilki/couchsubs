@@ -55,6 +55,38 @@ struct ReconnectPolicy {
     }
 }
 
+/// Dinlenme modundaki PS5 uyandırılsın mı (Android ve Windows'taki WakePolicy ile aynı kural).
+///
+/// Yalnız kullanıcı "Çeviriyi başlat"a bastıktan sonra, PS5'e henüz bağlanılmamışken uyandırılır. Eskiden yeniden bağlanma
+/// döngüsü de uyandırıyordu: oyuncu PS5'i kapatınca (dinlenme modu) PS5 oturumu bitiriyor, uygulama birkaç saniye sonra
+/// PS5'i yeniden açıyor ve yeniden bağlanıyordu. TV kapalı, PS5 kapatılmış görünürken ana ekran "PS5 bağlı" diyor, çeviri
+/// sürüyordu (X'te kullanıcı bildirimi, 19 Kas). Bu çeviride akış bir kez kurulduysa dinlenmedeki PS5'e dokunulmaz:
+/// "PS5'i açın" görünür ve PS5 açılınca bağlanılır.
+struct WakePolicy {
+    enum Action: Equatable {
+        /// PS5 uyanık ya da aramaya yanıt vermedi: oturum açılmaya çalışılır.
+        case connect
+        /// PS5 dinlenmede, çeviri yeni başladı: uyandırılır.
+        case wake
+        /// PS5 dinlenmede ve bu çeviride zaten bağlanılmıştı (kullanıcı kapattı): uyandırılmaz, açılması beklenir.
+        case waitUntilOn
+    }
+
+    private var hasStreamed = false
+
+    /// Kullanıcı çeviriyi başlattı.
+    mutating func reset() { hasStreamed = false }
+
+    /// PS5'e bağlanıldı.
+    mutating func streamed() { hasStreamed = true }
+
+    /// `awake`: aramada PS5'in durumu (nil: yanıt vermedi).
+    func action(awake: Bool?) -> Action {
+        guard awake == false else { return .connect }
+        return hasStreamed ? .waitUntilOn : .wake
+    }
+}
+
 /// Bağlantı sık kopuyorsa görüntü 720p'ye düşürülür (Windows ve Android'deki QualityFallback ile aynı kural).
 ///
 /// 1080p akış ~15 Mbit/sn, 720p ~10 Mbit/sn ister. Kablosuz ağda PS5 akışı birkaç dakikada bir kopuyor ya da görüntü
@@ -389,6 +421,8 @@ public final class StreamSession: @unchecked Sendable {
     private var decoder = H264FrameDecoder()
     private var throttle = FrameThrottle(minInterval: 1.0 / 20)
     private var policy = ReconnectPolicy()
+    /// Dinlenmedeki PS5 yalnız çeviri başlarken uyandırılır (yalnız `queue`).
+    private var wakePolicy = WakePolicy()
     /// Bağlantı sık koparsa görüntü 720p'ye düşürülür (yalnız `queue`).
     private var quality = QualityFallback()
     /// Geçerli oturum bağlandı mı (yalnız `queue`): yalnız akış sürerken olan kopmalar sayılır.
@@ -420,6 +454,7 @@ public final class StreamSession: @unchecked Sendable {
         let current = bump(running: true)
         queue.async { [weak self] in
             self?.policy.reset()
+            self?.wakePolicy.reset()
             self?.watch { $0.reset() }
             self?.connect(current)
         }
@@ -486,16 +521,23 @@ public final class StreamSession: @unchecked Sendable {
             info = relocate() ?? atHost
         }
         searchAnswered = info != nil
+        let action = wakePolicy.action(awake: info?.isAwake)
         if let info {
-            RemotePlayLog.write("PS5 oturumu: \(info.name) \(info.host) \(info.isAwake ? "uyanık" : "dinlenmede, uyandırılıyor")")
+            let detail = info.isAwake ? "uyanık" : action == .wake ? "dinlenmede, uyandırılıyor" : "dinlenmede, açılması bekleniyor"
+            RemotePlayLog.write("PS5 oturumu: \(info.name) \(info.host) \(detail)")
         } else {
             RemotePlayLog.write("PS5 oturumu: \(console.host) aramaya yanıt vermedi, yine de bağlanılıyor")
         }
-        if let info, !info.isAwake {
+        switch action {
+        case .connect:
+            openSession(current)
+        case .wake:
             do { try Console.wake(console) } catch { RemotePlayLog.write("PS5 uyandırılamadı: \(error)") }
-            return waitForWake(current, deadline: Date().addingTimeInterval(20))
+            waitForWake(current, deadline: Date().addingTimeInterval(20))
+        case .waitUntilOn:
+            // Kullanıcı PS5'i kapattı: yeniden açılmaz; aralıklı bakılır, PS5 açılınca bağlanılır.
+            scheduleReconnect(current, reason: .consoleAsleep)
         }
-        openSession(current)
     }
 
     /// Kayıtlı adreste PS5 yoksa (modem adresini değiştirmiş olabilir) ağda arar; bulursa adresi günceller.
@@ -592,6 +634,7 @@ public final class StreamSession: @unchecked Sendable {
             queue.async { [weak self] in
                 guard let self, self.box?.generation == eventGeneration else { return }
                 self.policy.connected()
+                self.wakePolicy.streamed()
                 self.streaming = true
                 self.watch { $0.connected() }
                 self.emit(.streaming)

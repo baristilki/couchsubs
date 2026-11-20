@@ -154,6 +154,33 @@ final class PhoneModelTests: XCTestCase {
         model.stop()
     }
 
+    /// X/DM'de bildirildi: iPhone arka plana alınınca ya da kilitlenince altyazı sessizce duruyordu. Çeviri sürerken arka
+    /// plana geçilince uyarı kurulur, öne dönünce geri alınır; çeviri yokken ya da bildirim tercihi kapalıyken kurulmaz.
+    func testGoingToBackgroundWhileTranslatingWarnsAndReturningClears() async throws {
+        let model = makeModel()
+        var paused = 0
+        var resumed = 0
+        model.onPausedInBackground = { paused += 1 }
+        model.onResumedFromBackground = { resumed += 1 }
+        model.enteredBackground()
+        XCTAssertEqual(paused, 0)
+        try await model.completePSNLogin(redirect: URL(string: "https://example.com")!)
+        try await model.register(host: "192.168.1.20", pin: "12345678")
+        model.settings.output = .computer
+        await model.start()
+        model.enteredBackground()
+        XCTAssertEqual(paused, 1)
+        model.becameActive(afterBackground: true)
+        XCTAssertEqual(resumed, 1)
+        // Denetim Merkezi'nden dönmek arka plan değildir.
+        model.becameActive(afterBackground: false)
+        XCTAssertEqual(resumed, 1)
+        defaults.set(false, forKey: PhoneModel.notifyDisconnectKey)
+        model.enteredBackground()
+        XCTAssertEqual(paused, 1)
+        model.stop()
+    }
+
     func testPhoneScreenShowsSubtitlesOnlyWhenChosen() {
         let model = makeModel()
         model.clock = { 100 }

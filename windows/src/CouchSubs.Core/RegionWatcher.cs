@@ -11,6 +11,15 @@ public interface IRegionSender
     /// <summary>Çevirinin içinde kumanda simgeleri varsa (<see cref="ButtonIcons"/>); simgeyi bilmeyen gönderici düz metni yollar.</summary>
     void SendRegion(string id, string text, TextBox? box, double? lineHeight, IReadOnlyList<IconPlacement>? icons) =>
         SendRegion(id, text, box, lineHeight);
+
+    /// <summary>
+    /// Alanda birbirinden ayrı duran yazı grupları varsa (görev başlığı ve ayrı sütundaki hedef) <paramref name="blocks"/>
+    /// her grubun çevirisini kendi yeriyle taşır; TV her birini kendi İngilizce yazısının üstüne koyar. Blokları bilmeyen
+    /// gönderici birleşik metni yollar.
+    /// </summary>
+    void SendRegion(string id, string text, TextBox? box, double? lineHeight, IReadOnlyList<IconPlacement>? icons,
+                    IReadOnlyList<ScreenTranslation.Item>? blocks) =>
+        SendRegion(id, text, box, lineHeight, icons);
     void ClearRegions();
 }
 
@@ -46,11 +55,19 @@ public sealed class RegionWatcher
         public IReadOnlyList<IconPlacement>? RenderedIcons;
         public TextBox? RenderedBox;
         public double? RenderedLineHeight;
+        public IReadOnlyList<Block>? RenderedLayout;
+        /// <summary>Gönderilen bloklar ve her birinin <see cref="Candidate.Blocks"/> içindeki sırası.</summary>
+        public IReadOnlyList<(int Group, ScreenTranslation.Item Item)>? RenderedBlocks;
     }
 
+    /// <summary>Alanda ayrı duran bir yazı grubu: <see cref="Candidate.Paragraphs"/> içinde <paramref name="Start"/>'tan
+    /// başlayan <paramref name="Count"/> parça, karedeki yeri ve satır yüksekliği (kareye oranla).</summary>
+    internal sealed record Block(int Start, int Count, TextBox Box, double LineHeight);
+
     /// <param name="Icons">Her parçadaki kumanda simgeleri (kareden kesilmiş), parçadaki sırasıyla.</param>
+    /// <param name="Blocks">Alanda birden çok ayrı yazı grubu varsa grupları; tek grupta null (tek kutu).</param>
     internal sealed record Candidate(IReadOnlyList<string> Paragraphs, TextBox? Box, double? LineHeight, string Key,
-                                     IReadOnlyList<IReadOnlyList<IconSlot>>? Icons = null);
+                                     IReadOnlyList<IReadOnlyList<IconSlot>>? Icons = null, IReadOnlyList<Block>? Blocks = null);
 
     private readonly ITextReader reader;
     private readonly ITextTranslator translator;
@@ -68,6 +85,14 @@ public sealed class RegionWatcher
     public Func<string, PackMatch?>? PackLookup { get; set; }
     /// <summary>Hedef dil Türkçe: yüksek güvenle Türkçe olan parça çevrilmez, aslı sayılır (#289).</summary>
     public bool SkipsTurkish { get; set; } = true;
+    /// <summary>Oynanan oyunun adı (bilinmiyorsa null); oyuna özgü yerleşim kuralları için.</summary>
+    public Func<string?>? Game { get; set; }
+
+    /// <summary>
+    /// Menü satırları ayrı ayrı yerleştirilir (<see cref="ScreenTranslation.Groups"/>): yalnız GTA 6. Etkileşim
+    /// menüsünde her satırın sağında kendi tuş simgesi var; başka oyunlarda yerleşim değişmez.
+    /// </summary>
+    internal static bool SplitsMenuRows(string? game) => GameName.Key(game) == "gta 6";
     public Action<string>? Log { get; set; }
     /// <summary>Her okumanın süresi (ms; ölçüm için).</summary>
     public Action<long>? ReadMeasured { get; set; }
@@ -164,7 +189,7 @@ public sealed class RegionWatcher
         if (Volatile.Read(ref session) != started) return;
         Interlocked.Increment(ref reads);
         ReadMeasured?.Invoke(now() - clock);
-        var candidate = MakeCandidate(reading, area.Region, crop);
+        var candidate = MakeCandidate(reading, area.Region, crop, SplitsMenuRows(Game?.Invoke()));
         if (state.LastRead == candidate.Key)
         {
             state.Candidate = null;
@@ -182,7 +207,7 @@ public sealed class RegionWatcher
     /// yukarıdan aşağı parçalara toplanır. Yazının içindeki kumanda simgeleri <paramref name="frame"/>'den (okunan alan)
     /// kesilir; çeviride yerleri korunur.
     /// </summary>
-    internal static Candidate MakeCandidate(Reading reading, CropRegion region, Frame? frame = null)
+    internal static Candidate MakeCandidate(Reading reading, CropRegion region, Frame? frame = null, bool menuRows = false)
     {
         var lines = reading.WithButtonIcons().WithoutButtonPrompts().WithoutOcrNoise().Lines
             .Where(line => ScreenTranslation.IsWords(line.Text))
@@ -190,41 +215,88 @@ public sealed class RegionWatcher
             .Where(line => !ButtonPrompts.IsActionLabel(line.Text))
             .OrderBy(line => line.Box?.Top ?? 0)
             .ToList();
-        // Fork: parçalara toplanınca birleşen ipuçları ("Hold" + "to interact with Andrew") da atılır; simgeli ipuçları
-        // (#435) da çevrilmez, tuş ekranda olduğu gibi görünür. Simge listesi paragraflarla aynı sırada kalır.
-        var allParagraphs = ScreenTranslation.Paragraphs(lines);
-        var allIcons = ScreenTranslation.ParagraphIcons(lines);
+        var (paragraphs, icons) = KeptMessages(ScreenTranslation.Paragraphs(lines), ScreenTranslation.ParagraphIcons(lines));
+        var place = new TextBox(region.Left, region.Top, region.Right, region.Bottom);
+        var boxes = lines.Where(line => line.Box is not null).Select(line => line.Box!.Value).ToList();
+        TextBox? box = boxes.Count == 0 ? null : boxes.Skip(1).Aggregate(boxes[0], (a, b) => a.Union(b)).PlacedIn(place);
+        var height = region.Bottom - region.Top;
+        var heights = boxes.Select(b => (b.Bottom - b.Top) * height).Order().ToList();
+        double? lineHeight = heights.Count == 0 ? null : heights[heights.Count / 2];
+        // Alanda birbirinden ayrı duran yazılar (başlık ile ayrı sütundaki hedef, alt alta iki bildirim) "Ekranı çevir"deki
+        // gibi gruplanır; her grubun çevirisi TV'de kendi yerine konur. Tek grupta (ya da yeri bilinmeyen satır varsa)
+        // eskisi gibi tek kutu. Anahtar grup yapısını da içerir: aynı yazı farklı gruplanırsa bloklar yeniden kurulur.
+        IReadOnlyList<Block>? blocks = null;
+        var key = TextMatch.Normalize(string.Join(' ', paragraphs));
+        var groups = lines.Count > 1 && boxes.Count == lines.Count ? ScreenTranslation.Groups(reading, menuRows) : [];
+        // Fork: gruplarda da ipuçları ve etiketler atılır; yazısı kalmayan grup hiç gösterilmez.
+        var kept = groups
+            .Select(group => (Group: group, Kept: KeptMessages(group.Paragraphs, group.Icons
+                ?? [.. group.Paragraphs.Select(_ => (IReadOnlyList<IconSlot>)[])])))
+            .Where(entry => entry.Kept.Paragraphs.Count > 0)
+            .ToList();
+        if (kept.Count is > 1 and < ScreenTranslation.MaxGroups)
+        {
+            paragraphs = [.. kept.SelectMany(entry => entry.Kept.Paragraphs)];
+            icons = [.. kept.SelectMany(entry => entry.Kept.Icons)];
+            var list = new List<Block>(kept.Count);
+            var start = 0;
+            foreach (var (group, part) in kept)
+            {
+                list.Add(new Block(start, part.Paragraphs.Count, group.Box.PlacedIn(place), group.LineHeight * height));
+                start += part.Paragraphs.Count;
+            }
+            blocks = list;
+            key = TextMatch.Normalize(string.Join(' ', paragraphs)) + "|" + string.Join(',', list.Select(block => block.Count));
+        }
+        IReadOnlyList<IReadOnlyList<IconSlot>>? cut = frame is null || icons.All(list => list.Count == 0) ? null
+            : [.. icons.Select(list => ButtonIcons.WithImages(list, frame))];
+        return new Candidate(paragraphs, box, lineHeight, key, cut, blocks);
+    }
+
+    /// <summary>
+    /// Fork: ek alanda yalnız mesaj ve cümleler çevrilir. Parçalara toplanınca birleşen ipuçları ("Hold" + "to interact
+    /// with Andrew") ve tek başına etiketler atılır; simgeli ipuçları (#435) da çevrilmez, tuş ekranda olduğu gibi görünür.
+    /// Simge listesi paragraflarla aynı sırada kalır.
+    /// </summary>
+    private static (List<string> Paragraphs, List<IReadOnlyList<IconSlot>> Icons) KeptMessages(
+        IReadOnlyList<string> all, IReadOnlyList<IReadOnlyList<IconSlot>> allIcons)
+    {
         var paragraphs = new List<string>();
         var icons = new List<IReadOnlyList<IconSlot>>();
-        for (var i = 0; i < allParagraphs.Count; i++)
+        for (var i = 0; i < all.Count; i++)
         {
-            var kept = ButtonPrompts.WithoutPromptSentences(allParagraphs[i]);
-            if (!ScreenTranslation.IsWords(kept)) continue;
-            var whole = System.Text.RegularExpressions.Regex.Replace(allParagraphs[i].Trim(), @"\s+", " ")
+            var kept = ButtonPrompts.WithoutPromptSentences(all[i]);
+            if (!ScreenTranslation.IsWords(kept) || ButtonPrompts.IsActionLabel(kept)) continue;
+            var whole = System.Text.RegularExpressions.Regex.Replace(all[i].Trim(), @"\s+", " ")
                 == System.Text.RegularExpressions.Regex.Replace(kept, @"\s+", " ");
             // Paragrafın bir kısmı atıldıysa simge yerleri artık tutmaz: simge işaretleri de kalkar.
             paragraphs.Add(whole ? kept : kept.Replace(ButtonIcons.Marker.ToString(), ""));
             icons.Add(whole && i < allIcons.Count ? allIcons[i] : []);
         }
-        var place = new TextBox(region.Left, region.Top, region.Right, region.Bottom);
-        var boxes = lines.Where(line => line.Box is not null).Select(line => line.Box!.Value).ToList();
-        TextBox? box = boxes.Count == 0 ? null : boxes.Skip(1).Aggregate(boxes[0], (a, b) => a.Union(b)).PlacedIn(place);
-        var heights = boxes.Select(b => (b.Bottom - b.Top) * (region.Bottom - region.Top)).Order().ToList();
-        double? lineHeight = heights.Count == 0 ? null : heights[heights.Count / 2];
-        IReadOnlyList<IReadOnlyList<IconSlot>>? cut = frame is null || icons.All(list => list.Count == 0) ? null
-            : [.. icons.Select(list => ButtonIcons.WithImages(list, frame))];
-        return new Candidate(paragraphs, box, lineHeight, TextMatch.Normalize(string.Join(' ', paragraphs)), cut);
+        return (paragraphs, icons);
     }
+
+    private static bool SameLayout(IReadOnlyList<Block>? a, IReadOnlyList<Block>? b) =>
+        a is null ? b is null : b is not null && a.SequenceEqual(b);
 
     private async Task CommitAsync(Candidate candidate, WatchedArea area, State state, int started)
     {
         if (state.Shown == candidate.Key)
         {
             if (state.RenderedKey != candidate.Key || string.IsNullOrEmpty(state.RenderedText)) return;
-            if (state.RenderedBox == candidate.Box && state.RenderedLineHeight == candidate.LineHeight) return;
-            server.SendRegion(area.Id, state.RenderedText, candidate.Box, candidate.LineHeight, state.RenderedIcons);
+            if (state.RenderedBox == candidate.Box && state.RenderedLineHeight == candidate.LineHeight
+                && SameLayout(state.RenderedLayout, candidate.Blocks)) return;
+            // Aynı yazı kaydı: çeviriler korunur, bloklar yeni yerlerine taşınır (anahtar aynıysa grup sayısı da aynıdır).
+            var moved = state.RenderedBlocks is { } rendered && candidate.Blocks is { } current
+                ? rendered.Select(block => (Group: block.Group, Item: block.Item with
+                    { Box = current[block.Group].Box, LineHeight = current[block.Group].LineHeight })).ToList()
+                : null;
+            server.SendRegion(area.Id, state.RenderedText, candidate.Box, candidate.LineHeight, state.RenderedIcons,
+                              moved?.Select(block => block.Item).ToList());
             state.RenderedBox = candidate.Box;
             state.RenderedLineHeight = candidate.LineHeight;
+            state.RenderedLayout = candidate.Blocks;
+            state.RenderedBlocks = moved;
             return;
         }
         var previousShown = state.Shown;
@@ -280,27 +352,55 @@ public sealed class RegionWatcher
             slots.AddRange(candidate.Icons is { } all && i < all.Count ? all[i] : []);
         }
         // Çevirisi aslıyla aynı (ad, sayı, zaten hedef dilde): kutu gösterilmez.
-        var same = candidate.Paragraphs.Select((source, i) =>
+        var similar = candidate.Paragraphs.Select((source, i) =>
                 TextMatch.IsSimilar(TextMatch.Normalize(IconText.Plain(source)), TextMatch.Normalize(IconText.Plain(text[i])), 0.90))
-            .All(similar => similar);
-        if (same)
+            .ToList();
+        if (similar.All(same => same))
         {
             server.SendRegion(area.Id, "", null);
             state.RenderedKey = candidate.Key;
             state.RenderedText = "";
             state.RenderedBox = null;
             state.RenderedLineHeight = null;
+            state.RenderedLayout = null;
+            state.RenderedBlocks = null;
             return;
         }
         var origin = fromPack == candidate.Paragraphs.Count ? "paket" : fromPack > 0 ? "paket+motor" : "motor";
         Log?.Invoke($"ek alan {area.Name}: {SubtitleLog.Excerpt(IconText.Plain(string.Join(' ', candidate.Paragraphs)))} → {origin}");
         var (shown, icons) = IconText.Render(string.Join('\n', text), slots);
-        server.SendRegion(area.Id, shown, candidate.Box, candidate.LineHeight, icons.Count > 0 ? icons : null);
+        var blocks = candidate.Blocks is { } layout ? RenderBlocks(candidate, layout, text, similar, slots) : null;
+        server.SendRegion(area.Id, shown, candidate.Box, candidate.LineHeight, icons.Count > 0 ? icons : null,
+                          blocks?.Select(block => block.Item).ToList());
         state.RenderedKey = candidate.Key;
         state.RenderedText = shown;
         state.RenderedIcons = icons.Count > 0 ? icons : null;
         state.RenderedBox = candidate.Box;
         state.RenderedLineHeight = candidate.LineHeight;
+        state.RenderedLayout = candidate.Blocks;
+        state.RenderedBlocks = blocks;
+    }
+
+    /// <summary>
+    /// Her grubun çevirisi kendi yeriyle. Çevirisi aslıyla aynı grup (ad, sayı) atlanır; İngilizcesi görünür kalır.
+    /// <paramref name="text"/> simge imlerini bütün alanın sırasıyla taşır; <paramref name="slots"/> o sıradaki simgeler.
+    /// </summary>
+    private static List<(int Group, ScreenTranslation.Item Item)> RenderBlocks(
+        Candidate candidate, IReadOnlyList<Block> layout, IReadOnlyList<string> text, IReadOnlyList<bool> similar,
+        IReadOnlyList<IconSlot> slots)
+    {
+        var result = new List<(int, ScreenTranslation.Item)>(layout.Count);
+        for (var g = 0; g < layout.Count; g++)
+        {
+            var block = layout[g];
+            var range = Enumerable.Range(block.Start, block.Count).ToList();
+            if (range.All(i => similar[i])) continue;
+            var (translation, icons) = IconText.Render(string.Join('\n', range.Select(i => text[i])), slots);
+            var source = string.Join('\n', range.Select(i => IconText.Plain(candidate.Paragraphs[i])));
+            result.Add((g, new ScreenTranslation.Item(source, translation, block.Box, block.LineHeight,
+                                                      icons.Count > 0 ? icons : null)));
+        }
+        return result;
     }
 
     /// <summary>Çeviri durdu ya da hat yeniden kuruldu: süren tur bırakılır, TV'deki ek alan kutuları kalkar.</summary>

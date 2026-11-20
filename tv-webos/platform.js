@@ -3,6 +3,19 @@
 (function () {
   'use strict';
 
+  var NETWORK_STATUS = ['luna://com.webos.service.connectionmanager/getStatus', 'luna://com.palm.connectionmanager/getStatus'];
+
+  // connectionmanager/getStatus yanıtındaki adres: bağlı kablolu, sonra bağlı kablosuz, sonra herhangi biri; yoksa null.
+  function addressFromStatus(msg) {
+    var status;
+    try { status = JSON.parse(msg) || {}; } catch (e) { return null; }
+    var wired = status.wired || {};
+    var wifi = status.wifi || {};
+    if (wired.state === 'connected' && wired.ipAddress) return wired.ipAddress;
+    if (wifi.state === 'connected' && wifi.ipAddress) return wifi.ipAddress;
+    return wired.ipAddress || wifi.ipAddress || null;
+  }
+
   window.COUCHSUBS_PLATFORM = {
     backKey: 461,
 
@@ -107,6 +120,8 @@
     },
 
     // TV'nin yerel ağdaki IPv4 adresi (kablolu öncelikli); bilinemezse null. Uygulama altyazı kaynağını bu ağda arar.
+    // Önce yeni webOS'un hizmeti, yanıt vermezse ya da adres yoksa eski webOS'larınki (com.palm.connectionmanager, LG'nin
+    // belgelediği ad) sorulur. Eskiden yalnız ilki soruluyordu; eski LG'lerde adres hiç bilinmiyordu (#469).
     localAddress: function (callback) {
       var done = false;
       function finish(ip) {
@@ -114,24 +129,36 @@
         done = true;
         callback(ip || null);
       }
-      try {
-        var bridge = new PalmServiceBridge();
-        bridge.onservicecallback = function (msg) {
-          var status;
-          try { status = JSON.parse(msg) || {}; } catch (e) { return finish(null); }
-          var wired = status.wired || {};
-          var wifi = status.wifi || {};
-          if (wired.state === 'connected' && wired.ipAddress) return finish(wired.ipAddress);
-          if (wifi.state === 'connected' && wifi.ipAddress) return finish(wifi.ipAddress);
-          finish(wired.ipAddress || wifi.ipAddress || null);
-        };
-        bridge.call('luna://com.webos.service.connectionmanager/getStatus', '{}');
-        // Köprü nesnesi çöpe gitmesin diye geri çağrı gelene kadar tutulur.
-        window.__netBridge = bridge;
-        setTimeout(function () { finish(null); }, 2000);
-      } catch (e) {
-        finish(null);
+      function ask(services, index) {
+        if (done) return;
+        if (index >= services.length) return finish(null);
+        var answered = false;
+        function next() {
+          if (answered) return;
+          answered = true;
+          ask(services, index + 1);
+        }
+        try {
+          var bridge = new PalmServiceBridge();
+          bridge.onservicecallback = function (msg) {
+            if (answered) return;
+            var ip = addressFromStatus(msg);
+            if (ip) {
+              answered = true;
+              return finish(ip);
+            }
+            next();
+          };
+          bridge.call(services[index], '{}');
+          // Köprü nesnesi çöpe gitmesin diye geri çağrı gelene kadar tutulur.
+          window['__netBridge' + index] = bridge;
+          // İki hizmet birlikte app.js'in 3 sn beklemesine sığar.
+          setTimeout(next, 1200);
+        } catch (e) {
+          next();
+        }
       }
+      ask(NETWORK_STATUS, 0);
     },
 
     exit: function () {

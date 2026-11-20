@@ -65,6 +65,25 @@ public class StaleSessionEventTests
     }
 }
 
+/// <summary>Kullanıcı PS5'i kapatınca (dinlenme modu) yeniden bağlanma döngüsü PS5'i yeniden açmamalı; eskiden açıyordu ve
+/// PS5 kapatılmış görünürken "PS5 bağlı" görünüyordu.</summary>
+public class WakePolicyTests
+{
+    [Fact]
+    public void WakesOnlyBeforeFirstConnection()
+    {
+        var policy = new WakePolicy();
+        Assert.Equal(WakePolicy.Action.Wake, policy.Decide(false));
+        Assert.Equal(WakePolicy.Action.Connect, policy.Decide(true));
+        Assert.Equal(WakePolicy.Action.Connect, policy.Decide(null));
+        policy.Streamed();
+        Assert.Equal(WakePolicy.Action.WaitUntilOn, policy.Decide(false));
+        Assert.Equal(WakePolicy.Action.Connect, policy.Decide(true));
+        policy.Reset();
+        Assert.Equal(WakePolicy.Action.Wake, policy.Decide(false));
+    }
+}
+
 public class ReconnectPolicyTests
 {
     [Fact]

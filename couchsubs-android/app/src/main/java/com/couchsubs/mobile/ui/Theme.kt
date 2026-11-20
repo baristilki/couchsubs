@@ -25,13 +25,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
@@ -54,14 +58,21 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -259,19 +270,33 @@ fun PrimaryButton(text: String, modifier: Modifier = Modifier, enabled: Boolean 
             contentColor = Tokens.Color.onAccent, disabledContainerColor = Tokens.Color.surface2,
             disabledContentColor = Tokens.Color.secondary),
         modifier = modifier.fillMaxWidth().heightIn(min = Tokens.Control.button).scale(if (pressed) 0.97f else 1f),
-    ) { Text(text, style = Tokens.Type.headline, textAlign = TextAlign.Center) }
+    ) { ButtonLabel(text) }
 }
 
 @Composable
 fun SecondaryButton(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     Button(onClick, enabled = enabled, shape = RoundedCornerShape(Tokens.Radius.control), border = BorderStroke(1.dp, Tokens.Color.borderStrong),
         colors = ButtonDefaults.buttonColors(containerColor = Tokens.Color.surface2, contentColor = Tokens.Color.text), elevation = null,
-        modifier = modifier.fillMaxWidth().heightIn(min = Tokens.Control.button)) { Text(text, style = Tokens.Type.headline, textAlign = TextAlign.Center) }
+        modifier = modifier.fillMaxWidth().heightIn(min = Tokens.Control.button)) { ButtonLabel(text) }
 }
 
 @Composable
 fun GhostButton(text: String, modifier: Modifier = Modifier, color: Color = Tokens.Color.accentText, onClick: () -> Unit) {
-    TextButton(onClick, modifier = modifier.heightIn(min = Tokens.Control.buttonSmall)) { Text(text, style = Tokens.Type.headline, color = color) }
+    TextButton(onClick, modifier = modifier.heightIn(min = Tokens.Control.buttonSmall)) { ButtonLabel(text, color) }
+}
+
+/**
+ * Düğme yazısı tek satırda kalır (iki satıra bölünmez): sığmazsa %75'e kadar küçülür (iPhone'daki minimumScaleFactor gibi).
+ * Sistem yazı boyu büyükken (1,3 ve üstü) küçültülmez, satıra bölünebilir.
+ */
+@Composable
+private fun ButtonLabel(text: String, color: Color = Color.Unspecified) {
+    val style = Tokens.Type.headline
+    val large = LocalDensity.current.fontScale >= 1.3f
+    var scale by remember(text) { mutableFloatStateOf(1f) }
+    Text(text, style = style.copy(fontSize = style.fontSize * scale), color = color, textAlign = TextAlign.Center,
+        maxLines = if (large) 3 else 1, softWrap = large, overflow = if (large) TextOverflow.Ellipsis else TextOverflow.Clip,
+        onTextLayout = { if (!large && it.didOverflowWidth && scale > 0.75f) scale = (scale - 0.05f).coerceAtLeast(0.75f) })
 }
 
 /** Tehlikeli: kırmızı tonlu zemin, kırmızı yazı, çerçevesiz ("Çeviriyi durdur"). */
@@ -279,7 +304,7 @@ fun GhostButton(text: String, modifier: Modifier = Modifier, color: Color = Toke
 fun DestructiveButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Button(onClick, shape = RoundedCornerShape(Tokens.Radius.control), elevation = null,
         colors = ButtonDefaults.buttonColors(containerColor = Tokens.Color.dangerSoft, contentColor = Tokens.Color.danger),
-        modifier = modifier.fillMaxWidth().heightIn(min = Tokens.Control.button)) { Text(text, style = Tokens.Type.headline, textAlign = TextAlign.Center) }
+        modifier = modifier.fillMaxWidth().heightIn(min = Tokens.Control.button)) { ButtonLabel(text) }
 }
 
 /**
@@ -379,8 +404,11 @@ fun Field(
 }
 
 /**
- * Ekran iskeleti: güvenli alan + 20 kenar, isteğe bağlı başlık satırı, kaydırılan içerik ve altta sabit düğme bölgesi
- * (birincil en altta).
+ * Ekran iskeleti (iPhone'daki MobileScreen ile aynı): içerik ekranın en üstüne ve en altına kadar kayar; başlık satırı ve
+ * alttaki düğme bölgesi (birincil en altta) içeriğin üstünde yüzer, arkalarında düz zemin şeridi yoktur. Kenarlarda
+ * içerik sert kesilmez: zemin rengi ekranın kenarından çubuğun iç tarafına doğru saydamlaşır (iOS 26'nın yumuşak kaydırma
+ * kenarı gibi). Son öğe düğmelerin altında kalmaz: çubukların ölçülen yüksekliği kaydırmanın iç boşluğuna eklenir.
+ * Klavye açılınca alt bölge klavyenin üstüne çıkar (safeDrawing, IME dahil).
  */
 @Composable
 fun ScreenScaffold(
@@ -389,24 +417,50 @@ fun ScreenScaffold(
     scroll: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val density = LocalDensity.current
+    var topHeight by remember { mutableStateOf(0.dp) }
+    var bottomHeight by remember { mutableStateOf(0.dp) }
+    val sides = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
     ScreenBackground {
-        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(Tokens.Space.screen)) {
-            if (top != null) {
-                top()
-                Spacer(Modifier.height(Tokens.Space.gap))
-            }
-            val state = rememberScrollState()
+        val state = rememberScrollState()
+        Column(
+            Modifier.fillMaxSize().let { if (scroll) it.verticalScroll(state) else it }
+                .windowInsetsPadding(sides)
+                .padding(start = Tokens.Space.screen, end = Tokens.Space.screen, top = topHeight, bottom = bottomHeight),
+            verticalArrangement = Arrangement.spacedBy(Tokens.Space.gap),
+            content = content,
+        )
+        EdgeBar(Alignment.TopCenter, Modifier.onSizeChanged { topHeight = with(density) { it.height.toDp() } }) {
             Column(
-                Modifier.weight(1f).fillMaxWidth().let { if (scroll) it.verticalScroll(state) else it },
-                verticalArrangement = Arrangement.spacedBy(Tokens.Space.gap),
-                content = content,
-            )
-            if (bottom != null) {
-                Spacer(Modifier.height(Tokens.Space.gap))
-                Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.gap), horizontalAlignment = Alignment.CenterHorizontally, content = bottom)
-            }
+                Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                    .padding(start = Tokens.Space.screen, end = Tokens.Space.screen, top = Tokens.Space.screen, bottom = Tokens.Space.gap),
+            ) { top?.invoke() }
+        }
+        EdgeBar(Alignment.BottomCenter, Modifier.onSizeChanged { bottomHeight = with(density) { it.height.toDp() } }) {
+            Column(
+                Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
+                    .padding(start = Tokens.Space.screen, end = Tokens.Space.screen, top = Tokens.Space.gap, bottom = Tokens.Space.screen),
+                verticalArrangement = Arrangement.spacedBy(Tokens.Space.gap), horizontalAlignment = Alignment.CenterHorizontally,
+            ) { bottom?.invoke(this) }
         }
     }
+}
+
+/**
+ * Kaydırmanın üstünde yüzen kenar çubuğu. Arkasındaki zemin ekranın kenarında neredeyse opak, çubuğun iç kenarına doğru
+ * saydamlaşır; kayan içerik çubuğun altına yumuşakça girer, düz şerit ve sert çizgi oluşmaz. Zemin dokunuş almaz.
+ */
+@Composable
+private fun BoxScope.EdgeBar(alignment: Alignment, modifier: Modifier, content: @Composable () -> Unit) {
+    val atTop = alignment == Alignment.TopCenter
+    val bg = Tokens.Color.bg
+    Box(
+        Modifier.align(alignment).fillMaxWidth().then(modifier).drawBehind {
+            val stops = arrayOf(0f to bg.copy(alpha = 0.96f), 0.55f to bg.copy(alpha = 0.88f), 1f to bg.copy(alpha = 0f))
+            drawRect(if (atTop) Brush.verticalGradient(*stops, startY = 0f, endY = size.height)
+                else Brush.verticalGradient(*stops, startY = size.height, endY = 0f))
+        },
+    ) { content() }
 }
 
 @Composable

@@ -36,7 +36,7 @@ struct HistoryScreen: View {
                         UIPasteboard.general.string = SubtitleHistory.plainText(model.history.entries)
                         copiedAll = true
                     } label: {
-                        Label(copiedAll ? "Copied" : "Copy all", systemImage: copiedAll ? "checkmark" : "doc.on.doc")
+                        Label(copiedAll ? "Copied" : "Copy", systemImage: copiedAll ? "checkmark" : "doc.on.doc")
                     }
                     .buttonStyle(.mobileSecondary)
                     .resetsAfterDelay($copiedAll)

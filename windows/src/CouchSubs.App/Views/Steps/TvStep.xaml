@@ -17,6 +17,17 @@
                     </Grid>
                     <TextBlock x:Name="NotFound" Style="{StaticResource HintText}" Text="{t:T 'No LG or Samsung TV found. Make sure the TV is on and on the same network.'}" />
                     <StackPanel x:Name="Tvs" />
+                    <!-- Aramada çıkmayan TV (webOS 3.x gibi, #498) adresiyle eklenir. -->
+                    <TextBlock Style="{StaticResource HintText}" Margin="0,12,0,0" TextWrapping="Wrap"
+                               Text="{t:T 'TV not in the list? Enter its IP address (on the TV under Settings › Network).'}" />
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="ManualHost" KeyDown="OnManualHostKey" />
+                        <Button x:Name="AddManual" Grid.Column="1" Margin="8,0,0,0" Content="{t:T 'Add'}" Click="OnAddManual" />
+                    </Grid>
                 </StackPanel>
             </c:Card>
             <c:Card Margin="0,12,0,0">

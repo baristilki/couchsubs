@@ -32,15 +32,18 @@ final class SubtitleBackgroundTests: XCTestCase {
 
     func testImageCoordinatesMatchTopDownBoxes() {
         var pixels = solid(20, 20, 20)
-        fill(&pixels, left: 24, top: 16, right: 104, bottom: 32, red: 33, green: 33, blue: 46)
+        // Panel altta olmalı: ortadaki panel, görüntü ters çevrilse de aynı yerde kalır.
+        fill(&pixels, left: 24, top: 31, right: 104, bottom: 46, red: 33, green: 33, blue: 46)
         let provider = CGDataProvider(data: Data(pixels) as CFData)!
         let image = CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
                             bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
                             bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue
                                 | CGBitmapInfo.byteOrder32Big.rawValue), provider: provider,
                             decode: nil, shouldInterpolate: false, intent: .defaultIntent)!
-        let reading = Reading(lines: [TextLine("Yes.", box: TextBox(left: 0.4, top: 20.0 / 48,
-                                                                   right: 0.6, bottom: 27.0 / 48))])
+        let reading = Reading(lines: [
+            TextLine("Menu text", box: TextBox(left: 0.4, top: 5.0 / 48, right: 0.6, bottom: 12.0 / 48)),
+            TextLine("Yes.", box: TextBox(left: 0.4, top: 35.0 / 48, right: 0.6, bottom: 42.0 / 48)),
+        ])
         XCTAssertEqual(SubtitleBackground.filter(reading, in: image).text, "Yes.")
     }
 

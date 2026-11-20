@@ -133,6 +133,7 @@ struct HomeScreen: View {
             if model.translatorStatus == .unsupported, !Translator.isAvailable {
                 MobileNote(text: String(localized: "Apple's free translation needs iOS 26 or later. Game packs, DeepL and AI translation work on this device."))
             }
+            DeveloperSignature()
         } bottom: {
             Button {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()

@@ -215,6 +215,16 @@ public static class SamsungDiscovery
         }
     }
 
+    /// <summary>Adresteki Samsung TV'nin adı (8001'de kendini tanıtırsa); değilse null.</summary>
+    public static async Task<string?> DeviceNameAsync(string host, CancellationToken cancellationToken = default)
+    {
+        try { return SamsungMessages.DeviceName(await Http.GetStringAsync($"http://{host}:8001/api/v2/", cancellationToken)); }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException or InvalidOperationException or UriFormatException)
+        {
+            return null;
+        }
+    }
+
     public static async Task<IReadOnlyList<LgTv>> SearchAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
     {
         var hosts = await LgDiscovery.CollectResponses(SearchTarget, timeout ?? TimeSpan.FromSeconds(3), cancellationToken);

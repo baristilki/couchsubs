@@ -30,7 +30,9 @@ with open(web + 'index.html', encoding='utf-8') as f:
             lines.append('  <script src="$WEBAPIS/webapis/webapis.js"></script>')
             lines.append(line)
         else:
-            lines.append(line.replace('src="icon.png"', 'src="panel-icon.png"'))
+            # Samsung ultrawide ekranda yüzey ancak bu görünümle genişler (package-tizen.sh, #304).
+            lines.append(line.replace('src="icon.png"', 'src="panel-icon.png"')
+                         .replace('<meta name="viewport" content="width=1920">', '<meta name="viewport" content="width=device-width">'))
 with zipfile.ZipFile(dst, 'w', zipfile.ZIP_STORED) as z:
     for path, name in sorted(files, key=lambda item: item[1]):
         info = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0))

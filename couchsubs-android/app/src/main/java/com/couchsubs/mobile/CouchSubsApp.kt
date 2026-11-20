@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 
-/** Uygulama açılınca: Firebase ve Meta (varsa) ve paket yenilemesi. Hesap ve reklam yok; uygulama ve paketler ücretsiz. */
+/** Uygulama açılınca: Firebase ve Meta (varsa) ve paket yenilemesi. Hesap ve reklam SDK'sı yok (yalnız kendi ürünlerimizin tanıtımı, bkz. promo); uygulama ve paketler ücretsiz. */
 class CouchSubsApp : Application() {
     override fun onCreate() {
         super.onCreate()

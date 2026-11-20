@@ -45,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -84,6 +85,9 @@ private enum class TourStep(val title: Int, val body: Int, val radius: Dp) {
     PROFILE(R.string.tour4_title, R.string.tour4_body, Tokens.Radius.control),
 }
 
+/** Tanıtım popup'ı açıkken ana ekranın bulanıklığı. */
+private val PROMO_BLUR = 16.dp
+
 /** Boşta ↔ çeviri ekranı geçişinin süresi (ms). */
 private const val MOTION_MS = 250
 
@@ -122,6 +126,8 @@ fun MainScreen(
     onSettings: () -> Unit,
     onHistory: () -> Unit = {},
     onTvUpdate: (InstalledTv) -> Unit = {},
+    /** Ana ekran en üstte (geçişte ya da üstünde başka ekran varken false): tanıtım popup'ı yalnız o zaman açılır. */
+    onHome: Boolean = true,
 ) {
     val context = LocalContext.current
     val settings = Services.settings
@@ -139,71 +145,85 @@ fun MainScreen(
         }
     }
 
+    // Kendi ürünlerimizin tanıtımı (promo.json): yalnız boştaki ana ekranda, girişten 10 sn sonra; oturum, deneme,
+    // kurulum ve tur sırasında asla. Açıkken ana ekran bulanıklaşır (Android 12+; altında yalnız karartma).
+    val promo by com.couchsubs.mobile.promo.PromoController.ready.collectAsState()
+    val promoShown = promo?.let { ready ->
+        val moment = com.couchsubs.mobile.promo.PromoMoment(onHome = onHome, sessionActive = status.running, demo = status.demo,
+            onboarding = Routes.next() != Routes.MAIN, tour = tour != null && !status.demo,
+            inAppMs = System.currentTimeMillis() - com.couchsubs.mobile.promo.PromoController.foregroundAtMs)
+        val record = com.couchsubs.mobile.promo.PromoController.record(context)
+        ready.takeIf { com.couchsubs.mobile.promo.PromoPolicy.shouldShow(it.popup, record, System.currentTimeMillis(), moment) }
+    }
     Box(Modifier.fillMaxSize()) {
-        // Başlatınca ve durdurunca boşta ve çeviri ekranları solarak yer değiştirir.
-        AnimatedContent(status.running, transitionSpec = { fadeIn(tween(MOTION_MS)) togetherWith fadeOut(tween(MOTION_MS)) },
-            label = "running") { running ->
-            if (running) RunningScreen(status, topBar, if (status.demo) onExitDemo else onStop, onPhoneView)
-            else ScreenScaffold(top = topBar, bottom = {
-                // PS5 eşlenmemişse (kurulum atlandı) başlatmak yerine eşleme açılır.
-                if (paired) PrimaryButton(stringResource(R.string.start), modifier = mark(TourStep.START), onClick = onStart)
-                else {
-                    PrimaryButton(stringResource(R.string.main_pair_button), modifier = mark(TourStep.START), onClick = onPairing)
-                    // Kurulum bitmeden de uygulama örnek görüntülerle denenebilir.
-                    GhostButton(stringResource(R.string.demo_mode_try), Modifier.fillMaxWidth(), onClick = onDemo)
-                }
-            }) {
-                if (paired) Heading(stringResource(R.string.main_ready), stringResource(R.string.main_ready_body))
-                else {
-                    Heading(stringResource(R.string.main_unpaired), stringResource(R.string.main_unpaired_body))
-                    NoteTile(stringResource(R.string.main_unpaired_note), Tokens.Color.secondary)
-                }
-                AnimatedNote(status.error)
-                TvAppUpdateCard(onTvUpdate)
-                // Telefon ana ekranı (TASARIM.md): PS5 ve Altyazı durum karoları ilgili ayarı açar (`›`).
-                TwoColumns(
-                    { if (xbox) StatusTile(CouchIcons.Gamepad, "Xbox", settings.xboxConsole?.name ?: stringResource(R.string.profile_not_paired), it,
-                        corner = { Pill(stringResource(R.string.beta)) }, chevron = true, onClick = onPairing)
-                      else StatusTile(CouchIcons.Gamepad, "PS5", settings.console?.name ?: stringResource(R.string.profile_not_paired), it,
-                        corner = { if (settings.console != null) StatusLabel(stringResource(R.string.main_paired)) }, chevron = true, onClick = onPairing) },
-                    { StatusTile(if (settings.target == SubtitleTarget.TV) CouchIcons.Tv else CouchIcons.Smartphone, stringResource(R.string.main_target),
-                        if (settings.target == SubtitleTarget.TV) settings.tvName ?: stringResource(R.string.main_target_tv) else stringResource(R.string.main_target_phone),
-                        it.then(mark(TourStep.TARGET)), chevron = true, onClick = onTarget) },
-                )
-                // Paket karosu: başlık ve not tek satır, sağda yalnız `›`; paketler kapalıysa nötr "Kapalı" etiketi.
-                Box(mark(TourStep.PACKS)) {
-                    Tile(Modifier.fillMaxWidth(), onClick = onPacks) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.inline)) {
-                            TileIcon(CouchIcons.Package, Tokens.Color.pro)
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.hair)) {
-                                Text(stringResource(R.string.main_packs_title), style = Tokens.Type.headline, color = Tokens.Color.text,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(stringResource(R.string.main_packs_games), style = Tokens.Type.caption, color = Tokens.Color.secondary,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Box(Modifier.fillMaxSize().then(if (promoShown != null) Modifier.blur(PROMO_BLUR) else Modifier)) {
+            // Başlatınca ve durdurunca boşta ve çeviri ekranları solarak yer değiştirir.
+            AnimatedContent(status.running, transitionSpec = { fadeIn(tween(MOTION_MS)) togetherWith fadeOut(tween(MOTION_MS)) },
+                label = "running") { running ->
+                if (running) RunningScreen(status, topBar, if (status.demo) onExitDemo else onStop, onPhoneView)
+                else ScreenScaffold(top = topBar, bottom = {
+                    // PS5 eşlenmemişse (kurulum atlandı) başlatmak yerine eşleme açılır.
+                    if (paired) PrimaryButton(stringResource(R.string.start), modifier = mark(TourStep.START), onClick = onStart)
+                    else {
+                        PrimaryButton(stringResource(R.string.main_pair_button), modifier = mark(TourStep.START), onClick = onPairing)
+                        // Kurulum bitmeden de uygulama örnek görüntülerle denenebilir.
+                        GhostButton(stringResource(R.string.demo_mode_try), Modifier.fillMaxWidth(), onClick = onDemo)
+                    }
+                }) {
+                    if (paired) Heading(stringResource(R.string.main_ready), stringResource(R.string.main_ready_body))
+                    else {
+                        Heading(stringResource(R.string.main_unpaired), stringResource(R.string.main_unpaired_body))
+                        NoteTile(stringResource(R.string.main_unpaired_note), Tokens.Color.secondary)
+                    }
+                    AnimatedNote(status.error)
+                    TvAppUpdateCard(onTvUpdate)
+                    // Telefon ana ekranı (TASARIM.md): PS5 ve Altyazı durum karoları ilgili ayarı açar (`›`).
+                    TwoColumns(
+                        { if (xbox) StatusTile(CouchIcons.Gamepad, "Xbox", settings.xboxConsole?.name ?: stringResource(R.string.profile_not_paired), it,
+                            corner = { Pill(stringResource(R.string.beta)) }, chevron = true, onClick = onPairing)
+                          else StatusTile(CouchIcons.Gamepad, "PS5", settings.console?.name ?: stringResource(R.string.profile_not_paired), it,
+                            corner = { if (settings.console != null) StatusLabel(stringResource(R.string.main_paired)) }, chevron = true, onClick = onPairing) },
+                        { StatusTile(if (settings.target == SubtitleTarget.TV) CouchIcons.Tv else CouchIcons.Smartphone, stringResource(R.string.main_target),
+                            if (settings.target == SubtitleTarget.TV) settings.tvName ?: stringResource(R.string.main_target_tv) else stringResource(R.string.main_target_phone),
+                            it.then(mark(TourStep.TARGET)), chevron = true, onClick = onTarget) },
+                    )
+                    // Paket karosu: başlık ve not tek satır, sağda yalnız `›`; paketler kapalıysa nötr "Kapalı" etiketi.
+                    Box(mark(TourStep.PACKS)) {
+                        Tile(Modifier.fillMaxWidth(), onClick = onPacks) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.inline)) {
+                                TileIcon(CouchIcons.Package, Tokens.Color.pro)
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.hair)) {
+                                    Text(stringResource(R.string.main_packs_title), style = Tokens.Type.headline, color = Tokens.Color.text,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(stringResource(R.string.main_packs_games), style = Tokens.Type.caption, color = Tokens.Color.secondary,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                if (!settings.packsEnabled) Pill(stringResource(R.string.main_packs_off))
+                                Chevron()
                             }
-                            if (!settings.packsEnabled) Pill(stringResource(R.string.main_packs_off))
-                            Chevron()
                         }
                     }
+                    // Çeviri motoru ve son oturum durum değil ayar bilgisidir: tek bilgi karosunda iki satır.
+                    InfoCard(listOf(
+                        { InfoRow(stringResource(R.string.main_engine), status.engineLabel.ifEmpty { engineName(context) }, onClick = onSettings) },
+                        { InfoRow(stringResource(R.string.main_last_session),
+                            if (settings.lastSessionMs > 0) durationText(context, settings.lastSessionMs) else "—", onClick = onHistory) },
+                    ))
+                    DeveloperSignature()
                 }
-                // Çeviri motoru ve son oturum durum değil ayar bilgisidir: tek bilgi karosunda iki satır.
-                InfoCard(listOf(
-                    { InfoRow(stringResource(R.string.main_engine), status.engineLabel.ifEmpty { engineName(context) }, onClick = onSettings) },
-                    { InfoRow(stringResource(R.string.main_last_session),
-                        if (settings.lastSessionMs > 0) durationText(context, settings.lastSessionMs) else "—", onClick = onHistory) },
-                ))
+            }
+            if (!status.demo) tour?.let { step ->
+                TourOverlay(step, bounds[step], onSkip = {
+                    settings.tourShown = true
+                    tour = null
+                }, onNext = {
+                    val next = TourStep.entries.getOrNull(step.ordinal + 1)
+                    if (next == null) settings.tourShown = true
+                    tour = next
+                })
             }
         }
-        if (!status.demo) tour?.let { step ->
-            TourOverlay(step, bounds[step], onSkip = {
-                settings.tourShown = true
-                tour = null
-            }, onNext = {
-                val next = TourStep.entries.getOrNull(step.ordinal + 1)
-                if (next == null) settings.tourShown = true
-                tour = next
-            })
-        }
+        promoShown?.let { ready -> PromoOverlay(ready) { com.couchsubs.mobile.promo.PromoController.dismissed(context, ready.popup) } }
     }
 }
 

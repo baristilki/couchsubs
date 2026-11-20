@@ -20,9 +20,7 @@ public enum SubtitleBackground {
                                           bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
                                               | CGBitmapInfo.byteOrder32Big.rawValue) else { return false }
             context.interpolationQuality = .low
-            // OCR kutuları ve CGImage kırpma koordinatları üstten ölçülür.
-            context.translateBy(x: 0, y: CGFloat(height))
-            context.scaleBy(x: 1, y: -1)
+            // Bitmap satırları ve OCR kutuları üstten ölçülür; görüntüyü ayrıca çevirmeyin.
             context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
             return true
         }

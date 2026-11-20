@@ -103,6 +103,8 @@ enum TVText {
     static var androidWirelessStep3: String { String(localized: "3. The first time, press “Pair device with pairing code”; type the IP address and port from that window together with the 6-digit code, and press Install and open while the window is still open.") }
     static var androidReplace: String { String(localized: "Remove the TV's copy and install") }
     static var androidErrUnreachable: String { String(localized: "The TV did not respond. Make sure the TV is on and on the same Wi-Fi as this phone, and that debugging is on in its developer options. With wireless debugging the port changes every time; type the one on the screen.") }
+    static var androidTryWireless: String { String(localized: "Try with wireless debugging") }
+    static var androidErrLegacyClosed: String { String(localized: "The TV did not answer on the USB/network debugging port (5555). Newer Android TV and Google TV models keep this port closed. On the TV, turn on Developer options › Wireless debugging, then tap the button below.") }
     static var androidErrNotApproved: String { String(localized: "Debugging was not allowed on the TV. Try again and choose Allow on the TV.") }
     static var androidErrNotPaired: String { String(localized: "The TV does not know this phone. With wireless debugging, pair first: press “Pair device with pairing code” on the TV, type the address and the code from that window and try again.") }
     static var androidErrPairing: String { String(localized: "Pairing failed: the code is wrong or the pairing window on the TV closed. Open the window again, type the new code and port and try again.") }

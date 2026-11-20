@@ -219,6 +219,16 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     public bool ConsoleKindLocked => consoleKindLocked;
     public bool IsXbox => consoleKind == GameConsoleKind.Xbox;
     public string ConsoleTitle => IsXbox ? "Xbox" : settings.FrameSource == FrameSource.CaptureWindow ? text["Selected window"] : "PS5";
+    /// <summary>
+    /// Ana ekrandaki "Görüntü kaynağı" satırının değeri: görüntünün nereden okunduğu, dokununca Ayarlar › Görüntü kaynağı
+    /// açılır. DM'de bildirildi: ayar yalnız Ayarlar'ın alt sıralarında olduğu için bulunamıyordu. Xbox'ta seçim yok, null.
+    /// </summary>
+    public string? PictureSourceTitle => IsXbox ? null : text[settings.FrameSource switch
+    {
+        FrameSource.RemotePlayWindow => "Remote Play window on this PC",
+        FrameSource.CaptureWindow => "OBS projector or game window",
+        _ => "The PS5 (second account)",
+    }];
     public bool HasXboxAccount => xboxToken is not null;
     public XboxConsole? SelectedXboxConsole => xboxConsole;
     public void SelectConsoleKind(GameConsoleKind kind)
@@ -431,7 +441,8 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
                                               TaskContinuationOptions.OnlyOnFaulted);
             }
             var translationChanged = old.OnlineTranslation != value.OnlineTranslation || old.OnlineEngine != value.OnlineEngine
-                                     || old.GeminiModel != value.GeminiModel || old.OpenAiModel != value.OpenAiModel
+                                     || old.GeminiModel != value.GeminiModel || old.GeminiPaidTier != value.GeminiPaidTier
+                                     || old.OpenAiModel != value.OpenAiModel
                                      || old.ClaudeModel != value.ClaudeModel
                                      || old.LocalAiBaseUrl != value.LocalAiBaseUrl || old.LocalAiModel != value.LocalAiModel
                                      || old.AiInstruction != value.AiInstruction
@@ -2583,6 +2594,7 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         }
         regionWatcher.PackLookup = PacksActive ? services.FindInPacks : null;
         regionWatcher.SkipsTurkish = settings.TargetLanguage == "tr";
+        regionWatcher.Game = () => gameSense.Current?.Name;
     }
 
     // --- Geçmiş ---
@@ -2642,7 +2654,8 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         {
             if (store.Load<string>(storeKey) is not { Length: > 0 } key) return local;
             online = engine.Provider() is { } provider
-                ? services.MakeAiTranslator(provider, key, provider.Model(settings.ModelFor(provider)).Id, fallback, game, settings.AiInstruction)
+                ? services.MakeAiTranslator(provider, key, provider.Model(settings.ModelFor(provider)).Id, fallback, game, settings.AiInstruction,
+                    settings.GeminiPaidTier && provider == AiProvider.Gemini)
                 : services.MakeOnlineTranslator(key, fallback);
         }
         if (online is null) return local;

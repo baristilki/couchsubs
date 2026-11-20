@@ -34,6 +34,7 @@ import com.couchsubs.mobile.tv.TvBrand
 import com.couchsubs.mobile.tv.TvDiscovery
 import com.couchsubs.mobile.tv.TvPackages
 import com.couchsubs.mobile.tv.android.AdbConnection
+import com.couchsubs.mobile.tv.android.AdbMode
 import com.couchsubs.mobile.tv.android.AndroidInstallError
 import com.couchsubs.mobile.tv.android.AndroidInstallException
 import com.couchsubs.mobile.tv.android.AndroidTvInstaller
@@ -81,7 +82,20 @@ internal fun AndroidTvInstallScreen(onBack: () -> Unit, onDone: () -> Unit, bran
     LaunchedEffect(Unit) {
         val found = withContext(Dispatchers.IO) { findAndroidTvs(phoneIp) }
         candidates = found
-        if (address.isEmpty()) found.firstOrNull { it.legacyAdbReachable }?.let { address = it.host }
+        if (address.isEmpty()) {
+            // 5555'i açık TV yoksa ağda bulunan ilk TV seçilir ve kablosuz hata ayıklama sekmesi açılır (GitHub #478).
+            (found.firstOrNull { it.legacyAdbReachable } ?: found.firstOrNull())?.let {
+                address = it.host
+                wireless = AdbMode.prefersWireless(it.legacyAdbReachable)
+            }
+        }
+    }
+
+    // 5555'e bağlanılamadı: kablosuz hata ayıklama sekmesine geçilir, TV'nin adresi kalır (port TV'den yazılır).
+    fun switchToWireless() {
+        wireless = true
+        address = AdbMode.hostOnly(address)
+        state = AndroidState.Idle
     }
 
     fun install(allowReplace: Boolean = false) {
@@ -152,7 +166,12 @@ internal fun AndroidTvInstallScreen(onBack: () -> Unit, onDone: () -> Unit, bran
                 list.forEach { tv ->
                     val selected = AndroidTvInstaller.parseAddress(address)?.first == tv.host
                     Tile(Modifier.fillMaxWidth(), style = if (selected) TileStyle.ACTIVE else TileStyle.NORMAL,
-                        onClick = { if (!working) address = tv.host }) {
+                        onClick = {
+                            if (!working) {
+                                address = tv.host
+                                wireless = AdbMode.prefersWireless(tv.legacyAdbReachable)
+                            }
+                        }) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.gap)) {
                             TileIcon(CouchIcons.Tv)
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.hair)) {
@@ -206,7 +225,11 @@ internal fun AndroidTvInstallScreen(onBack: () -> Unit, onDone: () -> Unit, bran
                 Text(stringResource(R.string.tvinstall_next), style = Tokens.Type.caption, color = Tokens.Color.secondary)
             }
             is AndroidState.Failed -> {
-                NoteTile(androidFailureText(current))
+                if (AdbMode.offersWireless(wireless, current.error)) {
+                    // Eskiden yalnız genel "TV yanıt vermedi" yazısı vardı; 5555 kapalı TV'de çözüm kablosuz hata ayıklamadır.
+                    NoteTile(stringResource(R.string.tvinstall_android_err_legacy_closed))
+                    SecondaryButton(stringResource(R.string.tvinstall_android_try_wireless), Modifier.fillMaxWidth()) { switchToWireless() }
+                } else NoteTile(androidFailureText(current))
                 // TV'deki başka imzalı kopya yalnız kullanıcı isterse kaldırılır (TV uygulamasının ayarları da silinir).
                 if (current.error == AndroidInstallError.REPLACE_NEEDED)
                     DestructiveButton(stringResource(R.string.tvinstall_android_replace), Modifier.fillMaxWidth()) { install(allowReplace = true) }

@@ -439,3 +439,26 @@ final class AndroidTvInstaller {
         log.write("Uygulama açılıyor: \(((try? adb.run("shell:am start -n \(Self.packageName)/.MainActivity")) ?? "açılamadı").trimmingCharacters(in: .whitespacesAndNewlines))")
     }
 }
+
+/// Android TV kurulumunda hangi bağlantı yolunun seçileceği (Android'deki AdbMode ile aynı kural, GitHub #478).
+///
+/// Yeni Android TV ve Google TV'lerde eski ADB portu 5555 kapalıdır; bunlara yalnız "Kablosuz hata ayıklama" (eşleme kodu ve
+/// her açılışta değişen port) ile bağlanılır. Eskiden ekran hep "USB/ağ hata ayıklama" sekmesinde açılıyor, 5555'e
+/// bağlanılamayınca yalnız küçük bir notta "kablosuz hata ayıklama ayrı port kullanır" yazıyordu; kullanıcılar fark etmiyordu.
+enum AdbMode {
+    /// Seçilen TV'de 5555 açık değilse kablosuz hata ayıklama sekmesi seçilir.
+    static func prefersWireless(legacyAdbReachable: Bool) -> Bool { !legacyAdbReachable }
+
+    /// Ağ hata ayıklamasıyla (5555) TV'ye bağlanılamadı: belirgin "Kablosuz hata ayıklamayla dene" düğmesi gösterilir.
+    static func offersWireless(wireless: Bool, error: AndroidInstallError?) -> Bool {
+        !wireless && error == .unreachable
+    }
+
+    /// Kablosuz sekmeye geçerken adresteki port bırakılır (kablosuz hata ayıklamanın portu farklıdır, TV'den yazılır).
+    static func hostOnly(_ address: String) -> String {
+        let trimmed = address.trimmingCharacters(in: .whitespaces)
+        let parts = trimmed.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty, parts[1].allSatisfy(\.isNumber) else { return trimmed }
+        return String(parts[0])
+    }
+}

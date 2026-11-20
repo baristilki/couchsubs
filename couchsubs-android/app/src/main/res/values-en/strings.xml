@@ -42,8 +42,8 @@
     <string name="error_model_unavailable">The translation model service is temporarily unavailable. Check Google Play services updates and try again.</string>
     <string name="error_model_timeout">The translation model download timed out. Check your connection and try again.</string>
     <string name="screen_translate">Translate screen</string>
-    <string name="screen_working">Translating the screen…</string>
-    <string name="screen_remove">Remove screen translations</string>
+    <string name="screen_working">Translating…</string>
+    <string name="screen_remove">Remove translations</string>
     <string name="screen_translating">Translating the screen…</string>
     <string name="screen_none">No text found on the screen.</string>
     <string name="screen_no_picture">Couldn\'t capture the screen: no picture from the PS5 yet.</string>
@@ -95,7 +95,7 @@
     <string name="target_phone">On this phone</string>
     <string name="target_tvs_none">No TV seen on the network (it may be off; that\'s fine).</string>
 
-    <string name="main_phone_view">Show subtitles on the phone</string>
+    <string name="main_phone_view">Subtitle screen</string>
     <string name="main_target">Subtitles</string>
     <string name="main_target_tv">TV</string>
     <string name="main_target_phone">This phone</string>
@@ -156,6 +156,9 @@
     <string name="settings_display_mode_note">If the PS5 picture stays black inside the CouchSubs TV app, choose Overlay: the TV shows the PS5 on its own HDMI input and the subtitles appear on top. If no picture arrives, the TV app first lists its HDMI inputs and switches to Overlay where it can. The TV app from Google Play has no Overlay mode: there this choice is not applied and the TV says so on screen.</string>
     <string name="settings_screen_on">Keep screen on</string>
     <string name="close">Close</string>
+    <!-- Kendi ürünlerimizin tanıtım popup'ı (promo.json) -->
+    <string name="promo_label">Sponsored</string>
+    <string name="promo_open">Open link</string>
     <string name="ok">OK</string>
     <string name="next_continue">Continue</string>
     <string name="setup_step">Setup · Step %1$d/3</string>
@@ -421,6 +424,8 @@
     <string name="tvinstall_android_wireless_step3">3. The first time, press “Pair device with pairing code”; type the IP address and port from that window together with the 6-digit code, and press Install and open while the window is still open.</string>
     <string name="tvinstall_android_replace">Remove the TV\'s copy and install</string>
     <string name="tvinstall_android_err_unreachable">The TV did not respond. Make sure the TV is on and on the same Wi-Fi as this phone, and that debugging is on in its developer options. With wireless debugging the port changes every time; type the one on the screen.</string>
+    <string name="tvinstall_android_try_wireless">Try with wireless debugging</string>
+    <string name="tvinstall_android_err_legacy_closed">The TV did not answer on the USB/network debugging port (5555). Newer Android TV and Google TV models keep this port closed. On the TV, turn on Developer options › Wireless debugging, then tap the button below.</string>
     <string name="tvinstall_android_err_not_approved">Debugging was not allowed on the TV. Try again and choose Allow on the TV.</string>
     <string name="tvinstall_android_err_not_paired">The TV does not know this phone. With wireless debugging, pair first: press “Pair device with pairing code” on the TV, type the address and the code from that window and try again.</string>
     <string name="tvinstall_android_err_pairing">Pairing failed: the code is wrong or the pairing window on the TV closed. Open the window again, type the new code and port and try again.</string>
@@ -430,9 +435,10 @@
     <string name="history">History</string>
     <string name="history_note">The last %1$d translated lines are kept on this phone.</string>
     <string name="history_empty">No subtitles yet. Lines translated in this and earlier sessions appear here.</string>
-    <string name="history_copy_all">Copy all</string>
     <string name="history_copied">Copied</string>
     <string name="history_copy">Copy</string>
+    <string name="developer_label">Developer</string>
+    <string name="developer_a11y">Developer: Enmera</string>
     <string name="history_clear">Clear</string>
     <string name="history_clear_title">Clear the history?</string>
     <string name="history_clear_body">All saved lines are removed from this phone.</string>

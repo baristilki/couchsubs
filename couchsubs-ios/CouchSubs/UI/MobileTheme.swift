@@ -87,12 +87,17 @@ struct MobileButtonStyle: ButtonStyle {
     /// Bir satırdaki küçük düğmeler (çeviri sürerken ikincil eylemler): simge üstte, `caption` yazı altta, yatay boşluk 8.
     var compact = false
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         return configuration.label
             .font(compact ? Mobile.TypeScale.caption.weight(.semibold) : Mobile.TypeScale.headline)
             .labelStyle(MobileButtonLabelStyle(stacked: compact))
+            // Düğme yazısı iki satıra bölünmez: sığmazsa %75'e kadar küçülür (erişilebilirlik yazı boylarında satır
+            // sınırı kalkar). Küçük düğmenin iki satırlık yazısı etiket stilinde.
+            .lineLimit(compact ? nil : typeSize.isAccessibilitySize ? 3 : 1)
+            .minimumScaleFactor(compact ? 1 : 0.75)
             .foregroundStyle(foreground)
             .frame(maxWidth: kind == .ghost ? nil : .infinity, minHeight: kind == .ghost ? Mobile.Control.buttonSmall : Mobile.Control.button)
             .padding(.horizontal, compact ? Mobile.Space.inline : kind == .ghost ? Mobile.Space.gap : Mobile.Space.screen)
@@ -515,24 +520,30 @@ struct MobileBackground: View {
     }
 }
 
-/// Ekran yapısı: güvenli alan + 20 → üst satır → 12 → içerik (12 aralıkla, kayar) → alt düğme bölgesi → 20.
+/// Ekran yapısı: güvenli alan + 8 → üst satır → 12 → içerik (12 aralıkla, kayar) → alt düğme bölgesi → 20.
+/// İçerik ekranın en üstüne ve en altına kadar kayar; üst satır ve alt düğmeler içeriğin üstünde yüzer (düz zemin şeridi
+/// yok). Kenarlarda iOS 26'nın yumuşak kaydırma kenarı (scroll edge effect), daha eskide bulanık malzeme + degrade.
+/// Son öğe düğmelerin altında kalmaz: çubukların yüksekliği kaydırmanın iç boşluğuna eklenir.
 struct MobileScreen<Header: View, Content: View, Bottom: View>: View {
     @ViewBuilder var header: Header
     @ViewBuilder var content: Content
     @ViewBuilder var bottom: Bottom
 
     var body: some View {
-        VStack(spacing: 0) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Mobile.Space.gap) { content }
+                .padding(.horizontal, Mobile.Space.screen)
+                .padding(.top, Mobile.Space.gap)
+                .padding(.bottom, Mobile.Space.screen)
+        }
+        .scrollIndicators(.hidden)
+        .softScrollEdges()
+        .edgeBar(.top) {
             header
                 .padding(.horizontal, Mobile.Space.screen)
                 .padding(.top, Mobile.Space.inline)
-            ScrollView {
-                VStack(alignment: .leading, spacing: Mobile.Space.gap) { content }
-                    .padding(.horizontal, Mobile.Space.screen)
-                    .padding(.top, Mobile.Space.gap)
-                    .padding(.bottom, Mobile.Space.screen)
-            }
-            .scrollIndicators(.hidden)
+        }
+        .edgeBar(.bottom) {
             VStack(spacing: Mobile.Space.gap) { bottom }
                 .padding(.horizontal, Mobile.Space.screen)
                 .padding(.bottom, Mobile.Space.screen)
@@ -540,6 +551,46 @@ struct MobileScreen<Header: View, Content: View, Bottom: View>: View {
         .foregroundStyle(Mobile.Palette.text)
         .background(MobileBackground())
         .toolbar(.hidden, for: .navigationBar)
+    }
+}
+
+extension View {
+    /// Kaydırmanın üstünde yüzen kenar çubuğu. iOS 26+: `safeAreaBar` (kaydırma kenarı efektini sistem çizer);
+    /// öncesi: `safeAreaInset` ve çubuğun arkasında içe doğru sönen bulanık malzeme (`EdgeFade`).
+    @ViewBuilder func edgeBar<Bar: View>(_ edge: VerticalEdge, @ViewBuilder bar: () -> Bar) -> some View {
+        if #available(iOS 26, *) {
+            safeAreaBar(edge: edge, spacing: 0, content: bar)
+        } else {
+            safeAreaInset(edge: edge, spacing: 0) { bar().background { EdgeFade(edge: edge) } }
+        }
+    }
+
+    /// iOS 26+: kenarda içerik sert kesilmez, yumuşakça bulanıp söner.
+    @ViewBuilder func softScrollEdges() -> some View {
+        if #available(iOS 26, *) {
+            scrollEdgeEffectStyle(.soft, for: .all)
+        } else {
+            self
+        }
+    }
+}
+
+/// iOS 26 öncesi kaydırma kenarı: ekranın kenarında (güvenli alan dahil) bulanık malzeme ve zemin rengi, çubuğun içerik
+/// tarafına doğru saydamlaşır; düz şerit ve sert çizgi oluşmaz.
+private struct EdgeFade: View {
+    let edge: VerticalEdge
+
+    var body: some View {
+        let outer: UnitPoint = edge == .top ? .top : .bottom
+        let inner: UnitPoint = edge == .top ? .bottom : .top
+        ZStack {
+            Rectangle().fill(.ultraThinMaterial)
+            Mobile.Palette.bg.opacity(0.55)
+        }
+        .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.5),
+                                     .init(color: .clear, location: 1)], startPoint: outer, endPoint: inner))
+        .ignoresSafeArea(edges: edge == .top ? .top : .bottom)
+        .allowsHitTesting(false)
     }
 }
 

@@ -43,6 +43,18 @@ final class SSAPMessagesTests: XCTestCase {
         XCTAssertNil(LGDiscovery.host(fromSSDPResponse: "HTTP/1.1 200 OK\r\nST: urn:other\r\n\r\n"))
     }
 
+    // webOS 3.x (2017) ikinci ekran hedefine cevap vermiyor; "ssdp:all" yanıtı LG olarak tanınır, başka cihaz alınmaz (#498).
+    func testSSDPAllResponseFromOldWebOSIsRecognised() {
+        let root = "HTTP/1.1 200 OK\r\nLOCATION: http://192.168.1.40:1259/\r\nST: upnp:rootdevice\r\nUSN: uuid:LGTV2017-1234::upnp:rootdevice\r\nSERVER: Linux/3.10.19-32.afro.4 UPnP/1.0 LGE WebOS TV LGE_DLNA_SDK/1.6.0\r\n\r\n"
+        XCTAssertEqual(LGDiscovery.host(fromSSDPResponse: root, searchTarget: LGDiscovery.allTarget), "192.168.1.40")
+        let netflix = "HTTP/1.1 200 OK\r\nLOCATION: http://192.168.1.40:9080\r\nST: urn:mdx-netflix-com:service:target:1\r\nUSN: uuid:LGTV2017-1234::urn:mdx-netflix-com:service:target:1\r\n\r\n"
+        XCTAssertEqual(LGDiscovery.host(fromSSDPResponse: netflix, searchTarget: LGDiscovery.allTarget), "192.168.1.40")
+        let router = "HTTP/1.1 200 OK\r\nLOCATION: http://192.168.1.1:49152/desc.xml\r\nST: upnp:rootdevice\r\nUSN: uuid:abcd::upnp:rootdevice\r\nSERVER: Linux UPnP/1.0 MiniUPnPd\r\n\r\n"
+        XCTAssertNil(LGDiscovery.host(fromSSDPResponse: router, searchTarget: LGDiscovery.allTarget))
+        // Asıl aramada "webOS" geçen başka hedefler sayılmaz: yalnız ikinci ekran servisi.
+        XCTAssertNil(LGDiscovery.host(fromSSDPResponse: root))
+    }
+
     // Adres adres tarama (iPhone'da multicast izni yokken): LG cihaz tanımı ve ikinci ekran sunucusunun karşılığı tanınır.
     func testScanRecognisesAnLGTV() {
         let xml = "<?xml version=\"1.0\"?><root><device><friendlyName> [LG] webOS TV UK7550 </friendlyName><manufacturer>LG Electronics</manufacturer></device></root>"

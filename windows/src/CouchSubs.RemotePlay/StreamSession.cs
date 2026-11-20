@@ -8,6 +8,36 @@ using CouchSubs.Core;
 namespace CouchSubs.RemotePlay;
 
 /// <summary>
+/// Dinlenme modundaki PS5 uyandırılsın mı (Mac/iPhone ve Android'deki WakePolicy ile aynı kural). Yalnız kullanıcı çeviriyi
+/// başlattıktan sonra, PS5'e henüz bağlanılmamışken uyandırılır. Eskiden yeniden bağlanma döngüsü de uyandırıyordu: oyuncu
+/// PS5'i kapatınca (dinlenme modu) uygulama birkaç saniye sonra PS5'i yeniden açıp bağlanıyor, TV kapalıyken "PS5 bağlı"
+/// görünüyordu. Bu çeviride akış bir kez kurulduysa dinlenmedeki PS5'e dokunulmaz; açılınca bağlanılır.
+/// </summary>
+internal sealed class WakePolicy
+{
+    public enum Action
+    {
+        /// <summary>PS5 uyanık ya da aramaya yanıt vermedi: oturum açılmaya çalışılır.</summary>
+        Connect,
+        /// <summary>PS5 dinlenmede, çeviri yeni başladı: uyandırılır.</summary>
+        Wake,
+        /// <summary>PS5 dinlenmede ve bu çeviride zaten bağlanılmıştı (kullanıcı kapattı): açılması beklenir.</summary>
+        WaitUntilOn,
+    }
+
+    private bool hasStreamed;
+
+    /// <summary>Kullanıcı çeviriyi başlattı.</summary>
+    public void Reset() => hasStreamed = false;
+
+    /// <summary>PS5'e bağlanıldı.</summary>
+    public void Streamed() => hasStreamed = true;
+
+    /// <summary><paramref name="awake"/>: aramada PS5'in durumu (null: yanıt vermedi).</summary>
+    public Action Decide(bool? awake) => awake != false ? Action.Connect : hasStreamed ? Action.WaitUntilOn : Action.Wake;
+}
+
+/// <summary>
 /// Bağlantı koptuğunda yeniden deneme aralıkları: 2, 4, 8, 16, en çok 30 sn (Mac'teki ReconnectPolicy ile aynı kural).
 /// Aralık bağlanınca hemen değil, oturum <see cref="StableAfter"/> kadar sürdükten sonra kapanınca baştan başlar. Eskiden her
 /// bağlanışta sıfırlanıyordu: PS5 oturumu açılıp birkaç saniyede düşürünce (ör. "açıldıktan 3-4 sn sonra kapanıyor")
@@ -339,6 +369,8 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
     private readonly SerialQueue queue = new("CouchSubs stream session");
     private readonly FrameDelivery delivery;
     private readonly ReconnectPolicy policy = new();
+    /// <summary>Dinlenmedeki PS5 yalnız çeviri başlarken uyandırılır (yalnız kuyrukta).</summary>
+    private readonly WakePolicy wakePolicy = new();
     /// <summary>Bağlantı sık koparsa görüntü 720p'ye düşürülür (yalnız kuyrukta).</summary>
     private readonly QualityFallback quality = new();
     /// <summary>Geçerli oturum bağlandı mı (yalnız kuyrukta): yalnız akış sürerken olan kopmalar sayılır.</summary>
@@ -371,6 +403,7 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
         queue.Post(() =>
         {
             policy.Reset();
+            wakePolicy.Reset();
             Connect(current);
         });
     }
@@ -470,17 +503,25 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
             info = Relocate() ?? atHost;
         }
         searchAnswered = info is not null;
+        var action = wakePolicy.Decide(info?.IsAwake);
         RemotePlayLog.Note(info is null
             ? $"PS5 oturumu: {console.Host} aramaya yanıt vermedi, yine de bağlanılıyor"
-            : $"PS5 oturumu: {info.Name} {info.Host} {(info.IsAwake ? "uyanık" : "dinlenmede, uyandırılıyor")}");
-        if (info is { IsAwake: false })
+            : $"PS5 oturumu: {info.Name} {info.Host} {(info.IsAwake ? "uyanık" : action == WakePolicy.Action.Wake ? "dinlenmede, uyandırılıyor" : "dinlenmede, açılması bekleniyor")}");
+        switch (action)
         {
-            try { ConsoleDiscovery.Wake(console); }
-            catch (Exception error) { RemotePlayLog.Write(1, $"wake: {error.Message}"); }
-            WaitForWake(current, DateTime.UtcNow.AddSeconds(20));
-            return;
+            case WakePolicy.Action.Wake:
+                try { ConsoleDiscovery.Wake(console); }
+                catch (Exception error) { RemotePlayLog.Write(1, $"wake: {error.Message}"); }
+                WaitForWake(current, DateTime.UtcNow.AddSeconds(20));
+                break;
+            case WakePolicy.Action.WaitUntilOn:
+                // Kullanıcı PS5'i kapattı: yeniden açılmaz; aralıklı bakılır, PS5 açılınca bağlanılır.
+                ScheduleReconnect(current, new DisconnectReason(DisconnectKind.ConsoleAsleep));
+                break;
+            default:
+                OpenSession(current);
+                break;
         }
-        OpenSession(current);
     }
 
     /// <summary>Son aramada PS5 yanıt verdi mi (yalnız kuyrukta).</summary>
@@ -552,6 +593,7 @@ public sealed class StreamSession : IStreamSession, IGameVideoSource
                 {
                     if (box?.Generation != eventGeneration || !IsCurrent(eventGeneration)) return;
                     policy.Connected(Environment.TickCount64);
+                    wakePolicy.Streamed();
                     streaming = true;
                     box!.Connected = true;
                     lastNudge = Environment.TickCount64;

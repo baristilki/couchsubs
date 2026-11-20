@@ -27,6 +27,8 @@ public enum HotkeyAction
     Screen,
     /// <summary>Num 7 / Ctrl+Shift+7: bilgisayar ekranındaki altyazı penceresinde "Tıklamalar geçsin"i aç / kapat.</summary>
     ClickThrough,
+    /// <summary>Fork: Num 6 / Ctrl+Shift+6: son çeviriyi TV'de ve ekranda yeniden göster (kaçırılan satır).</summary>
+    Replay,
 }
 
 /// <summary>RegisterHotKey'in değiştirici tuşları (değerler Win32 MOD_* ile aynı).</summary>
@@ -97,6 +99,7 @@ public static class HotkeyTable
         (HotkeyAction.PauseSubtitles, 0),
         (HotkeyAction.Screen, 9),
         (HotkeyAction.ClickThrough, 7),
+        (HotkeyAction.Replay, 6),
     ];
 
     /// <summary>Varsayılan tablo: önce bütün Num tuşları, sonra Ctrl+Shift+rakam tuşları; sırası kısayol kimliğini belirler.</summary>

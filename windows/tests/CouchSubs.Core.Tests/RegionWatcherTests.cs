@@ -457,6 +457,17 @@ public class RegionWatcherTests
         Assert.Equal([null], server.Blocks);
     }
 
+    /// <summary>Fork: yazı tanımanın kestiği kalıntılar çevrilmez; kısa mesajlar kalır.</summary>
+    [Theory]
+    [InlineData("and heFt", true)]
+    [InlineData("and heft", true)]
+    [InlineData("the ma", true)]
+    [InlineData("on my way", false)]
+    [InlineData("and you?", false)]
+    [InlineData("Call me", false)]
+    [InlineData("iPhone", false)]
+    public void OcrFragmentIsDropped(string text, bool fragment) => Assert.Equal(fragment, RegionWatcher.IsFragment(text));
+
     /// <summary>Fork: menü satırları yalnız GTA 6'da çevrilir; başka oyunda ek alanda etiketler çevrilmez.</summary>
     [Theory]
     [InlineData("Red Dead Redemption 2")]

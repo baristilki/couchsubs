@@ -1175,6 +1175,17 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     /// Num 0: canlı altyazı çevirisini duraklatır ya da sürdürür. Alan çevirirken sürekli çeviri de TV'de görünüp
     /// karışmasın diye kullanılır. TV'de kısa bir bildirim çıkar. Çeviri sürmüyorsa bir şey yapmaz.
     /// </summary>
+    /// <summary>
+    /// Fork: son gösterilen çeviriyi yeniden gösterir (Num 6): hızlı geçen satırı kaçırınca. Yerinde ve öncekinin yerine
+    /// konur; yazı uzunluğuna göre 3-8 saniye kalır.
+    /// </summary>
+    public void ReplayLastSubtitle()
+    {
+        if (!isRunning || pipeline?.LastPair is not { } last || string.IsNullOrWhiteSpace(last.Translation)) return;
+        var milliseconds = Math.Clamp(2000 + (last.Translation.Length * 60), 3000, 8000);
+        server.SendSubtitle(last.Translation, milliseconds, pipeline.LastBox, replaces: true);
+    }
+
     public void ToggleSubtitles()
     {
         if (!isRunning) return;
@@ -2358,6 +2369,8 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         // Elle seçilen oyunda satırlar yalnız o oyunun paketinde aranır, paketi yoksa hiç aranmaz (#218).
         services.GamePacks?.LimitToGame(gameSense.PackLimit);
         var current = gameSense.Current;
+        // Fork: bilinen oyunun paketi öncelikli; başka paketteki genel satır kapsamı o oyuna kaydırmaz.
+        services.GamePacks?.PreferGame(current?.Name);
         PlayedGame = current?.Name;
         FollowGameAreas();
         if (current == publishedGame) return;

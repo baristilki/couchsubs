@@ -6,7 +6,7 @@
   'use strict';
 
   // TV uygulamasının sürümü: appinfo.json, tv-tizen/config.xml ve tv-android/app/build.gradle ile aynı tutulur.
-  var APP_VERSION = '0.9.33';
+  var APP_VERSION = '0.9.34';
   var t = window.t;
   var config = window.COUCHSUBS_CONFIG || {};
   var platform = window.COUCHSUBS_PLATFORM;
@@ -608,9 +608,15 @@
       }
       // Fork: çevrilmiş rol adları ("Mağaza görevlisi:", "Polis 2:") yalnız ilk harfi büyük de olsa addır; en çok 4
       // sözcük, cümle işareti yok. Bilinen adlara eklenmez (iki noktasız eşleşme yalnız gerçek adlarla yapılır).
+      // "Peter İki kelime:" gibi araya büyük harfli sözcük giren ad sayılmaz; "Saat 10:30" da (iki noktadan sonra boşluk yok).
       var head = name.charAt(0);
-      if (words.length >= 1 && words.length <= 4 && head !== head.toLowerCase() && name.indexOf('\n') < 0 &&
-          /^[^:!?,;"()\[\]{}<>@#$%^&*_=+|\\\/]+$/.test(name)) {
+      var restLower = true;
+      for (var k = 1; k < words.length; k++) {
+        var c = words[k].charAt(0);
+        if (c !== c.toLowerCase() && c === c.toUpperCase()) restLower = false;
+      }
+      if (words.length >= 1 && words.length <= 4 && head !== head.toLowerCase() && restLower && name.indexOf('\n') < 0 &&
+          /\s/.test(text.charAt(colon + 1)) && /^[^:!?,;"()\[\]{}<>@#$%^&*_=+|\\\/]+$/.test(name)) {
         return { speaker: name, line: text.slice(colon + 1).replace(/^\s+/, ''), colon: true };
       }
     }

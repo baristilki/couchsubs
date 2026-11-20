@@ -159,6 +159,29 @@ public class GamePackTests
         Assert.Equal("Sakin ol kızım.", library.Find("Easy, girl."));
     }
 
+    /// <summary>
+    /// Fork: oynanan oyun biliniyorsa satırın Türkçesi önce onun paketinden gelir; yalnız başka pakette olan genel satır
+    /// çevrilir ama bulanık aramanın kapsamı oynanan oyunda kalır (GTA 6'da "Not a problem." CoD paketine kayıyordu).
+    /// </summary>
+    [Fact]
+    public void KnownGameKeepsTheScope()
+    {
+        var common = PackKey.Key("Let's go.");
+        var only = PackKey.Key("Not a problem.");
+        var lucia = PackKey.Key("Where are you, Jason?");
+        var gta = $"{{\"format\":1,\"id\":\"gta-6\",\"title\":\"Grand Theft Auto VI\",\"entries\":{{\"{common}\":\"Gidelim.\",\"{lucia}\":\"Neredesin Jason?\"}}}}";
+        var cod = $"{{\"format\":1,\"id\":\"cod\",\"title\":\"Call of Duty\",\"entries\":{{\"{common}\":\"Hadi hadi.\",\"{only}\":\"Sorun yok.\"}}}}";
+        IEnumerable<(string, byte[])> Bundled() => [("a.json", Encoding.UTF8.GetBytes(gta)), ("b.json", Encoding.UTF8.GetBytes(cod))];
+        var library = new GamePackLibrary(Bundled, null);
+        library.PreferGame("GTA 6");
+        Assert.Equal("Gidelim.", library.Find("Let's go."));
+        Assert.Equal("gta-6", library.SearchScope);
+        Assert.Equal("Sorun yok.", library.Find("Not a problem."));
+        Assert.Equal("gta-6", library.SearchScope);
+        library.PreferGame(null);
+        Assert.Equal("Hadi hadi.", library.Find("Let's go."));
+    }
+
     [Fact]
     public void MissingDirectoriesGiveAnEmptyLibrary()
     {

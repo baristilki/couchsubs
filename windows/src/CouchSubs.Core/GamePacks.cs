@@ -232,6 +232,10 @@ public sealed class GamePackLibrary(Func<IEnumerable<(string Name, byte[] Data)>
     private string? limitKey;
     /// <summary>Elle seçilen oyunun paketi (<see cref="loadedPacks"/> sırası); -1 paketi yok, null henüz aranmadı.</summary>
     private int? limited;
+    /// <summary>Fork: bilinen (PS5'in bildirdiği, seçilen ya da tanınan) oyunun adı; satır önce onun paketinde aranır.</summary>
+    private string? preferKey;
+    /// <summary>Fork: <see cref="preferKey"/> oyununun paketi; -1 paketi yok, null henüz aranmadı.</summary>
+    private int? preferred;
 
     /// <summary>Uygulamaya gömülü paketler (core/Sources/CouchSubsCore/Resources/packs, ad: "packs/x.json.gz").</summary>
     public static IEnumerable<(string Name, byte[] Data)> EmbeddedPacks()
@@ -296,23 +300,46 @@ public sealed class GamePackLibrary(Func<IEnumerable<(string Name, byte[] Data)>
         }
     }
 
+    /// <summary>
+    /// Fork: oynanan oyun biliniyorsa (<see cref="GameSense.Current"/>) satır önce onun paketinde aranır; yalnız başka
+    /// paketlerde bulunan genel satır ("Not a problem.") çevrilir ama bulanık aramanın kapsamı oynanan oyunda kalır.
+    /// Eskiden GTA 6'da böyle bir satır Call of Duty paketinden geliyor, sonraki bulanık eşleşmeler de oradan yapılıyordu.
+    /// </summary>
+    public void PreferGame(string? name)
+    {
+        var key = name is null ? null : GameName.Key(name);
+        if (key?.Length == 0) key = null;
+        lock (gate)
+        {
+            if (key == preferKey) return;
+            preferKey = key;
+            preferred = null;
+        }
+    }
+
     /// <summary>Elle seçilen oyunun paketi: adı ya da kimliği aynı olan son paket. -1 paketi yok, null sınır yok.</summary>
     private int? LimitedPack()
     {
         if (limitKey is null) return null;
-        if (limited is { } known) return known;
-        var found = -1;
+        limited ??= PackOf(limitKey);
+        return limited;
+    }
+
+    private int? PreferredPack()
+    {
+        if (preferKey is null) return null;
+        preferred ??= PackOf(preferKey);
+        return preferred >= 0 ? preferred : null;
+    }
+
+    private int PackOf(string key)
+    {
         for (var index = loadedPacks.Count - 1; index >= 0; index--)
         {
             var pack = loadedPacks[index];
-            if (pack.Id != GameSense.GeneralPack && (GameName.Key(pack.Title) == limitKey || GameName.Key(pack.Id) == limitKey))
-            {
-                found = index;
-                break;
-            }
+            if (pack.Id != GameSense.GeneralPack && (GameName.Key(pack.Title) == key || GameName.Key(pack.Id) == key)) return index;
         }
-        limited = found;
-        return found;
+        return -1;
     }
 
     /// <summary>Elle seçilen oyunun paketinde anahtarın Türkçesi: önce tam satır, sonra parça (yalnız o paketin kendisi).</summary>
@@ -328,12 +355,14 @@ public sealed class GamePackLibrary(Func<IEnumerable<(string Name, byte[] Data)>
         Dictionary<ulong, string> current;
         IReadOnlyList<GamePack> packs;
         int? only;
+        int? playing;
         lock (gate)
         {
             LoadIfNeeded();
             current = entries;
             packs = loadedPacks;
             only = LimitedPack();
+            playing = PreferredPack();
         }
         if (only is { } limit)
         {
@@ -352,6 +381,17 @@ public sealed class GamePackLibrary(Func<IEnumerable<(string Name, byte[] Data)>
         var owners = new List<int>();
         for (var index = 0; index < packs.Count; index++)
             if (Contains(packs[index].Keys, number)) owners.Add(index);
+        if (playing is { } game)
+        {
+            lock (gate)
+            {
+                if (loadedPacks != packs) return turkish;
+                if (owners.Count == 1) distinctive = owners[0];
+                // Oynanan oyunun paketi kapsam olarak kalır; satır onda da varsa Türkçesi de ondan.
+                scope = game;
+            }
+            return owners.Contains(game) && Own(packs[game], number) is { } own ? own : turkish;
+        }
         if (owners.Count > 0)
         {
             lock (gate)
@@ -489,6 +529,7 @@ public sealed class GamePackLibrary(Func<IEnumerable<(string Name, byte[] Data)>
         scope = null;
         distinctive = null;
         limited = null;
+        preferred = null;
         infos = [.. packs.Select(p => new Info(p.Pack.Id, p.Pack.Title, p.Pack.Entries.Count, p.BuiltIn))];
     }
 

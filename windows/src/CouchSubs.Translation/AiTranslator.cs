@@ -76,12 +76,17 @@ public static class AiRequest
     /// etiketlerinden öğrenilip cümlelerde geçen adlar; model "Price"ı "Fiyat" diye çevirmesin diye adıyla söylenir (#287).
     /// </summary>
     public static string UserMessage(IReadOnlyList<string> sentences, IReadOnlyList<AiContextLine> context, string? game = null,
-                                     IReadOnlyList<string>? names = null)
+                                     IReadOnlyList<string>? names = null, IReadOnlyList<(string English, string Turkish)>? terms = null)
     {
         var parts = new List<string>();
         if (!string.IsNullOrEmpty(game)) parts.Add($"Game: {game}");
         if (names is { Count: > 0 })
             parts.Add($"Character names (keep them exactly as written, do not translate them): {string.Join(", ", names)}");
+        // Fork: oyun sözlüğü (AiGlossary): satırda geçen terimlerin istenen Türkçesi.
+        if (terms is { Count: > 0 })
+            parts.Add("Glossary for this game (use exactly these Turkish words for these terms; \"keep\" means leave it as written):\n" +
+                      string.Join("\n", terms.Select(term => term.English == term.Turkish
+                          ? $"{term.English} = keep" : $"{term.English} = {term.Turkish}")));
         if (context.Count > 0)
         {
             var lines = new List<string> { "Previous subtitles, for context only (do not translate them again):" };
@@ -115,10 +120,11 @@ public static class AiRequest
     public static HttpRequestMessage Build(AiProvider provider, string key, AiModel model, IReadOnlyList<string> sentences,
                                            IReadOnlyList<AiContextLine> context, string? game = null, LocalAiServer? server = null,
                                            int maxOutputTokens = MaxOutputTokens, bool thinkingOff = true,
-                                           IReadOnlyList<string>? names = null, string? instruction = null)
+                                           IReadOnlyList<string>? names = null, string? instruction = null,
+                                           IReadOnlyList<(string English, string Turkish)>? terms = null)
     {
         key = key.Trim();
-        var user = UserMessage(sentences, context, game, names);
+        var user = UserMessage(sentences, context, game, names, terms);
         var system = SystemPromptWith(instruction);
         HttpRequestMessage request;
         JsonObject body;
@@ -498,6 +504,8 @@ public sealed class AiTranslator : ITextTranslator, IOnlineTranslator
     private readonly List<AiContextLine> _recent = [];
     private string? _recentGame;
     private readonly Func<string?>? _game;
+    /// <summary>Fork: oyunun yapay zekâ sözlüğü (<see cref="AiGlossary"/>); null ise sözlük yok.</summary>
+    private readonly Func<string?, Glossary>? _glossary;
     /// <summary>Ayarlardaki "Ek talimat" (sınırlanmış); yoksa null.</summary>
     private readonly string? _instruction;
     /// <summary>Ek talimatın önbellek etiketi; talimat yoksa null (anahtar eskisi gibi).</summary>
@@ -521,9 +529,11 @@ public sealed class AiTranslator : ITextTranslator, IOnlineTranslator
     /// <param name="instruction">Ayarlardaki "Ek talimat": sistem talimatının sonuna eklenir; boşsa hiçbir şey değişmez.</param>
     public AiTranslator(AiProvider provider, string key, string? model, ITextTranslator? fallback, HttpClient? http = null,
                         TranslationCache? cache = null, RequestBudget? budget = null, LocalAiServer? server = null,
-                        Func<string?>? game = null, string? instruction = null, bool paidTier = false)
+                        Func<string?>? game = null, string? instruction = null, bool paidTier = false,
+                        Func<string?, Glossary>? glossary = null)
     {
         _game = game;
+        _glossary = glossary;
         _instruction = AiRequest.Instruction(instruction);
         _instructionTag = AiRequest.InstructionTag(_instruction);
         Provider = provider;
@@ -556,6 +566,8 @@ public sealed class AiTranslator : ITextTranslator, IOnlineTranslator
     private string CacheKey(string text, string? game)
     {
         var key = string.IsNullOrEmpty(game) ? text : game + "\u001f" + text;
+        // Fork: sözlük değişince o oyunun satırları yeniden çevrilir.
+        if (_glossary?.Invoke(game) is { IsEmpty: false } glossary) key = "g:" + glossary.Fingerprint + "\u001f" + key;
         return _instructionTag is null ? key : "i:" + _instructionTag + "\u001f" + key;
     }
 
@@ -795,7 +807,8 @@ public sealed class AiTranslator : ITextTranslator, IOnlineTranslator
     private Task<string[]> RequestAsync(List<string> sentences, List<AiContextLine> context, string? game,
                                         IReadOnlyList<string> names, CancellationToken cancellationToken) =>
         PerformAsync(thinkingOff => AiRequest.Build(Provider, _key, Model, sentences, context, game, Server, thinkingOff: thinkingOff, names: names,
-                                                       instruction: _instruction),
+                                                       instruction: _instruction,
+                                                       terms: _glossary is null ? null : AiGlossary.Terms(_glossary(game), sentences)),
                      _http, sentences.Count, cancellationToken);
 
     /// <summary>Düşünmeyi kapatan alanları reddeden Ollama sunucuları; uygulama açık kaldıkça hatırlanır.</summary>

@@ -14,6 +14,9 @@ public class StreamSubtitleTextTests
         // OCR iki noktayı kaçırınca cümlenin içindeki iki nokta adı uzatmasın.
         Assert.Null(StreamSubtitleText.SplitSpeaker("Peter İki kelime: Yüzey gerilimi!"));
         Assert.Null(StreamSubtitleText.SplitSpeaker("Saat 10:30"));
+        // Fork: çevrilmiş rol adları da ad.
+        Assert.Equal(("Mağaza görevlisi", "Hoş geldiniz."), StreamSubtitleText.SplitSpeaker("Mağaza görevlisi: Hoş geldiniz."));
+        Assert.Equal(("Polis 2", "Dur!"), StreamSubtitleText.SplitSpeaker("Polis 2: Dur!"));
     }
 
     [Fact]

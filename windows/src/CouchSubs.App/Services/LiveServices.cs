@@ -27,10 +27,13 @@ public sealed class LiveServices : IAppServices
 
     // Her model kendi önbelleğini kullanır ("gemini:gemini-3.5-flash-lite"); model değişince eski çeviriler karışmaz.
     // Ek talimat aynı önbellekte kalır; anahtar talimatın etiketiyle ayrılır (bkz. AiTranslator.CacheKey).
+    /// <summary>Fork: yapay zekâ çevirisinin oyun sözlükleri (LOCALAPPDATA/CouchSubs/ai-glossary).</summary>
+    private static readonly AiGlossary AiGlossaries = new(AiGlossary.UserDirectory);
+
     public ITextTranslator? MakeAiTranslator(AiProvider provider, string key, string model, ITextTranslator? fallback, Func<string?>? game,
                                              string? instruction = null, bool paidTier = false) =>
         new AiTranslator(provider, key, model, fallback, cache: TranslationCache.Shared(AppPaths.Translations, provider.EngineId(model), "en", "tr"),
-                         game: game, instruction: instruction, paidTier: paidTier);
+                         game: game, instruction: instruction, paidTier: paidTier, glossary: AiGlossaries.For);
 
     public Task<AiTestResult> TestAiKeyAsync(AiProvider provider, string key, string model) => AiTranslator.TestAsync(provider, key, model);
 
@@ -38,7 +41,7 @@ public sealed class LiveServices : IAppServices
     public ITextTranslator? MakeLocalAiTranslator(LocalAiServer server, string key, ITextTranslator? fallback, Func<string?>? game,
                                                   string? instruction = null) =>
         new AiTranslator(AiProvider.Local, key, server.Model, fallback, cache: TranslationCache.Shared(AppPaths.Translations, server.EngineId, "en", "tr"),
-                         server: server, game: game, instruction: instruction);
+                         server: server, game: game, instruction: instruction, glossary: AiGlossaries.For);
 
     public Task<AiTestResult> TestLocalAiAsync(LocalAiServer server, string key) =>
         AiTranslator.TestAsync(AiProvider.Local, key, server.Model, server: server);

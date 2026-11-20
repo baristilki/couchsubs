@@ -275,7 +275,7 @@ public sealed class RegionWatcher
                 continue;
             }
             var kept = ButtonPrompts.WithoutPromptSentences(all[i]);
-            if (!ScreenTranslation.IsWords(kept) || ButtonPrompts.IsActionLabel(kept)) continue;
+            if (!ScreenTranslation.IsWords(kept) || ButtonPrompts.IsActionLabel(kept) || IsFragment(kept)) continue;
             var whole = System.Text.RegularExpressions.Regex.Replace(all[i].Trim(), @"\s+", " ")
                 == System.Text.RegularExpressions.Regex.Replace(kept, @"\s+", " ");
             // Paragrafın bir kısmı atıldıysa simge yerleri artık tutmaz: simge işaretleri de kalkar.
@@ -283,6 +283,22 @@ public sealed class RegionWatcher
             icons.Add(whole && i < allIcons.Count ? allIcons[i] : []);
         }
         return (paragraphs, icons);
+    }
+
+    private static readonly HashSet<string> FragmentStarts =
+        ["and", "or", "but", "nor", "of", "the"];
+
+    /// <summary>
+    /// Fork: yazı tanımanın kestiği satır kalıntısı ("and heft", "and heFt"): en çok üç sözcük, küçük harfli bir bağlaçla
+    /// başlıyor ya da sözcüğün ortasında büyük harf var. Çeviriye gitmez. Cümle sonu işaretiyle biten kısa yazı kalır;
+    /// "on my way" gibi kısa mesajlar bağlaçla başlamadığı için etkilenmez.
+    /// </summary>
+    internal static bool IsFragment(string text)
+    {
+        var words = text.Replace(ButtonIcons.Marker, ' ').Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length is 0 or > 3 || text.TrimEnd().EndsWith('.') || text.TrimEnd().EndsWith('!') || text.TrimEnd().EndsWith('?')) return false;
+        if (FragmentStarts.Contains(words[0])) return true;
+        return words.Any(word => System.Text.RegularExpressions.Regex.IsMatch(word, "^[a-z]{2,}[A-Z][a-z]*$"));
     }
 
     private static bool SameLayout(IReadOnlyList<Block>? a, IReadOnlyList<Block>? b) =>

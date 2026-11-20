@@ -1,0 +1,19 @@
+{
+  "game": "GTA 6",
+  "keep": [
+    "Jason", "Lucia", "Cal", "Boobie", "Raul", "Brian", "Drequan", "Dre'Quan", "Real Dimez",
+    "Vice City", "Leonida", "Leonida Keys", "Grassrivers", "Port Gellhorn", "Ambrosia", "Mount Kalaga",
+    "Bonnie and Clyde"
+  ],
+  "terms": {
+    "bro": "kanka",
+    "homie": "kanka",
+    "dude": "dostum",
+    "cops": "polisler",
+    "five-o": "aynasızlar",
+    "heist": "soygun",
+    "score": "vurgun",
+    "the feds": "federaller",
+    "wanted level": "aranma seviyesi"
+  }
+}

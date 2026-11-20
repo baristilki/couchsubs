@@ -29,6 +29,17 @@ public static class StreamSubtitleText
             foreach (var name in known.OrderByDescending(name => name.Length))
                 if (text.Length > name.Length + 1 && text.StartsWith(name + " ", StringComparison.OrdinalIgnoreCase))
                     return (name, text[(name.Length + 1)..].TrimStart());
+        // Fork: çevrilmiş rol adı ("Mağaza görevlisi:", "Polis 2:"): ilk sözcük büyük, gerisi küçük harfle ya da sayıyla
+        // başlıyor, en çok 4 sözcük. "Peter İki kelime:" (araya büyük harfli sözcük girmiş) ad sayılmaz.
+        if (colon >= 1 && colon <= 30 && colon + 1 < text.Length && char.IsWhiteSpace(text[colon + 1]))
+        {
+            var name = text[..colon].Trim();
+            var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (!name.Contains('\n') && words.Length is >= 1 and <= 4 && char.IsUpper(words[0][0])
+                && words.Skip(1).All(word => !char.IsUpper(word[0]))
+                && char.IsLetter(name[0]) && name.All(c => char.IsLetterOrDigit(c) || c is ' ' or '.' or '\'' or '-'))
+                return (name, text[(colon + 1)..].TrimStart());
+        }
         return null;
     }
 

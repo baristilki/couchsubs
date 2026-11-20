@@ -43,6 +43,25 @@ public sealed class LiveServices : IAppServices
         new AiTranslator(AiProvider.Local, key, server.Model, fallback, cache: TranslationCache.Shared(AppPaths.Translations, server.EngineId, "en", "tr"),
                          server: server, game: game, instruction: instruction, glossary: AiGlossaries.For);
 
+    /// <summary>Fork: Ollama'ya modeli hemen boşaltmasını söyler (keep_alive 0); LM Studio ve diğerlerinde bir şey yapılmaz.</summary>
+    public async Task UnloadLocalAiAsync(LocalAiServer server)
+    {
+        if (server.Kind != LocalAiServerKind.Ollama) return;
+        try
+        {
+            // OpenAI uyumlu adres ".../v1"; boşaltma Ollama'nın kendi API'sinde.
+            var root = new Uri(server.BaseUrl, "/");
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            var body = System.Text.Json.JsonSerializer.Serialize(new { model = server.Model, keep_alive = 0 });
+            using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+            using var response = await http.PostAsync(new Uri(root, "api/generate"), content).ConfigureAwait(false);
+        }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException or UriFormatException)
+        {
+            // Ollama kapalıysa bellekte de model yoktur.
+        }
+    }
+
     public Task<AiTestResult> TestLocalAiAsync(LocalAiServer server, string key) =>
         AiTranslator.TestAsync(AiProvider.Local, key, server.Model, server: server);
     public IDubbingModel? Dubbing { get; } = PocketDubbingModel.EngineBundled ? new PocketDubbingModel() : null;

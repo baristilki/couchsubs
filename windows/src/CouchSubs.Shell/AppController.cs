@@ -449,6 +449,10 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
                                      || old.TranslationDevice != value.TranslationDevice
                                      || old.CpuTranslationThreads != value.CpuTranslationThreads;
             if (translationChanged && !isRunning) RefreshTranslatorStatus();
+            // Fork: yerel modelden başka motora (ya da başka yerel modele) geçilince eski model ekran kartı belleğinden çıkar.
+            if (old.Engine == TranslationEngine.Local && old.LocalAiServer is { } previous
+                && (value.Engine != TranslationEngine.Local || value.LocalAiServer != previous))
+                _ = services.UnloadLocalAiAsync(previous);
             if (isRunning && (old.SourceLanguage != value.SourceLanguage || old.TargetLanguage != value.TargetLanguage
                               || translationChanged || old.FastSubtitleDetection != value.FastSubtitleDetection
                               || old.WatchSubtitleBackground != value.WatchSubtitleBackground

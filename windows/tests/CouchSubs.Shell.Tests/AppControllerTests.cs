@@ -194,6 +194,12 @@ internal sealed class FakeServices : IAppServices
         return fallback ?? Translation.Create("en", "tr");
     }
     public List<(LocalAiServer Server, string Key)> LocalTests { get; } = [];
+    public List<LocalAiServer> Unloaded { get; } = [];
+    public Task UnloadLocalAiAsync(LocalAiServer server)
+    {
+        Unloaded.Add(server);
+        return Task.CompletedTask;
+    }
     public List<(LocalAiServer Server, string Key)> LocalTranslators { get; } = [];
     public Task<AiTestResult> TestLocalAiAsync(LocalAiServer server, string key)
     {
@@ -1738,6 +1744,19 @@ public class AppControllerRunTests
 
     /// Yerel model anahtarsız hazırdır; "Bağlantıyı dene" ayardaki adres ve modelle gider, yazılan anahtarı yalnız sunucu
     /// kabul ederse saklar; çevirmene sunucu ve anahtar gider; anahtar kaldırılınca yerel model seçili kalır.
+    /// <summary>Fork: yerel modelden başka motora geçince model ekran kartı belleğinden çıkarılır.</summary>
+    [Fact]
+    public void LeavingTheLocalModelUnloadsIt()
+    {
+        var services = new FakeServices();
+        var (controller, _, _) = Ready(services);
+        controller.Settings = controller.Settings.WithEngine(TranslationEngine.Local) with { LocalAiModel = "gemma3:12b" };
+        Assert.Empty(services.Unloaded);
+        controller.Settings = controller.Settings.WithEngine(TranslationEngine.Gemini);
+        var unloaded = Assert.Single(services.Unloaded);
+        Assert.Equal("gemma3:12b", unloaded.Model);
+    }
+
     [Fact]
     public async Task LocalModelNeedsNoKey()
     {

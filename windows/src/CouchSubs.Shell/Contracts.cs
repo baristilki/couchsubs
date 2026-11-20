@@ -773,6 +773,11 @@ public interface IAppServices
     /// <summary>Yerel model (Ollama, LM Studio) çevirmeni; anahtar boş olabilir. Bu derlemede yoksa null.</summary>
     ITextTranslator? MakeLocalAiTranslator(LocalAiServer server, string key, ITextTranslator? fallback, Func<string?>? game,
                                            string? instruction = null) => null;
+    /// <summary>
+    /// Fork: yerel modeli (Ollama) ekran kartı belleğinden çıkarır. Çeviri motoru yerelden başka bir motora geçince
+    /// çağrılır: model 24 saat yüklü kalacak şekilde açıldığından ~8 GB ekran kartı belleğini boşuna tutuyordu.
+    /// </summary>
+    Task UnloadLocalAiAsync(LocalAiServer server) => Task.CompletedTask;
     /// <summary>Yerel model sunucusunu örnek bir satırı çevirerek dener ("Bağlantıyı dene").</summary>
     Task<AiTestResult> TestLocalAiAsync(LocalAiServer server, string key) => Task.FromResult(new AiTestResult(OnlineKeyState.Unreachable));
     /// <summary>Türkçe dublaj modeli; bu derlemede yoksa null.</summary>

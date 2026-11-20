@@ -119,8 +119,9 @@ public sealed record SubtitleLook(bool OneLine, bool MatchSize, string? Font, st
 /// <param name="Replaces">Satır öncekinin uzamış ya da düzelmiş okumasıdır; öncekinin üstüne yığılmaz, yerine geçer.</param>
 /// <param name="Id">Ek alan olayında alanın kimliği (<see cref="SubtitleEventKind.Region"/>; metin boşsa kutu kalkar).</param>
 /// <param name="Box">Ek alan olayında yazının karedeki yeri.</param>
+/// <param name="Blocks">Fork: ek alanda ayrı duran yazıların çevirileri kendi yerleriyle (TV'deki gibi); yoksa null.</param>
 public sealed record SubtitleEvent(SubtitleEventKind Kind, string Text = "", int DurationMs = 0, bool Paragraphs = false, bool Replaces = false,
-                                   string? Id = null, TextBox? Box = null)
+                                   string? Id = null, TextBox? Box = null, IReadOnlyList<(TextBox Box, string Text)>? Blocks = null)
 {
     public static readonly SubtitleEvent Cleared = new(SubtitleEventKind.Clear);
 }
@@ -348,7 +349,9 @@ public sealed class SubtitleServer(int port = 8787, TimeSpan? pingInterval = nul
         if (box is { } b) json["box"] = BoxJson(b);
         if (lineHeight is { } line) json["line"] = Round(line);
         Broadcast(Frame("region", json), subtitle: true);
-        EventSent?.Invoke(new SubtitleEvent(SubtitleEventKind.Region, text, Id: id, Box: box));
+        IReadOnlyList<(TextBox, string)>? placed = blocks is { Count: > 0 } && text.Length > 0
+            ? [.. blocks.Select(block => (block.Box, block.Translation))] : null;
+        EventSent?.Invoke(new SubtitleEvent(SubtitleEventKind.Region, text, Id: id, Box: box, Blocks: placed));
     }
 
     /// <summary>Bütün ek alan kutularını kaldırır.</summary>

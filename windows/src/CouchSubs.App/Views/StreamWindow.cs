@@ -33,7 +33,7 @@ public sealed partial class StreamWindow : Window
     private readonly StackPanel linesPanel = new() { VerticalAlignment = VerticalAlignment.Bottom };
     /// <summary>Ek alanların (görev, telefon mesajı, bildirim) çevirileri; saydam penceredeki gibi üstte, alanın yanına yaslı.</summary>
     private readonly StackPanel regionsPanel = new() { VerticalAlignment = VerticalAlignment.Top };
-    private readonly Dictionary<string, (string Text, CouchSubs.Core.TextBox? Box)> regions = [];
+    private readonly Dictionary<string, (string Text, CouchSubs.Core.TextBox? Box, IReadOnlyList<(CouchSubs.Core.TextBox Box, string Text)>? Blocks)> regions = [];
     private readonly Border linesHost;
     private readonly Dictionary<int, Border> boxes = [];
     private double screenUntil;
@@ -459,7 +459,7 @@ public sealed partial class StreamWindow : Window
             case SubtitleEventKind.Region:
                 if (e.Id is null) break;
                 regions.Remove(e.Id);
-                if (e.Text.Length > 0) regions[e.Id] = (e.Text, e.Box);
+                if (e.Text.Length > 0) regions[e.Id] = (e.Text, e.Box, e.Blocks);
                 break;
             case SubtitleEventKind.RegionClear:
                 regions.Clear();
@@ -487,8 +487,15 @@ public sealed partial class StreamWindow : Window
         regionsPanel.Children.Clear();
         regionLayer.Children.Clear();
         var onPicture = controller.StreamBackground == StreamBackground.Game && controller.GameVideoActive;
-        foreach (var (text, area) in regions.Values.OrderBy(region => region.Box?.Top ?? 0))
+        foreach (var (text, area, blocks) in regions.Values.OrderBy(region => region.Box?.Top ?? 0))
         {
+            // Fork: alanda ayrı duran yazılar (GTA 6 etkileşim menüsünün satırları, başlık ile hedef) TV'deki gibi
+            // her biri kendi İngilizce yazısının üstünde; tek kutuda alt alta toplanmaz.
+            if (onPicture && blocks is { Count: > 0 })
+            {
+                foreach (var (box, translation) in blocks) regionLayer.Children.Add(MakePlacedRegion(translation, box));
+                continue;
+            }
             // Oyun görüntüsü üstünde çeviri kendi alanında (telefon mesajı telefonda, görev yazısı solda), TV'deki gibi.
             if (onPicture && area is { } placed) regionLayer.Children.Add(MakePlacedRegion(text, placed));
             else regionsPanel.Children.Add(MakeRegionBox(text, area));

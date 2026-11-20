@@ -24,15 +24,28 @@ public sealed partial class StreamWindow
         return brush;
     }
 
+    /// <summary>Fork: menünün görünümü (Views/StreamMenuStyle.xaml): uygulamanın koyu yüzeyi, yarı saydam, yuvarlak köşe.</summary>
+    private static readonly Lazy<ResourceDictionary> MenuLook = new(() => new ResourceDictionary
+    {
+        Source = new Uri("pack://application:,,,/CouchSubs;component/Views/StreamMenuStyle.xaml"),
+    });
+
     private void InitMenu()
     {
-        ContextMenu = new ContextMenu
+        ContextMenu = new ContextMenu();
+        try
         {
-            Background = MenuBackground,
-            BorderBrush = MenuBorder,
-            Foreground = Brushes.White,
-            Padding = new Thickness(4),
-        };
+            ContextMenu.Resources.MergedDictionaries.Add(MenuLook.Value);
+            ContextMenu.Style = (Style)MenuLook.Value["StreamMenu"];
+        }
+        catch (Exception)
+        {
+            // Görünüm yüklenemezse eski koyu menü.
+            ContextMenu.Background = MenuBackground;
+            ContextMenu.BorderBrush = MenuBorder;
+            ContextMenu.Foreground = Brushes.White;
+            ContextMenu.Padding = new Thickness(4);
+        }
         // Her açılışta güncel durumla yeniden kurulur (sessiz, düzey, örtü seçimi).
         ContextMenuOpening += (_, _) => BuildMenu();
         BuildMenu();
@@ -48,7 +61,7 @@ public sealed partial class StreamWindow
         menu.Items.Add(Item(text["Mute game sound (M)"], () => controller.StreamGameMuted = !controller.StreamGameMuted,
             isChecked: controller.StreamGameMuted));
         var volume = text.Format("Game sound: %lld%%", controller.StreamGameVolume);
-        var level = new MenuItem { Header = volume, Foreground = Brushes.White };
+        var level = new MenuItem { Header = volume };
         level.Items.Add(Item(text["Louder (+)"], () =>
         {
             controller.StreamGameMuted = false;
@@ -87,20 +100,13 @@ public sealed partial class StreamWindow
     }
 
     /// <summary>Alt menüler de koyu ve yarı saydam açılsın.</summary>
-    private static MenuItem Styled(MenuItem item)
-    {
-        item.Foreground = Brushes.White;
-        item.Resources[SystemColors.MenuBrushKey] = MenuBackground;
-        item.Resources[SystemColors.MenuTextBrushKey] = Brushes.White;
-        return item;
-    }
+    private static MenuItem Styled(MenuItem item) => item;
 
     private MenuItem Item(string header, Action action, bool? isChecked = null, bool keepOpen = false)
     {
         var item = new MenuItem
         {
             Header = header,
-            Foreground = Brushes.White,
             IsCheckable = isChecked is not null,
             IsChecked = isChecked == true,
             StaysOpenOnClick = keepOpen,

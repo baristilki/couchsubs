@@ -1,0 +1,112 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Fork: yayın penceresinin sağ tık menüsü. Uygulamanın koyu yüzey renginde, yarı saydam, yuvarlak köşeli; seçili
+     satırda uygulamanın sarı vurgusu. Menü ayrı açılır pencere olduğundan yayına girmez. Renkler design/tokens.json'dan
+     (surface #1C1E23, border #30333A, textPrimary #F3EEE4, textSecondary #A9A59C, accent #F5B83D). -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="StreamMenu.Surface" Color="#E01C1E23" />
+    <SolidColorBrush x:Key="StreamMenu.Border" Color="#5530333A" />
+    <SolidColorBrush x:Key="StreamMenu.Text" Color="#F3EEE4" />
+    <SolidColorBrush x:Key="StreamMenu.Muted" Color="#A9A59C" />
+    <SolidColorBrush x:Key="StreamMenu.Hover" Color="#1FFFFFFF" />
+    <SolidColorBrush x:Key="StreamMenu.Accent" Color="#F5B83D" />
+    <SolidColorBrush x:Key="StreamMenu.Divider" Color="#22FFFFFF" />
+
+    <!-- Menü ve alt menülerin ortak kutusu. -->
+    <Style x:Key="StreamMenu.Panel" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource StreamMenu.Surface}" />
+        <Setter Property="BorderBrush" Value="{StaticResource StreamMenu.Border}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="6" />
+        <Setter Property="Margin" Value="10" />
+        <Setter Property="MinWidth" Value="220" />
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect BlurRadius="22" ShadowDepth="4" Direction="270" Opacity="0.45" Color="Black" />
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="StreamMenu" TargetType="ContextMenu">
+        <Setter Property="HasDropShadow" Value="False" />
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="Foreground" Value="{StaticResource StreamMenu.Text}" />
+        <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContextMenu">
+                    <Border Style="{StaticResource StreamMenu.Panel}">
+                        <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="Separator">
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Separator">
+                    <Border Height="1" Margin="10,5" Background="{StaticResource StreamMenu.Divider}" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="MenuItem">
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="Foreground" Value="{StaticResource StreamMenu.Text}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="MenuItem">
+                    <Grid SnapsToDevicePixels="True">
+                        <Border x:Name="Row" CornerRadius="8" Background="Transparent" Padding="10,8,10,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="22" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <!-- Seçili satırda vurgu renginde onay işareti. -->
+                                <Path x:Name="Check" Grid.Column="0" Width="12" Height="9" Stretch="Uniform" VerticalAlignment="Center"
+                                      HorizontalAlignment="Left" Data="M0,5 L4,9 L12,0" Stroke="{StaticResource StreamMenu.Accent}"
+                                      StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                      Visibility="Hidden" />
+                                <ContentPresenter x:Name="Header" Grid.Column="1" ContentSource="Header" RecognizesAccessKey="False"
+                                                  VerticalAlignment="Center" />
+                                <TextBlock x:Name="Arrow" Grid.Column="2" Text="›" FontSize="16" Margin="16,-2,0,0"
+                                           Foreground="{StaticResource StreamMenu.Muted}" VerticalAlignment="Center" Visibility="Collapsed" />
+                            </Grid>
+                        </Border>
+                        <Popup x:Name="PART_Popup" Placement="Right" HorizontalOffset="-6" VerticalOffset="-16"
+                               IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                               AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
+                            <Border Style="{StaticResource StreamMenu.Panel}">
+                                <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Row" Property="Background" Value="{StaticResource StreamMenu.Hover}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Check" Property="Visibility" Value="Visible" />
+                            <Setter Property="Foreground" Value="{StaticResource StreamMenu.Accent}" />
+                        </Trigger>
+                        <Trigger Property="HasItems" Value="True">
+                            <Setter TargetName="Arrow" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource StreamMenu.Muted}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

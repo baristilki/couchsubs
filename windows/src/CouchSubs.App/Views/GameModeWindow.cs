@@ -96,6 +96,7 @@ public sealed class GameModeWindow : IDisposable
             double work = 0, waited = 0;
             // Fork: düzensiz gelen kareler küçük bir payla eşit aralıkla gösterilir (hareket halinde takılma olmasın).
             var smoother = new ArrivalSmoother();
+            var arrivedVersion = -1L;
             timeBeginPeriod(1);
             while (!stopping)
             {
@@ -104,7 +105,11 @@ public sealed class GameModeWindow : IDisposable
                 if (signaled)
                 {
                     var arrived = Volatile.Read(ref lastArrivalTicks) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
-                    var due = smoother.Due(arrived);
+                    // Son uyanıştan beri gelen kare sayısı: saat kare sayacıyla ilerler.
+                    var written = frames.Version;
+                    var count = arrivedVersion < 0 ? 1 : (int)Math.Clamp(written - arrivedVersion, 1, 8);
+                    arrivedVersion = written;
+                    var due = smoother.Due(arrived, count);
                     var now = System.Diagnostics.Stopwatch.GetTimestamp() * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
                     if (due > now)
                     {

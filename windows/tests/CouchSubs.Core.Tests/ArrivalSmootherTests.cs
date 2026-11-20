@@ -39,6 +39,24 @@ public class ArrivalSmootherTests
         Assert.InRange(delay, 0, 0.6);
     }
 
+    /// <summary>Gösterim beklerken iki kare birden gelse de saat öne kaçmaz, bekleme büyümez (eskiden 30 kareye düşüyordu).</summary>
+    [Fact]
+    public void SkippedWakeUpsDoNotDriftTheClock()
+    {
+        var smoother = new ArrivalSmoother();
+        var random = new Random(5);
+        double worst = 0;
+        for (var i = 0; i < 600; )
+        {
+            var frames = random.NextDouble() < 0.3 ? 2 : 1;
+            i += frames;
+            var arrival = (i * 1000.0 / 60) + (random.NextDouble() * 3);
+            var wait = smoother.Due(arrival, frames) - arrival;
+            if (i > 120) worst = Math.Max(worst, wait);
+        }
+        Assert.InRange(worst, 0, 6);
+    }
+
     [Fact]
     public void LongGapResetsTheClock()
     {

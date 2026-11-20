@@ -8,12 +8,20 @@ namespace CouchSubs.Core;
 /// dönerken görüntü takılıyordu. Kaynağın düzenli saati gelen karelerden izlenir (her kare için beklenen geliş anı);
 /// kare bu anın biraz sonrasında (<see cref="MarginMs"/>) gösterilir. Pay geç gelen karelere göre hemen büyür, ağ
 /// düzgünleşince yavaşça küçülür; en çok <see cref="MaxMarginMs"/>. Ağ düzgünken bekleme neredeyse sıfırdır.
+/// <para>
+/// Saat kare sayacıyla ilerler (<c>frames</c>: son çağrıdan beri gelen kare sayısı): gösterim beklerken iki kare
+/// birden gelince aralık iki katı ölçülüp saat öne kaçıyor, bekleme büyüyüp kare hızı 30'a düşüyordu.
+/// </para>
 /// </summary>
 public sealed class ArrivalSmoother(double maxMarginMs = 12)
 {
-    private double interval = 1000.0 / 60;
-    private double expected = double.NaN;
+    private const double NominalInterval = 1000.0 / 60;
+    private double interval = NominalInterval;
+    /// <summary>Son işlenen kareden sonraki karenin beklenen geliş anı.</summary>
+    private double next = double.NaN;
     private double lastArrival = double.NaN;
+    private double firstArrival = double.NaN;
+    private long countedFrames;
     private double margin;
 
     /// <summary>Şu anki bekleme payı (ms).</summary>
@@ -21,34 +29,52 @@ public sealed class ArrivalSmoother(double maxMarginMs = 12)
     public double MaxMarginMs { get; } = maxMarginMs;
     public double IntervalMs => interval;
 
-    /// <summary><paramref name="arrivalMs"/>'de gelen karenin gösterileceği an (ms; gelişten önce olmaz).</summary>
-    public double Due(double arrivalMs)
+    /// <summary>
+    /// Son çağrıdan beri <paramref name="frames"/> kare geldi, en yenisi <paramref name="arrivalMs"/>'de: gösterileceği
+    /// an (ms; gelişten önce değil, gelişten en çok <see cref="MaxMarginMs"/> sonra).
+    /// </summary>
+    public double Due(double arrivalMs, int frames = 1)
     {
-        if (!double.IsNaN(lastArrival))
+        frames = Math.Max(1, frames);
+        // Aralık uzun bir pencereden ölçülür (ilk kareden bu yana geçen süre / kare sayısı): tek tek aralıklar ağın
+        // düzensizliğiyle oynar, kısa ortalama saati kaydırıyordu. 30 kare/sn akış da (ayardan) böyle tanınır.
+        if (double.IsNaN(firstArrival)) firstArrival = arrivalMs;
+        else
         {
-            var gap = arrivalMs - lastArrival;
-            if (gap is > 2 and < 100) interval = (interval * 0.98) + (gap * 0.02);
+            countedFrames += frames;
+            if (countedFrames >= 60)
+            {
+                var measured = (arrivalMs - firstArrival) / countedFrames;
+                if (measured is > 8 and < 40) interval = measured;
+            }
         }
         lastArrival = arrivalMs;
-        // İlk kare ya da uzun boşluk (kopma, duraklama): saat bu kareye kurulur.
-        if (double.IsNaN(expected) || Math.Abs(arrivalMs - expected) > interval * 2)
+        var predicted = next + (interval * (frames - 1));
+        // İlk kare ya da uzun boşluk / kayma (kopma, duraklama): saat bu kareye kurulur.
+        if (double.IsNaN(predicted) || Math.Abs(arrivalMs - predicted) > interval * 2)
         {
-            expected = arrivalMs + interval;
-            return arrivalMs + margin;
+            next = arrivalMs + interval;
+            // Uzun boşluk (kopma): aralık ölçümü de baştan.
+            firstArrival = arrivalMs;
+            countedFrames = 0;
+            return arrivalMs;
         }
-        var late = arrivalMs - expected;
+        var late = arrivalMs - predicted;
         // Geç gelen kare payı hemen büyütür; sonra her karede ~0,03 ms küçülür (saniyede ~2 ms).
-        margin = late > margin ? Math.Min(MaxMarginMs, late + 0.5) : Math.Max(0, margin - 0.03);
-        var due = Math.Max(arrivalMs, expected + margin);
+        margin = late > margin ? Math.Min(MaxMarginMs, late + 0.5) : Math.Max(0, margin - (0.03 * frames));
+        var due = Math.Clamp(predicted + margin, arrivalMs, arrivalMs + MaxMarginMs);
         // Saat kaynağın gerçek hızına yavaşça yaklaşır (erken/geç gelişin küçük bir kısmı kadar).
-        expected += interval + (late * 0.02);
+        next = predicted + interval + (late * 0.02);
         return due;
     }
 
     public void Reset()
     {
-        expected = double.NaN;
+        next = double.NaN;
         lastArrival = double.NaN;
+        firstArrival = double.NaN;
+        countedFrames = 0;
         margin = 0;
+        interval = NominalInterval;
     }
 }

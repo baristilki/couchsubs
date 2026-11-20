@@ -2587,7 +2587,24 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
     // --- İç işleyiş ---
 
     /// <summary>Okuma hattını güncel dillerle (yeniden) kurar.</summary>
+    /// <summary>Fork: hat yokken yeniden kurma denemesinin son zamanı (kare iş parçacığı).</summary>
+    private long lastPipelineRetry;
+
     private void MakePipeline()
+    {
+        try
+        {
+            BuildPipeline();
+        }
+        catch (Exception error)
+        {
+            // Fork: kurulamayan hat (çevirmen, okuyucu) artık sessiz kalmaz; günlüğe yazılır, kare gelince yeniden denenir.
+            pipeline = null;
+            SubtitleLog.Write($"okuma hattı kurulamadı: {error.GetBaseException().Message}");
+        }
+    }
+
+    private void BuildPipeline()
     {
         pipeline?.Reset();
         pipeline = null;
@@ -2602,7 +2619,11 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
         // Gelişmiş yazı tanıma Windows'un dil paketine gerek duymaz.
         OcrMissing = reader is null || (!(settings.OcrEngine == OcrEngine.Advanced && AdvancedOcrInstalled)
                                         && !services.HasOcrLanguage(settings.SourceLanguage));
-        if (reader is null) return;
+        if (reader is null)
+        {
+            SubtitleLog.Write("okuma hattı kurulamadı: yazı tanıma açılamadı");
+            return;
+        }
         var scheduler = new ReadScheduler(maxReuse: settings.FastSubtitleDetection
             ? ReadScheduler.FastMaxReuse : ReadScheduler.DefaultMaxReuse);
         var built = new SubtitlePipeline(reader, MakeTranslator(), server, scheduler)
@@ -2921,7 +2942,18 @@ public sealed class AppController : INotifyPropertyChanged, IDisposable
             if (subtitlesPaused) return;
             // Önceki kare hâlâ işleniyorsa bu kare atlanır; okuma kareleri biriktirmez.
             var current = pipeline;
-            if (current is null) return;
+            if (current is null)
+            {
+                // Fork: çeviri sürerken hat yoksa (ayar değişiminde kurulamadı) okuma sessizce duruyordu; 5 sn'de bir
+                // yeniden kurulmaya çalışılır.
+                if (isRunning && Environment.TickCount64 - lastPipelineRetry > 5000)
+                {
+                    lastPipelineRetry = Environment.TickCount64;
+                    SubtitleLog.Write("okuma hattı yok; yeniden kuruluyor");
+                    post(MakePipeline);
+                }
+                return;
+            }
             // Ek bölgeler ayrı ve seyrek okunur (saniyede bir, kendi okuyucusuyla); altyazı okumasını beklemez, onu bekletmez.
             regionWatcher?.Offer(frame, settings.WatchedAreas());
             var entry = frameGate.TryEnter(Environment.TickCount64);

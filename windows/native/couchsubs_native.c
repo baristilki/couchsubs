@@ -486,8 +486,10 @@ static bool cs_decoder_convert(cs_decoder *decoder, AVFrame *frame)
 	}
 	bool changed = frame->format != decoder->source_format || frame->colorspace != decoder->source_colorspace
 		|| frame->color_range != decoder->source_range;
+	/* Fork: renk (4:2:0 chroma) en yakın komşuyla değil, çift doğrusal ve tam çözünürlükte büyütülür; SWS_POINT renkli
+	   kenarlarda ve yazılarda basamak bırakıp görüntüyü yumuşak gösteriyordu. */
 	decoder->sws = sws_getCachedContext(decoder->sws, width, height, frame->format, width, height, AV_PIX_FMT_BGRA,
-			SWS_POINT, NULL, NULL, NULL);
+			SWS_BILINEAR | SWS_FULL_CHR_H_INT, NULL, NULL, NULL);
 	if(!decoder->sws)
 		return false;
 	if(changed)
